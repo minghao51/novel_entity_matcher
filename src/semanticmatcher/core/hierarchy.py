@@ -374,6 +374,7 @@ class HierarchicalMatcher:
             normalize: Whether to apply text normalization
         """
         self.entities = entities
+        self.entities_dict = {e["id"]: e for e in entities}
         self.embedding_model = embedding_model
         self.normalize = normalize
 
@@ -588,3 +589,100 @@ class HierarchicalMatcher:
         # Sort by score and return top_k
         results = sorted(seen.values(), key=lambda x: x["score"], reverse=True)
         return results[:top_k]
+
+    def get_ancestors(
+        self,
+        entity_id: str,
+        max_depth: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all ancestors of an entity with metadata.
+
+        Args:
+            entity_id: Entity to find ancestors for
+            max_depth: Maximum depth to traverse
+
+        Returns:
+            List of ancestor entities with metadata
+        """
+        ancestor_ids = self.hierarchy_index.get_ancestors(entity_id, max_depth)
+
+        return [
+            {
+                "id": aid,
+                "name": self.entities_dict[aid].get("name", aid),
+                "depth": self.hierarchy_index.get_relationship_depth(entity_id, aid)
+            }
+            for aid in ancestor_ids
+            if aid in self.entities_dict
+        ]
+
+    def get_descendants(
+        self,
+        entity_id: str,
+        max_depth: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all descendants of an entity with metadata.
+
+        Args:
+            entity_id: Entity to find descendants for
+            max_depth: Maximum depth to traverse
+
+        Returns:
+            List of descendant entities with metadata
+        """
+        descendant_ids = self.hierarchy_index.get_descendants(entity_id, max_depth)
+
+        return [
+            {
+                "id": did,
+                "name": self.entities_dict[did].get("name", did),
+                "depth": self.hierarchy_index.get_relationship_depth(entity_id, did)
+            }
+            for did in descendant_ids
+            if did in self.entities_dict
+        ]
+
+    def get_hierarchy_path(
+        self,
+        entity_id: str,
+        to_entity: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get path from entity_id to root or to_entity.
+
+        Args:
+            entity_id: Starting entity
+            to_entity: Ending entity (None = path to root)
+
+        Returns:
+            List of entities representing the path
+        """
+        if to_entity:
+            # Try direct path first
+            path_ids = self.hierarchy_index.get_path(entity_id, to_entity)
+
+            # If no direct path, try reverse (going up the hierarchy)
+            if not path_ids:
+                path_ids = self.hierarchy_index.get_path(to_entity, entity_id)
+                path_ids = list(reversed(path_ids))
+        else:
+            # Path to root (farthest ancestor)
+            path_ids = [entity_id]
+            current = entity_id
+            while True:
+                ancestors = self.hierarchy_index.get_ancestors(current, max_depth=1)
+                if not ancestors:
+                    break
+                current = ancestors[0]
+                path_ids.append(current)
+
+        return [
+            {
+                "id": pid,
+                "name": self.entities_dict[pid].get("name", pid)
+            }
+            for pid in path_ids
+            if pid in self.entities_dict
+        ]

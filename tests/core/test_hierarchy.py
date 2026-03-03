@@ -358,3 +358,37 @@ class TestHierarchicalMatcher:
 
         # Should return some results
         assert len(results) > 0
+
+    def test_get_ancestors(self):
+        """Test getting ancestors of an entity"""
+        matcher = HierarchicalMatcher(entities=SAMPLE_HIERARCHICAL_ENTITIES)
+        matcher.build_index()
+
+        ancestors = matcher.get_ancestors("DE-BY")
+        ancestor_ids = [a["id"] for a in ancestors]
+
+        assert "DE" in ancestor_ids
+        assert "EU" in ancestor_ids
+
+    def test_get_descendants(self):
+        """Test getting descendants of an entity"""
+        matcher = HierarchicalMatcher(entities=SAMPLE_HIERARCHICAL_ENTITIES)
+        matcher.build_index()
+
+        descendants = matcher.get_descendants("EU")
+        descendant_ids = [d["id"] for d in descendants]
+
+        assert "DE" in descendant_ids
+        assert "DE-BY" in descendant_ids
+
+    def test_get_hierarchy_path(self):
+        """Test getting path between entities"""
+        matcher = HierarchicalMatcher(entities=SAMPLE_HIERARCHICAL_ENTITIES)
+        matcher.build_index()
+
+        path = matcher.get_hierarchy_path("DE-BY", "EU")
+
+        assert len(path) > 0
+        entity_ids = [p["id"] for p in path]
+        assert entity_ids[0] == "DE-BY"
+        assert entity_ids[-1] == "EU"
