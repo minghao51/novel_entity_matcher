@@ -13,6 +13,9 @@ import numpy as np
 from functools import lru_cache
 from sklearn.metrics.pairwise import cosine_similarity
 
+from semanticmatcher.core.matcher import EmbeddingMatcher
+from semanticmatcher.core.normalizer import TextNormalizer
+
 
 __all__ = [
     "HierarchyIndex",
@@ -339,5 +342,93 @@ class HierarchicalScoring:
 
 
 class HierarchicalMatcher:
-    """Placeholder for HierarchicalMatcher class"""
-    pass
+    """
+    Hierarchical entity matching with multi-parent support.
+
+    Combines semantic similarity (via EmbeddingMatcher) with
+    hierarchy-aware scoring to enable flexible granularity matching.
+
+    Features:
+    - Match at any level in hierarchy (self, ancestors, descendants)
+    - Multi-parent hierarchy support
+    - Depth-aware confidence scores
+    - Flexible granularity matching
+    """
+
+    def __init__(
+        self,
+        entities: List[Dict[str, Any]],
+        embedding_model: str = "BAAI/bge-base-en-v1.5",
+        alpha: float = 0.7,
+        beta: float = 0.3,
+        normalize: bool = True
+    ):
+        """
+        Initialize hierarchical matcher.
+
+        Args:
+            entities: List of entity dicts with optional 'hierarchy' key
+            embedding_model: Sentence transformer model name
+            alpha: Weight for semantic similarity (0-1)
+            beta: Weight for hierarchical boost (0-1)
+            normalize: Whether to apply text normalization
+        """
+        self.entities = entities
+        self.embedding_model = embedding_model
+        self.normalize = normalize
+
+        # Initialize text normalizer
+        self.normalizer = TextNormalizer() if normalize else None
+
+        # Build hierarchy index
+        self.hierarchy_index = HierarchyIndex(entities)
+
+        # Initialize scorer
+        self.scorer = HierarchicalScoring(
+            self.hierarchy_index,
+            alpha=alpha,
+            beta=beta
+        )
+
+        # Will be initialized in build_index()
+        self.embedding_matcher = None
+        self.entity_embeddings = {}
+        self.entity_texts = {}
+
+    def build_index(self):
+        """
+        Build embedding index for all entities.
+
+        Must be called before matching.
+        """
+        # Prepare entity texts (name + aliases)
+        for entity in self.entities:
+            entity_id = entity["id"]
+            texts = [entity["name"]]
+
+            if "aliases" in entity:
+                texts.extend(entity["aliases"])
+
+            # Apply normalization if enabled
+            if self.normalizer:
+                texts = [self.normalizer.normalize(t) for t in texts]
+
+            # Store combined text (join with space)
+            self.entity_texts[entity_id] = " ".join(texts)
+
+        # Create EmbeddingMatcher for semantic similarity
+        embedding_entities = [
+            {"id": eid, "name": text}
+            for eid, text in self.entity_texts.items()
+        ]
+
+        self.embedding_matcher = EmbeddingMatcher(
+            entities=embedding_entities,
+            model_name=self.embedding_model,
+            normalize=False  # Already normalized if needed
+        )
+
+        self.embedding_matcher.build_index()
+
+        # Cache embeddings for scoring
+        self.entity_embeddings = self.embedding_matcher.embeddings

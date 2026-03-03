@@ -303,4 +303,22 @@ class TestHierarchicalMatcher:
 
     def test_init(self):
         """Test HierarchicalMatcher initialization"""
-        assert True  # Placeholder
+        matcher = HierarchicalMatcher(entities=SAMPLE_HIERARCHICAL_ENTITIES)
+
+        assert matcher.entities == SAMPLE_HIERARCHICAL_ENTITIES
+        assert matcher.hierarchy_index is not None
+        assert matcher.scorer is not None
+
+    def test_init_custom_params(self):
+        """Test initialization with custom parameters"""
+        matcher = HierarchicalMatcher(
+            entities=SAMPLE_HIERARCHICAL_ENTITIES,
+            embedding_model="sentence-transformers/all-MiniLM-L6-v2",
+            alpha=0.8,
+            beta=0.2,
+            normalize=False
+        )
+
+        assert matcher.scorer.alpha == 0.8
+        assert matcher.scorer.beta == 0.2
+        assert matcher.normalize is False
