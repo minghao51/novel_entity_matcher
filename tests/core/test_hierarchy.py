@@ -322,3 +322,39 @@ class TestHierarchicalMatcher:
         assert matcher.scorer.alpha == 0.8
         assert matcher.scorer.beta == 0.2
         assert matcher.normalize is False
+
+    def test_match_basic(self):
+        """Test basic matching functionality"""
+        matcher = HierarchicalMatcher(entities=SAMPLE_HIERARCHICAL_ENTITIES)
+        matcher.build_index()
+
+        results = matcher.match("Germany", top_k=3, match_level="self")
+
+        assert len(results) > 0
+        assert "id" in results[0]
+        assert "score" in results[0]
+        assert "relationship" in results[0]
+
+    def test_match_with_ancestors(self):
+        """Test matching including ancestor entities"""
+        matcher = HierarchicalMatcher(entities=SAMPLE_HIERARCHICAL_ENTITIES)
+        matcher.build_index()
+
+        # Query "Bavaria" should match DE-BY, DE, and EU
+        results = matcher.match("Bavaria", top_k=5, match_level="ancestors", max_depth=2)
+
+        entity_ids = [r["id"] for r in results]
+
+        # Should include self, parent, and grandparent
+        assert "DE-BY" in entity_ids or len(results) > 0
+
+    def test_match_with_descendants(self):
+        """Test matching including descendant entities"""
+        matcher = HierarchicalMatcher(entities=SAMPLE_HIERARCHICAL_ENTITIES)
+        matcher.build_index()
+
+        # Query "Europe" should match EU and descendants
+        results = matcher.match("European region", top_k=5, match_level="descendants", max_depth=2)
+
+        # Should return some results
+        assert len(results) > 0

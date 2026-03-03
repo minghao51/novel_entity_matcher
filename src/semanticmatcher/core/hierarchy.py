@@ -430,5 +430,161 @@ class HierarchicalMatcher:
 
         self.embedding_matcher.build_index()
 
-        # Cache embeddings for scoring
-        self.entity_embeddings = self.embedding_matcher.embeddings
+        # Cache embeddings for scoring - create dict mapping entity_id to embedding
+        self.entity_embeddings = {
+            entity_id: self.embedding_matcher.embeddings[idx]
+            for idx, entity_id in enumerate(self.embedding_matcher.entity_ids)
+        }
+
+    def match(
+        self,
+        query: str,
+        top_k: int = 5,
+        match_level: str = "all",
+        max_depth: int = 3
+    ) -> List[Dict[str, Any]]:
+        """
+        Match query considering hierarchical relationships.
+
+        Args:
+            query: Query text
+            top_k: Number of results to return
+            match_level: "self", "ancestors", "descendants", "all"
+            max_depth: Maximum depth to traverse for hierarchical matches
+
+        Returns:
+            List of matches with:
+            - id: Entity ID
+            - score: Final hierarchical score
+            - relationship: "self", "parent", "child", "ancestor", "descendant"
+            - depth: Relationship depth
+            - semantic_score: Raw embedding similarity
+            - hierarchical_boost: Applied hierarchical boost
+        """
+        if self.embedding_matcher is None:
+            raise RuntimeError("Must call build_index() before matching")
+
+        # Normalize query if needed
+        if self.normalizer:
+            query = self.normalizer.normalize(query)
+
+        # Get query embedding
+        query_emb = self.embedding_matcher.model.encode(
+            query,
+            convert_to_numpy=True
+        )
+
+        # Collect candidates based on match_level
+        candidates = []
+
+        # Get base matches from embedding matcher (self-level)
+        base_matches = self.embedding_matcher.match(query, top_k=top_k * 2)
+
+        for base_match in base_matches:
+            entity_id = base_match["id"]
+            entity_emb = self.entity_embeddings[entity_id]
+
+            # Compute hierarchical score for self-match
+            score = self.scorer.compute_score(
+                query_emb,
+                entity_emb,
+                entity_id,
+                relationship_type="self",
+                depth=0
+            )
+
+            candidates.append({
+                "id": entity_id,
+                "score": score,
+                "relationship": "self",
+                "depth": 0,
+                "semantic_score": base_match["score"],
+                "hierarchical_boost": 0.0
+            })
+
+        # Add hierarchical matches if requested
+        if match_level in ["ancestors", "all"]:
+            for base_match in base_matches[:top_k]:  # Only check top matches
+                entity_id = base_match["id"]
+                ancestors = self.hierarchy_index.get_ancestors(entity_id, max_depth)
+
+                for ancestor_id in ancestors:
+                    if ancestor_id not in self.entity_embeddings:
+                        continue
+
+                    # Calculate depth
+                    depth = self.hierarchy_index.get_relationship_depth(
+                        entity_id, ancestor_id
+                    )
+
+                    ancestor_emb = self.entity_embeddings[ancestor_id]
+
+                    score = self.scorer.compute_score(
+                        query_emb,
+                        ancestor_emb,
+                        ancestor_id,
+                        relationship_type="ancestor" if depth > 1 else "parent",
+                        depth=depth
+                    )
+
+                    candidates.append({
+                        "id": ancestor_id,
+                        "score": score,
+                        "relationship": "parent" if depth == 1 else "ancestor",
+                        "depth": depth,
+                        "semantic_score": float(cosine_similarity(
+                            query_emb.reshape(1, -1),
+                            ancestor_emb.reshape(1, -1)
+                        )[0][0]),
+                        "hierarchical_boost": self.scorer._get_hierarchical_boost(
+                            "parent" if depth == 1 else "ancestor"
+                        )
+                    })
+
+        if match_level in ["descendants", "all"]:
+            for base_match in base_matches[:top_k]:
+                entity_id = base_match["id"]
+                descendants = self.hierarchy_index.get_descendants(entity_id, max_depth)
+
+                for descendant_id in descendants:
+                    if descendant_id not in self.entity_embeddings:
+                        continue
+
+                    depth = self.hierarchy_index.get_relationship_depth(
+                        entity_id, descendant_id
+                    )
+
+                    descendant_emb = self.entity_embeddings[descendant_id]
+
+                    score = self.scorer.compute_score(
+                        query_emb,
+                        descendant_emb,
+                        descendant_id,
+                        relationship_type="descendant" if depth > 1 else "child",
+                        depth=depth
+                    )
+
+                    candidates.append({
+                        "id": descendant_id,
+                        "score": score,
+                        "relationship": "child" if depth == 1 else "descendant",
+                        "depth": depth,
+                        "semantic_score": float(cosine_similarity(
+                            query_emb.reshape(1, -1),
+                            descendant_emb.reshape(1, -1)
+                        )[0][0]),
+                        "hierarchical_boost": self.scorer._get_hierarchical_boost(
+                            "child" if depth == 1 else "descendant"
+                        )
+                    })
+
+        # Remove duplicates (keep highest score)
+        seen = {}
+        for candidate in candidates:
+            cid = candidate["id"]
+            if cid not in seen or candidate["score"] > seen[cid]["score"]:
+                seen[cid] = candidate
+
+        # Sort by score and return top_k
+        results = sorted(seen.values(), key=lambda x: x["score"], reverse=True)
+        return results[:top_k]
