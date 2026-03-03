@@ -24,6 +24,15 @@ RERANKER_REGISTRY = {
     "default": "BAAI/bge-reranker-v2-m3",
 }
 
+# Matcher mode registry for unified Matcher class
+MATCHER_MODE_REGISTRY = {
+    "zero-shot": "EmbeddingMatcher",
+    "head-only": "EntityMatcher",
+    "full": "EntityMatcher",
+    "hybrid": "HybridMatcher",
+    "auto": "SmartSelection",
+}
+
 
 def resolve_model_alias(model_name: str) -> str:
     """Resolve model alias to full model name."""
@@ -33,6 +42,24 @@ def resolve_model_alias(model_name: str) -> str:
 def resolve_reranker_alias(model_name: str) -> str:
     """Resolve reranker alias to full model name."""
     return RERANKER_REGISTRY.get(model_name, model_name)
+
+
+def resolve_matcher_mode(mode: str) -> str:
+    """
+    Resolve matcher mode name to implementation class name.
+
+    Args:
+        mode: Mode name (e.g., 'zero-shot', 'head-only', 'full', 'auto')
+
+    Returns:
+        Implementation class name or the original mode if not found in registry.
+
+    Example:
+        resolve_matcher_mode('zero-shot')  # 'EmbeddingMatcher'
+        resolve_matcher_mode('full')       # 'EntityMatcher'
+        resolve_matcher_mode('auto')       # 'SmartSelection'
+    """
+    return MATCHER_MODE_REGISTRY.get(mode, mode)
 
 
 def recommend_model(use_case: str = "general", language: str = "en") -> str:

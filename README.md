@@ -1,11 +1,8 @@
 # SemanticMatcher
 
-Map messy text to canonical entities using semantic matching:
+Map messy text to canonical entities using semantic matching.
 
-- `EmbeddingMatcher` for embedding similarity matching (no training)
-- `EntityMatcher` for few-shot SetFit training
-- `HybridMatcher` for three-stage waterfall pipelines
-- `CrossEncoderReranker` for high-precision reranking
+**New:** Unified `Matcher` class with smart auto-selection - no need to choose between different matchers!
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/semantic-matcher)](https://pypi.org/project/semantic-matcher/)
@@ -27,58 +24,62 @@ pip install semantic-matcher
 
 ## Quick Start
 
-### EmbeddingMatcher (No Training)
+### The New Unified API (Recommended)
 
-Fastest way to get started. No training required.
+**Single `Matcher` class that auto-detects the best approach:**
 
 ```python
-from semanticmatcher import EmbeddingMatcher
+from semanticmatcher import Matcher
 
 entities = [
     {"id": "DE", "name": "Germany", "aliases": ["Deutschland"]},
     {"id": "US", "name": "United States", "aliases": ["USA", "America"]},
 ]
 
-matcher = EmbeddingMatcher(entities=entities)
-matcher.build_index()
+# Zero-shot mode (no training required)
+matcher = Matcher(entities=entities)
+matcher.fit()
+print(matcher.match("America"))  # {"id": "US", "score": 0.95}
 
-print(matcher.match("America"))  # {"id": "US", "score": 1.0}
-```
-
-### EntityMatcher (Few-Shot Training)
-
-For higher accuracy with labeled examples.
-
-```python
-from semanticmatcher import EntityMatcher
-
+# Or with training data (auto-detects training mode)
 training_data = [
     {"text": "Germany", "label": "DE"},
     {"text": "Deutschland", "label": "DE"},
     {"text": "USA", "label": "US"},
 ]
+matcher.fit(training_data)  # Auto: head-only for <3 examples, full training for ≥3
+print(matcher.match("Deutschland"))  # {"id": "DE", "score": 1.0}
+```
 
-matcher = EntityMatcher(entities=entities)
-matcher.train(training_data)
+**How it works:**
+- No training data → zero-shot (embedding similarity)
+- < 3 examples/entity → head-only training (~30s)
+- ≥ 3 examples/entity → full training (~3min)
 
-print(matcher.predict("Deutschland"))  # "DE"
+### Alternative: Explicit Mode Selection
+
+```python
+# Force zero-shot mode
+matcher = Matcher(entities=entities, mode="zero-shot")
+
+# Force full training mode
+matcher = Matcher(entities=entities, mode="full")
+matcher.fit(training_data)
 ```
 
 ## Feature Comparison
 
-| Matcher | Training | Speed | Best For |
+| Mode | Training | Speed | Best For |
 |---|---|---|---|---|
-| `EmbeddingMatcher` | No | Fast (~50 q/s) | Prototyping, simple matching |
-| `EntityMatcher` | Yes (3-5 examples/entity) | Medium (~30 q/s) | Production, complex variations |
-| `HybridMatcher` | No | Medium (3-stage) | Large datasets (>10k entities) |
+| `zero-shot` | No | Fast (~50 q/s) | Prototyping, simple matching |
+| `head-only` | Yes (~30s) | Medium (~30 q/s) | Quick accuracy boost |
+| `full` | Yes (~3min) | Medium (~30 q/s) | Production, complex variations |
 
-**Choosing a matcher**:
-- Need results immediately? → `EmbeddingMatcher`
-- Have labeled examples? → `EntityMatcher`
-- Very large dataset? → `HybridMatcher`
+**The new `Matcher` class auto-selects the best mode** based on your training data.
 
 ## Documentation
 
+- [Migration Guide](docs/migration-guide.md) - Migrate from old API to unified Matcher
 - [Quick Start Guide](docs/quickstart.md) - Complete getting started guide
 - [Examples Catalog](docs/examples.md) - All examples with difficulty ratings
 - [Troubleshooting](docs/troubleshooting.md) - Common issues and fixes

@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-Related docs: [`index.md`](./index.md) | [`notebooks.md`](./notebooks.md) | [`examples.md`](./examples.md) | [`architecture.md`](./architecture.md)
+Related docs: [`index.md`](./index.md) | [`migration-guide.md`](./migration-guide.md) | [`examples.md`](./examples.md) | [`architecture.md`](./architecture.md)
 
 ## Installation
 
@@ -10,30 +10,12 @@ pip install semantic-matcher
 
 Use this page for the official package wrapper API. If you want exploratory scripts or Jupyter notebooks, see [`notebooks.md`](./notebooks.md). If you want lower-level raw `setfit` examples, see [`examples.md`](./examples.md).
 
-## Choose a Matcher
+## Quick Start: The Unified Matcher API
 
-| Matcher | Best For | Training Required | Speed | Accuracy |
-|---|---|---|---|---|---|
-| `EmbeddingMatcher` | Prototyping, quick results, simple matching | No | Fast (~50 q/s) | Good on exact matches |
-| `EntityMatcher` | Production use, complex variations | Yes (3-5 examples/entity) | Medium (~30 q/s) | High on variations |
-| `HybridMatcher` | Large datasets (10k+ entities) | No | Medium (3-stage) | High + precise |
-
-**Decision Guide**:
-- **No training data?** → Use `EmbeddingMatcher`
-- **Have labeled examples?** → Use `EntityMatcher`
-- **Very large dataset?** → Use `HybridMatcher`
-
----
-
-## Path 1: Embedding Similarity (No Training)
-
-Use cosine similarity without training for quick prototypes. Best when:
-- You need results immediately
-- Text variations are minimal
-- Accuracy requirements are moderate
+**New:** The unified `Matcher` class with smart auto-selection. No need to choose between different matchers!
 
 ```python
-from semanticmatcher import EmbeddingMatcher
+from semanticmatcher import Matcher
 
 entities = [
     {"id": "DE", "name": "Germany", "aliases": ["Deutschland", "Deutchland"]},
@@ -41,43 +23,163 @@ entities = [
     {"id": "US", "name": "United States", "aliases": ["USA", "America"]},
 ]
 
-matcher = EmbeddingMatcher(entities=entities, threshold=0.7)
-matcher.build_index()
+matcher = Matcher(entities=entities)
+matcher.fit()  # Auto zero-shot mode
+
+print(matcher.match("Deutschland"))  # {"id": "DE", "score": 0.95}
+```
+
+**How auto-selection works:**
+- No training data → **zero-shot** (embedding similarity, fast)
+- < 3 examples/entity → **head-only training** (~30s)
+- ≥ 3 examples/entity → **full training** (~3min, most accurate)
+
+---
+
+## Path 1: Zero-Shot Matching (No Training)
+
+Use when you need results immediately with no training data.
+
+```python
+from semanticmatcher import Matcher
+
+entities = [
+    {"id": "DE", "name": "Germany", "aliases": ["Deutschland", "Deutchland"]},
+    {"id": "FR", "name": "France", "aliases": ["Frankreich"]},
+    {"id": "US", "name": "United States", "aliases": ["USA", "America"]},
+]
+
+matcher = Matcher(entities=entities)
+matcher.fit()  # No training data = zero-shot mode
 
 print(matcher.match("Deutschland"))  # {"id": "DE", "score": ...}
 print(matcher.match("UnknownPlace"))  # None (below threshold)
 ```
 
-**Parameters**:
+**Or explicitly specify mode:**
+```python
+matcher = Matcher(entities=entities, mode="zero-shot")
+matcher.fit()
+```
+
+**Parameters:**
 - `entities` (required): List of entity dicts with `id`, `name`, optional `aliases`
-- `model_name` (default: `paraphrase-mpnet-base-v2`): Sentence transformer model
-- `threshold` (default: `0.7`): Minimum similarity score (0.0-1.0). Lower = more matches, higher = fewer matches
-- `normalize` (default: `True`): Apply text normalization (lowercase, remove accents/punctuation)
-- `embedding_dim` (optional): Truncate embeddings to this dimension (Matryoshka embeddings)
-- `cache` (optional): Model cache instance (defaults to global cache)
+- `model` (default: `"default"`): Model name or alias (e.g., `"bge-base"`, `"mpnet"`, `"minilm"`)
+- `threshold` (default: `0.7`): Minimum similarity score (0.0-1.0)
+- `normalize` (default: `True`): Apply text normalization
+- `mode` (optional): Explicit mode: `"zero-shot"`, `"head-only"`, `"full"`, or `"auto"`
 
-**Methods**:
-- `build_index(batch_size=None)`: Build embedding index from entities. Call once before matching.
-- `match(texts, top_k=1, batch_size=None)`: Match query/queries. Returns best match or list of matches.
-- `match_bulk(queries, n_jobs=-1)`: Batch processing with parallel workers (HybridMatcher only)
-
-See [`examples/embedding_matcher_demo.py`](../examples/embedding_matcher_demo.py) for a complete working example.
+**Methods:**
+- `fit(training_data=None, mode=None, **kwargs)`: Train the matcher or build zero-shot index
+- `match(texts, top_k=1, **kwargs)`: Match query/queries, returns best match(es)
+- `predict(texts, **kwargs)`: Convenience method returning just entity IDs
 
 ---
 
-## Path 2: Few-Shot Training with `EntityMatcher`
+## Path 2: With Training Data (Auto-Detect)
 
-Train a SetFit-backed matcher when you have labeled examples. Best when:
-- You have 3-5 labeled examples per entity
-- Text has significant variations (typos, translations, abbreviations)
-- You need higher accuracy on complex cases
-- You can afford 1-3 minutes of training time
+When you have labeled examples, `Matcher` auto-detects the best training approach.
 
 ```python
-from semanticmatcher import EntityMatcher
+from semanticmatcher import Matcher
 
 entities = [
-    {"id": "DE", "name": "Germany", "aliases": ["Deutschland", "Deutchland"]},
+    {"id": "DE", "name": "Germany"},
+    {"id": "US", "name": "United States"},
+]
+
+# Small training set → auto head-only (~30s)
+training_data = [
+    {"text": "Germany", "label": "DE"},
+    {"text": "USA", "label": "US"},
+]
+
+matcher = Matcher(entities=entities)
+matcher.fit(training_data)  # Auto-detects: head-only training
+
+print(matcher.match("Deutschland"))  # {"id": "DE", "score": 1.0}
+
+# Larger training set → auto full training (~3min)
+training_data_large = [
+    {"text": "Germany", "label": "DE"},
+    {"text": "Deutschland", "label": "DE"},
+    {"text": "Deutchland", "label": "DE"},
+    {"text": "USA", "label": "US"},
+    {"text": "America", "label": "US"},
+    {"text": "United States", "label": "US"},
+]
+
+matcher.fit(training_data_large, num_epochs=1)  # Auto-detects: full training
+print(matcher.match("Deutschland"))  # {"id": "DE", "score": 1.0}
+```
+
+---
+
+## Path 3: Explicit Mode Selection
+
+Override auto-detection if you know what you need.
+
+```python
+# Force zero-shot even with training data available
+matcher = Matcher(entities=entities)
+matcher.fit(training_data, mode="zero-shot")
+
+# Force full training even with small dataset
+matcher = Matcher(entities=entities)
+matcher.fit(training_data_small, mode="full", num_epochs=1)
+```
+
+---
+
+## Model Selection
+
+Use short aliases for common models:
+
+```python
+# Default (mpnet-base-v2)
+matcher = Matcher(entities=entities, model="default")
+
+# Fast (MiniLM)
+matcher = Matcher(entities=entities, model="minilm")
+
+# Accurate (BGE-base)
+matcher = Matcher(entities=entities, model="bge-base")
+
+# Multilingual (BGE-m3)
+matcher = Matcher(entities=entities, model="bge-m3")
+
+# Or use full model name
+matcher = Matcher(entities=entities, model="sentence-transformers/all-mpnet-base-v2")
+```
+
+---
+
+## Legacy API (Deprecated)
+
+The old API is still functional but shows deprecation warnings:
+
+```python
+# Old API (deprecated - shows warning)
+from semanticmatcher import EmbeddingMatcher, EntityMatcher
+
+matcher = EmbeddingMatcher(entities=entities)
+matcher.build_index()
+result = matcher.match("query")
+
+# See migration-guide.md for migration instructions
+```
+
+---
+
+## Choosing Your Approach
+
+| Situation | Recommended Mode | Training Time | Speed | Accuracy |
+|---|---|---|---|---|
+| **No training data** | `zero-shot` | None | Fast (~50 q/s) | Good |
+| **Few examples (<3/entity)** | `head-only` | ~30s | Medium (~30 q/s) | High |
+| **Many examples (≥3/entity)** | `full` | ~3min | Medium (~30 q/s) | Very High |
+
+**Or just use `Matcher` with auto-detection** - it will choose for you based on your data!
     {"id": "FR", "name": "France", "aliases": ["Frankreich"]},
     {"id": "US", "name": "United States", "aliases": ["USA", "America"]},
 ]

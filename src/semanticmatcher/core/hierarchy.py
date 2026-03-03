@@ -7,10 +7,9 @@ This module provides:
 - HierarchicalMatcher: User-facing API for hierarchical matching
 """
 
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Any
 import networkx as nx
 import numpy as np
-from functools import lru_cache
 from sklearn.metrics.pairwise import cosine_similarity
 
 from semanticmatcher.core.matcher import EmbeddingMatcher
@@ -74,14 +73,14 @@ class HierarchyIndex:
             # Add child edges (child -> parent)
             for child in hierarchy.get("children", []):
                 if child in self.entities:
-                    child_weights = self.entities[child].get("hierarchy", {}).get("weights", {})
+                    child_weights = (
+                        self.entities[child].get("hierarchy", {}).get("weights", {})
+                    )
                     weight = child_weights.get(entity_id, 1.0)
                     self.graph.add_edge(entity_id, child, weight=weight)
 
     def get_ancestors(
-        self,
-        entity_id: str,
-        max_depth: Optional[int] = None
+        self, entity_id: str, max_depth: Optional[int] = None
     ) -> List[str]:
         """
         Get all ancestor entities for a given entity.
@@ -122,9 +121,7 @@ class HierarchyIndex:
         return ancestors
 
     def get_descendants(
-        self,
-        entity_id: str,
-        max_depth: Optional[int] = None
+        self, entity_id: str, max_depth: Optional[int] = None
     ) -> List[str]:
         """
         Get all descendant entities for a given entity.
@@ -242,11 +239,11 @@ class HierarchicalScoring:
 
     # Depth penalties: how much to reduce score based on relationship depth
     DEPTH_PENALTIES = {
-        0: 1.0,    # Self-match
-        1: 0.9,    # Direct parent/child
-        2: 0.75,   # Grandparent/grandchild
-        3: 0.6,    # Great-grandparent
-        4: 0.5     # Even deeper
+        0: 1.0,  # Self-match
+        1: 0.9,  # Direct parent/child
+        2: 0.75,  # Grandparent/grandchild
+        3: 0.6,  # Great-grandparent
+        4: 0.5,  # Even deeper
     }
 
     # Hierarchical boost: how much to boost score based on relationship type
@@ -255,14 +252,11 @@ class HierarchicalScoring:
         "parent": 0.4,
         "child": 0.4,
         "ancestor": 0.3,
-        "descendant": 0.3
+        "descendant": 0.3,
     }
 
     def __init__(
-        self,
-        hierarchy_index: HierarchyIndex,
-        alpha: float = 0.7,
-        beta: float = 0.3
+        self, hierarchy_index: HierarchyIndex, alpha: float = 0.7, beta: float = 0.3
     ):
         """
         Initialize hierarchical scorer.
@@ -282,7 +276,7 @@ class HierarchicalScoring:
         entity_embedding: np.ndarray,
         entity_id: str,
         relationship_type: str = "self",
-        depth: int = 0
+        depth: int = 0,
     ) -> float:
         """
         Compute hierarchical score combining semantic and hierarchical features.
@@ -305,8 +299,7 @@ class HierarchicalScoring:
         """
         # Compute semantic similarity
         semantic_score = self._compute_semantic_similarity(
-            query_embedding,
-            entity_embedding
+            query_embedding, entity_embedding
         )
 
         # Get hierarchical boost for this relationship type
@@ -317,28 +310,19 @@ class HierarchicalScoring:
 
         # Combine scores
         final_score = (
-            semantic_score * self.alpha +
-            hierarchical_boost * self.beta
+            semantic_score * self.alpha + hierarchical_boost * self.beta
         ) * depth_penalty
 
         return float(final_score)
 
-    def _compute_semantic_similarity(
-        self,
-        emb1: np.ndarray,
-        emb2: np.ndarray
-    ) -> float:
+    def _compute_semantic_similarity(self, emb1: np.ndarray, emb2: np.ndarray) -> float:
         """Compute cosine similarity between two embeddings."""
-        similarity = cosine_similarity(
-            emb1.reshape(1, -1),
-            emb2.reshape(1, -1)
-        )[0][0]
+        similarity = cosine_similarity(emb1.reshape(1, -1), emb2.reshape(1, -1))[0][0]
         return float(similarity)
 
     def _get_hierarchical_boost(self, relationship_type: str) -> float:
         """Get hierarchical boost value for relationship type."""
         return self.HIERARCHICAL_BOOSTS.get(relationship_type, 0.2)
-
 
 
 class HierarchicalMatcher:
@@ -361,7 +345,7 @@ class HierarchicalMatcher:
         embedding_model: str = "BAAI/bge-base-en-v1.5",
         alpha: float = 0.7,
         beta: float = 0.3,
-        normalize: bool = True
+        normalize: bool = True,
     ):
         """
         Initialize hierarchical matcher.
@@ -385,11 +369,7 @@ class HierarchicalMatcher:
         self.hierarchy_index = HierarchyIndex(entities)
 
         # Initialize scorer
-        self.scorer = HierarchicalScoring(
-            self.hierarchy_index,
-            alpha=alpha,
-            beta=beta
-        )
+        self.scorer = HierarchicalScoring(self.hierarchy_index, alpha=alpha, beta=beta)
 
         # Will be initialized in build_index()
         self.embedding_matcher = None
@@ -419,14 +399,13 @@ class HierarchicalMatcher:
 
         # Create EmbeddingMatcher for semantic similarity
         embedding_entities = [
-            {"id": eid, "name": text}
-            for eid, text in self.entity_texts.items()
+            {"id": eid, "name": text} for eid, text in self.entity_texts.items()
         ]
 
         self.embedding_matcher = EmbeddingMatcher(
             entities=embedding_entities,
             model_name=self.embedding_model,
-            normalize=False  # Already normalized if needed
+            normalize=False,  # Already normalized if needed
         )
 
         self.embedding_matcher.build_index()
@@ -438,11 +417,7 @@ class HierarchicalMatcher:
         }
 
     def match(
-        self,
-        query: str,
-        top_k: int = 5,
-        match_level: str = "all",
-        max_depth: int = 3
+        self, query: str, top_k: int = 5, match_level: str = "all", max_depth: int = 3
     ) -> List[Dict[str, Any]]:
         """
         Match query considering hierarchical relationships.
@@ -470,10 +445,7 @@ class HierarchicalMatcher:
             query = self.normalizer.normalize(query)
 
         # Get query embedding
-        query_emb = self.embedding_matcher.model.encode(
-            query,
-            convert_to_numpy=True
-        )
+        query_emb = self.embedding_matcher.model.encode(query, convert_to_numpy=True)
 
         # Collect candidates based on match_level
         candidates = []
@@ -487,21 +459,19 @@ class HierarchicalMatcher:
 
             # Compute hierarchical score for self-match
             score = self.scorer.compute_score(
-                query_emb,
-                entity_emb,
-                entity_id,
-                relationship_type="self",
-                depth=0
+                query_emb, entity_emb, entity_id, relationship_type="self", depth=0
             )
 
-            candidates.append({
-                "id": entity_id,
-                "score": score,
-                "relationship": "self",
-                "depth": 0,
-                "semantic_score": base_match["score"],
-                "hierarchical_boost": 0.0
-            })
+            candidates.append(
+                {
+                    "id": entity_id,
+                    "score": score,
+                    "relationship": "self",
+                    "depth": 0,
+                    "semantic_score": base_match["score"],
+                    "hierarchical_boost": 0.0,
+                }
+            )
 
         # Add hierarchical matches if requested
         if match_level in ["ancestors", "all"]:
@@ -525,22 +495,26 @@ class HierarchicalMatcher:
                         ancestor_emb,
                         ancestor_id,
                         relationship_type="ancestor" if depth > 1 else "parent",
-                        depth=depth
+                        depth=depth,
                     )
 
-                    candidates.append({
-                        "id": ancestor_id,
-                        "score": score,
-                        "relationship": "parent" if depth == 1 else "ancestor",
-                        "depth": depth,
-                        "semantic_score": float(cosine_similarity(
-                            query_emb.reshape(1, -1),
-                            ancestor_emb.reshape(1, -1)
-                        )[0][0]),
-                        "hierarchical_boost": self.scorer._get_hierarchical_boost(
-                            "parent" if depth == 1 else "ancestor"
-                        )
-                    })
+                    candidates.append(
+                        {
+                            "id": ancestor_id,
+                            "score": score,
+                            "relationship": "parent" if depth == 1 else "ancestor",
+                            "depth": depth,
+                            "semantic_score": float(
+                                cosine_similarity(
+                                    query_emb.reshape(1, -1),
+                                    ancestor_emb.reshape(1, -1),
+                                )[0][0]
+                            ),
+                            "hierarchical_boost": self.scorer._get_hierarchical_boost(
+                                "parent" if depth == 1 else "ancestor"
+                            ),
+                        }
+                    )
 
         if match_level in ["descendants", "all"]:
             for base_match in base_matches[:top_k]:
@@ -562,22 +536,26 @@ class HierarchicalMatcher:
                         descendant_emb,
                         descendant_id,
                         relationship_type="descendant" if depth > 1 else "child",
-                        depth=depth
+                        depth=depth,
                     )
 
-                    candidates.append({
-                        "id": descendant_id,
-                        "score": score,
-                        "relationship": "child" if depth == 1 else "descendant",
-                        "depth": depth,
-                        "semantic_score": float(cosine_similarity(
-                            query_emb.reshape(1, -1),
-                            descendant_emb.reshape(1, -1)
-                        )[0][0]),
-                        "hierarchical_boost": self.scorer._get_hierarchical_boost(
-                            "child" if depth == 1 else "descendant"
-                        )
-                    })
+                    candidates.append(
+                        {
+                            "id": descendant_id,
+                            "score": score,
+                            "relationship": "child" if depth == 1 else "descendant",
+                            "depth": depth,
+                            "semantic_score": float(
+                                cosine_similarity(
+                                    query_emb.reshape(1, -1),
+                                    descendant_emb.reshape(1, -1),
+                                )[0][0]
+                            ),
+                            "hierarchical_boost": self.scorer._get_hierarchical_boost(
+                                "child" if depth == 1 else "descendant"
+                            ),
+                        }
+                    )
 
         # Remove duplicates (keep highest score)
         seen = {}
@@ -591,9 +569,7 @@ class HierarchicalMatcher:
         return results[:top_k]
 
     def get_ancestors(
-        self,
-        entity_id: str,
-        max_depth: Optional[int] = None
+        self, entity_id: str, max_depth: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
         Get all ancestors of an entity with metadata.
@@ -611,16 +587,14 @@ class HierarchicalMatcher:
             {
                 "id": aid,
                 "name": self.entities_dict[aid].get("name", aid),
-                "depth": self.hierarchy_index.get_relationship_depth(entity_id, aid)
+                "depth": self.hierarchy_index.get_relationship_depth(entity_id, aid),
             }
             for aid in ancestor_ids
             if aid in self.entities_dict
         ]
 
     def get_descendants(
-        self,
-        entity_id: str,
-        max_depth: Optional[int] = None
+        self, entity_id: str, max_depth: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
         Get all descendants of an entity with metadata.
@@ -638,16 +612,14 @@ class HierarchicalMatcher:
             {
                 "id": did,
                 "name": self.entities_dict[did].get("name", did),
-                "depth": self.hierarchy_index.get_relationship_depth(entity_id, did)
+                "depth": self.hierarchy_index.get_relationship_depth(entity_id, did),
             }
             for did in descendant_ids
             if did in self.entities_dict
         ]
 
     def get_hierarchy_path(
-        self,
-        entity_id: str,
-        to_entity: Optional[str] = None
+        self, entity_id: str, to_entity: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Get path from entity_id to root or to_entity.
@@ -679,10 +651,7 @@ class HierarchicalMatcher:
                 path_ids.append(current)
 
         return [
-            {
-                "id": pid,
-                "name": self.entities_dict[pid].get("name", pid)
-            }
+            {"id": pid, "name": self.entities_dict[pid].get("name", pid)}
             for pid in path_ids
             if pid in self.entities_dict
         ]
