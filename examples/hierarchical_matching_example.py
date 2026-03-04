@@ -12,32 +12,20 @@ entities = [
         "id": "EU",
         "name": "European Union",
         "aliases": ["EU", "Europe"],
-        "hierarchy": {
-            "parents": [],
-            "children": ["DE", "FR", "IT"],
-            "level": 1
-        }
+        "hierarchy": {"parents": [], "children": ["DE", "FR", "IT"], "level": 1},
     },
     {
         "id": "DE",
         "name": "Germany",
         "aliases": ["Deutschland", "Deutsch"],
-        "hierarchy": {
-            "parents": ["EU"],
-            "children": ["DE-BY", "DE-BW"],
-            "level": 2
-        }
+        "hierarchy": {"parents": ["EU"], "children": ["DE-BY", "DE-BW"], "level": 2},
     },
     {
         "id": "DE-BY",
         "name": "Bavaria",
         "aliases": ["Bayern"],
-        "hierarchy": {
-            "parents": ["DE"],
-            "children": [],
-            "level": 3
-        }
-    }
+        "hierarchy": {"parents": ["DE"], "children": [], "level": 3},
+    },
 ]
 
 # Initialize matcher
@@ -71,8 +59,8 @@ products = [
         "hierarchy": {
             "parents": ["laptops", "gaming-hardware"],
             "weights": {"laptops": 1.0, "gaming-hardware": 0.8},
-            "level": 2
-        }
+            "level": 2,
+        },
     },
     {
         "id": "laptops",
@@ -80,8 +68,8 @@ products = [
         "hierarchy": {
             "parents": ["computers"],
             "children": ["laptop-gaming"],
-            "level": 1
-        }
+            "level": 1,
+        },
     },
     {
         "id": "gaming-hardware",
@@ -89,9 +77,9 @@ products = [
         "hierarchy": {
             "parents": ["electronics"],
             "children": ["laptop-gaming"],
-            "level": 1
-        }
-    }
+            "level": 1,
+        },
+    },
 ]
 
 product_matcher = HierarchicalMatcher(entities=products)

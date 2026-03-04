@@ -76,6 +76,15 @@ class TestEntityMatcher:
         result = matcher.predict("UnknownCountry123")
         assert result is None
 
+    def test_entity_matcher_match_empty_candidates_returns_no_match(
+        self, sample_entities, training_data
+    ):
+        matcher = EntityMatcher(entities=sample_entities, threshold=0.0)
+        matcher.train(training_data, num_epochs=1)
+
+        assert matcher.match("Germany", candidates=[]) is None
+        assert matcher.match("Germany", candidates=[], top_k=2) == []
+
 
 class TestEmbeddingMatcher:
     """Tests for EmbeddingMatcher - similarity-based matching."""
@@ -235,6 +244,29 @@ class TestUnifiedMatcher:
             {"text": "United States", "label": "US"},
         ]
 
+    @staticmethod
+    def _build_trained_matcher(sample_entities, threshold=0.4):
+        class FakeClassifier:
+            labels = ["DE", "FR", "US"]
+
+            def predict_proba(self, text):
+                assert text == "deutschland"
+                return np.array([0.82, 0.75, 0.41], dtype=float)
+
+        entity_matcher = EntityMatcher(
+            entities=sample_entities,
+            threshold=threshold,
+            normalize=True,
+        )
+        entity_matcher.classifier = FakeClassifier()
+        entity_matcher.is_trained = True
+
+        matcher = Matcher(entities=sample_entities, mode="full", threshold=threshold)
+        matcher._entity_matcher = entity_matcher
+        matcher._active_matcher = entity_matcher
+        matcher._training_mode = "full"
+        return matcher
+
     def test_matcher_init(self, sample_entities):
         """Test basic initialization."""
         matcher = Matcher(entities=sample_entities)
@@ -283,7 +315,9 @@ class TestUnifiedMatcher:
         assert matcher._active_matcher is not None
         assert matcher._training_mode == "zero-shot"
 
-    def test_matcher_fit_auto_with_small_data(self, sample_entities, training_data_small):
+    def test_matcher_fit_auto_with_small_data(
+        self, sample_entities, training_data_small
+    ):
         """Test fit() with auto-detection and small training set."""
         matcher = Matcher(entities=sample_entities)
         matcher.fit(training_data_small)
@@ -298,13 +332,17 @@ class TestUnifiedMatcher:
         assert matcher._has_training_data
         assert matcher._active_matcher is not None
 
-    def test_matcher_fit_mode_override_to_zero_shot(self, sample_entities, training_data_full):
+    def test_matcher_fit_mode_override_to_zero_shot(
+        self, sample_entities, training_data_full
+    ):
         """Test fit() with mode override to zero-shot."""
         matcher = Matcher(entities=sample_entities)
         matcher.fit(training_data_full, mode="zero-shot")
         assert matcher._training_mode == "zero-shot"
 
-    def test_matcher_fit_mode_override_to_full(self, sample_entities, training_data_small):
+    def test_matcher_fit_mode_override_to_full(
+        self, sample_entities, training_data_small
+    ):
         """Test fit() with mode override to full training."""
         matcher = Matcher(entities=sample_entities)
         matcher.fit(training_data_small, mode="full", num_epochs=1)
@@ -332,6 +370,35 @@ class TestUnifiedMatcher:
         result = matcher.match("Deutschland")
         assert result is not None
         assert result["id"] == "DE"
+
+    def test_matcher_match_with_training_honors_top_k(self, sample_entities):
+        """Test trained mode returns ranked top-k results."""
+        matcher = self._build_trained_matcher(sample_entities)
+
+        results = matcher.match("Deutschland", top_k=2)
+
+        assert len(results) == 2
+        assert [result["id"] for result in results] == ["DE", "FR"]
+        assert [result["score"] for result in results] == [0.82, 0.75]
+
+    def test_matcher_match_with_training_filters_candidates(self, sample_entities):
+        """Test trained mode applies candidate filtering before top-k truncation."""
+        matcher = self._build_trained_matcher(sample_entities)
+        candidates = [sample_entities[1], sample_entities[2]]
+
+        results = matcher.match("Deutschland", top_k=2, candidates=candidates)
+
+        assert [result["id"] for result in results] == ["FR", "US"]
+        assert [result["score"] for result in results] == [0.75, 0.41]
+
+    def test_matcher_match_with_training_applies_threshold(self, sample_entities):
+        """Test trained mode still filters out results below the threshold."""
+        matcher = self._build_trained_matcher(sample_entities, threshold=0.8)
+
+        results = matcher.match("Deutschland", top_k=3)
+
+        assert [result["id"] for result in results] == ["DE"]
+        assert [result["score"] for result in results] == [0.82]
 
     def test_matcher_match_auto_fit(self, sample_entities):
         """Test match() triggers auto-fit if not yet fitted."""
@@ -382,29 +449,33 @@ class TestUnifiedMatcher:
         import semanticmatcher
 
         # Clear any previous warnings
-        semanticmatcher.__dict__.pop('EntityMatcher', None)
+        semanticmatcher.__dict__.pop("EntityMatcher", None)
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             # Access through __getattr__ which triggers deprecation
-            OldEntityMatcher = semanticmatcher.EntityMatcher
+            _ = semanticmatcher.EntityMatcher
             # Should see deprecation warning
             assert len(w) >= 1
-            assert any(issubclass(warning.category, DeprecationWarning) for warning in w)
+            assert any(
+                issubclass(warning.category, DeprecationWarning) for warning in w
+            )
 
     def test_matcher_backward_compatibility_embedding_matcher(self, sample_entities):
         """Test EmbeddingMatcher deprecation warning."""
         import semanticmatcher
 
         # Clear cached import
-        semanticmatcher.__dict__.pop('EmbeddingMatcher', None)
+        semanticmatcher.__dict__.pop("EmbeddingMatcher", None)
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             # Access through __getattr__ which triggers deprecation
-            OldEmbeddingMatcher = semanticmatcher.EmbeddingMatcher
+            _ = semanticmatcher.EmbeddingMatcher
             assert len(w) >= 1
-            assert any(issubclass(warning.category, DeprecationWarning) for warning in w)
+            assert any(
+                issubclass(warning.category, DeprecationWarning) for warning in w
+            )
 
     def test_matcher_no_deprecation_for_new_api(self, sample_entities):
         """Test that new Matcher class doesn't show deprecation warning."""

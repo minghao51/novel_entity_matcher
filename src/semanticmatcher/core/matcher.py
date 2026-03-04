@@ -335,30 +335,12 @@ class Matcher:
         if self._training_mode == "zero-shot":
             return self.embedding_matcher.match(texts, top_k=top_k, **kwargs)
         else:
-            # EntityMatcher returns entity IDs, we need to convert to match format
-            predictions = self.entity_matcher.predict(texts)
-            texts_list, single_input = _coerce_texts(texts)
-
-            # Build result dicts with scores
-            results = []
-            entity_lookup = {entity["id"]: entity for entity in self.entities}
-
-            for i, pred_id in enumerate(predictions if isinstance(predictions, list) else [predictions]):
-                if pred_id is None:
-                    results.append(None if top_k == 1 else [])
-                    continue
-
-                # For EntityMatcher, we return the entity with a placeholder score
-                # (EntityMatcher doesn't expose scores directly)
-                entity = entity_lookup.get(pred_id, {})
-                result = {
-                    "id": pred_id,
-                    "score": 1.0,  # EntityMatcher doesn't expose raw scores
-                    "text": entity.get("name", ""),
-                }
-                results.append(result if top_k == 1 else [result])
-
-            return _unwrap_single(results, single_input)
+            # Trained mode currently supports candidate filtering, but not batch_size.
+            return self.entity_matcher.match(
+                texts,
+                candidates=kwargs.get("candidates"),
+                top_k=top_k,
+            )
 
     def predict(
         self,
@@ -418,7 +400,7 @@ class EntityMatcher:
         batch_size: int = 16,
     ):
         normalized_data = self._get_training_data(training_data)
-        labels = list(set(item["label"] for item in normalized_data))
+        labels = list(dict.fromkeys(item["label"] for item in normalized_data))
 
         self.classifier = SetFitClassifier(
             labels=labels,
@@ -435,22 +417,64 @@ class EntityMatcher:
         if not self.is_trained or self.classifier is None:
             raise RuntimeError("Model not trained. Call train() first.")
 
+        matches = self.match(texts, top_k=1)
+
+        if isinstance(matches, list):
+            return [match["id"] if match else None for match in matches]
+        return matches["id"] if matches else None
+
+    def match(
+        self,
+        texts: TextInput,
+        candidates: Optional[List[Dict[str, Any]]] = None,
+        top_k: int = 1,
+    ) -> Any:
+        if not self.is_trained or self.classifier is None:
+            raise RuntimeError("Model not trained. Call train() first.")
+        if top_k < 1:
+            raise ValueError("top_k must be >= 1")
+
         texts, single_input = _coerce_texts(texts)
         texts = _normalize_texts(texts, self.normalizer, self.normalize)
+        entity_lookup = {entity["id"]: entity for entity in self.entities}
+        candidate_ids = None
+        if candidates is not None:
+            candidate_ids = {candidate["id"] for candidate in candidates}
 
-        predictions = []
+        results = []
         for text in texts:
             try:
                 proba = self.classifier.predict_proba(text)
-                if float(np.max(proba)) < self.threshold:
-                    predictions.append(None)
-                    continue
-                pred = self.classifier.predict(text)
-                predictions.append(pred)
+                ranked_matches = sorted(
+                    zip(self.classifier.labels, proba),
+                    key=lambda item: item[1],
+                    reverse=True,
+                )
+                matches = []
+                for label, score in ranked_matches:
+                    score = float(score)
+                    if score < self.threshold:
+                        continue
+                    if candidate_ids is not None and label not in candidate_ids:
+                        continue
+                    entity = entity_lookup.get(label, {})
+                    matches.append(
+                        {
+                            "id": label,
+                            "score": score,
+                            "text": entity.get("name", ""),
+                        }
+                    )
+                    if len(matches) >= top_k:
+                        break
+                if top_k == 1:
+                    results.append(matches[0] if matches else None)
+                else:
+                    results.append(matches)
             except ValueError:
-                predictions.append(None)
+                results.append(None if top_k == 1 else [])
 
-        return _unwrap_single(predictions, single_input)
+        return _unwrap_single(results, single_input)
 
 
 class EmbeddingMatcher:

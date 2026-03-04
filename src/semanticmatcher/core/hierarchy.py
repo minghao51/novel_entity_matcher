@@ -15,7 +15,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 from semanticmatcher.core.matcher import EmbeddingMatcher
 from semanticmatcher.core.normalizer import TextNormalizer
 
-
 __all__ = [
     "HierarchyIndex",
     "HierarchicalScoring",

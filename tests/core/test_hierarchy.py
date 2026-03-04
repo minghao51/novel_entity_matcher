@@ -2,7 +2,6 @@
 Tests for hierarchical entity matching.
 """
 
-import pytest
 import numpy as np
 from semanticmatcher.core.hierarchy import (
     HierarchyIndex,
@@ -10,59 +9,38 @@ from semanticmatcher.core.hierarchy import (
     HierarchicalMatcher,
 )
 
-
 # Test fixtures
 SAMPLE_HIERARCHICAL_ENTITIES = [
     {
         "id": "EU",
         "name": "European Union",
         "aliases": ["EU"],
-        "hierarchy": {
-            "parents": [],
-            "children": ["DE", "FR"],
-            "level": 1
-        }
+        "hierarchy": {"parents": [], "children": ["DE", "FR"], "level": 1},
     },
     {
         "id": "DE",
         "name": "Germany",
         "aliases": ["Deutschland"],
-        "hierarchy": {
-            "parents": ["EU"],
-            "children": ["DE-BY", "DE-BW"],
-            "level": 2
-        }
+        "hierarchy": {"parents": ["EU"], "children": ["DE-BY", "DE-BW"], "level": 2},
     },
     {
         "id": "FR",
         "name": "France",
         "aliases": [],
-        "hierarchy": {
-            "parents": ["EU"],
-            "children": [],
-            "level": 2
-        }
+        "hierarchy": {"parents": ["EU"], "children": [], "level": 2},
     },
     {
         "id": "DE-BY",
         "name": "Bavaria",
         "aliases": ["Bayern"],
-        "hierarchy": {
-            "parents": ["DE"],
-            "children": [],
-            "level": 3
-        }
+        "hierarchy": {"parents": ["DE"], "children": [], "level": 3},
     },
     {
         "id": "DE-BW",
         "name": "Baden-Württemberg",
         "aliases": [],
-        "hierarchy": {
-            "parents": ["DE"],
-            "children": [],
-            "level": 3
-        }
-    }
+        "hierarchy": {"parents": ["DE"], "children": [], "level": 3},
+    },
 ]
 
 MULTI_PARENT_ENTITIES = [
@@ -73,8 +51,8 @@ MULTI_PARENT_ENTITIES = [
         "hierarchy": {
             "parents": ["laptops", "gaming-hardware"],
             "weights": {"laptops": 1.0, "gaming-hardware": 0.8},
-            "level": 2
-        }
+            "level": 2,
+        },
     },
     {
         "id": "laptops",
@@ -83,8 +61,8 @@ MULTI_PARENT_ENTITIES = [
         "hierarchy": {
             "parents": ["computers"],
             "children": ["laptop-gaming"],
-            "level": 1
-        }
+            "level": 1,
+        },
     },
     {
         "id": "gaming-hardware",
@@ -93,9 +71,9 @@ MULTI_PARENT_ENTITIES = [
         "hierarchy": {
             "parents": ["electronics"],
             "children": ["laptop-gaming"],
-            "level": 1
-        }
-    }
+            "level": 1,
+        },
+    },
 ]
 
 
@@ -108,7 +86,7 @@ class TestHierarchyIndex:
 
         # Check graph exists
         assert index.graph is not None
-        assert hasattr(index.graph, 'nodes')
+        assert hasattr(index.graph, "nodes")
 
         # Check nodes
         assert "EU" in index.graph.nodes
@@ -215,7 +193,7 @@ class TestHierarchicalScoring:
 
         assert scorer.hierarchy == index
         assert scorer.alpha == 0.7  # Default
-        assert scorer.beta == 0.3   # Default
+        assert scorer.beta == 0.3  # Default
 
     def test_init_custom_params(self):
         """Test initialization with custom alpha and beta"""
@@ -235,11 +213,7 @@ class TestHierarchicalScoring:
         entity_emb = np.array([1.0, 0.0, 0.0])
 
         score = scorer.compute_score(
-            query_emb,
-            entity_emb,
-            "DE",
-            relationship_type="self",
-            depth=0
+            query_emb, entity_emb, "DE", relationship_type="self", depth=0
         )
 
         # High score for perfect semantic match at depth 0
@@ -257,14 +231,12 @@ class TestHierarchicalScoring:
 
         # Direct parent (depth 1)
         score_depth_1 = scorer.compute_score(
-            query_emb, entity_emb, "DE",
-            relationship_type="parent", depth=1
+            query_emb, entity_emb, "DE", relationship_type="parent", depth=1
         )
 
         # Grandparent (depth 2)
         score_depth_2 = scorer.compute_score(
-            query_emb, entity_emb, "EU",
-            relationship_type="ancestor", depth=2
+            query_emb, entity_emb, "EU", relationship_type="ancestor", depth=2
         )
 
         # Depth 2 should have lower score than depth 1
@@ -279,23 +251,19 @@ class TestHierarchicalScoring:
         entity_emb = np.array([1.0, 0.0, 0.0])
 
         score_self = scorer.compute_score(
-            query_emb, entity_emb, "DE",
-            relationship_type="self", depth=0
+            query_emb, entity_emb, "DE", relationship_type="self", depth=0
         )
         score_parent = scorer.compute_score(
-            query_emb, entity_emb, "DE",
-            relationship_type="parent", depth=1
+            query_emb, entity_emb, "DE", relationship_type="parent", depth=1
         )
         score_ancestor = scorer.compute_score(
-            query_emb, entity_emb, "EU",
-            relationship_type="ancestor", depth=2
+            query_emb, entity_emb, "EU", relationship_type="ancestor", depth=2
         )
 
         # Self match should score highest
         assert score_self > score_parent
         # Parent should score higher than distant ancestor
         assert score_parent > score_ancestor
-
 
 
 class TestHierarchicalMatcher:
@@ -316,7 +284,7 @@ class TestHierarchicalMatcher:
             embedding_model="sentence-transformers/all-MiniLM-L6-v2",
             alpha=0.8,
             beta=0.2,
-            normalize=False
+            normalize=False,
         )
 
         assert matcher.scorer.alpha == 0.8
@@ -341,7 +309,9 @@ class TestHierarchicalMatcher:
         matcher.build_index()
 
         # Query "Bavaria" should match DE-BY, DE, and EU
-        results = matcher.match("Bavaria", top_k=5, match_level="ancestors", max_depth=2)
+        results = matcher.match(
+            "Bavaria", top_k=5, match_level="ancestors", max_depth=2
+        )
 
         entity_ids = [r["id"] for r in results]
 
@@ -354,7 +324,9 @@ class TestHierarchicalMatcher:
         matcher.build_index()
 
         # Query "Europe" should match EU and descendants
-        results = matcher.match("European region", top_k=5, match_level="descendants", max_depth=2)
+        results = matcher.match(
+            "European region", top_k=5, match_level="descendants", max_depth=2
+        )
 
         # Should return some results
         assert len(results) > 0
