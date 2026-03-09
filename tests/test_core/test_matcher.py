@@ -110,6 +110,37 @@ class TestEmbeddingMatcher:
         matcher = EmbeddingMatcher(entities=sample_entities, model_name="BAAI/bge-m3")
         assert matcher.model_name == "BAAI/bge-m3"
 
+    def test_embedding_matcher_resolves_dynamic_alias_before_loading(
+        self, sample_entities, monkeypatch
+    ):
+        loaded_models = []
+
+        class FakeModel:
+            def __init__(self, model_name):
+                loaded_models.append(model_name)
+
+            def get_sentence_embedding_dimension(self):
+                return 2
+
+            def encode(self, texts, batch_size=None):
+                if isinstance(texts, str):
+                    texts = [texts]
+                return np.ones((len(texts), 2), dtype=float)
+
+        monkeypatch.setattr(
+            "semanticmatcher.core.matcher.SentenceTransformer", FakeModel
+        )
+
+        matcher = EmbeddingMatcher(
+            entities=sample_entities,
+            model_name="mpnet",
+            normalize=False,
+            threshold=0.0,
+        )
+        matcher.build_index()
+
+        assert loaded_models == ["sentence-transformers/all-mpnet-base-v2"]
+
     def test_embedding_matcher_build_index(self, sample_entities):
         matcher = EmbeddingMatcher(entities=sample_entities)
         matcher.build_index()
@@ -353,6 +384,38 @@ class TestUnifiedMatcher:
         matcher = Matcher(entities=sample_entities)
         matcher.fit(training_data_small, mode="full", num_epochs=1)
         assert matcher._training_mode == "full"
+
+    def test_matcher_training_default_uses_training_safe_backbone(
+        self, sample_entities, training_data_small, monkeypatch
+    ):
+        trained_models = []
+
+        def fake_train(self, training_data, **kwargs):
+            trained_models.append(self.model_name)
+            self.is_trained = True
+
+        monkeypatch.setattr(EntityMatcher, "train", fake_train)
+
+        matcher = Matcher(entities=sample_entities)
+        matcher.fit(training_data_small, mode="full", show_progress=False)
+
+        assert trained_models == ["sentence-transformers/all-mpnet-base-v2"]
+
+    def test_matcher_explicit_static_model_falls_back_for_training(
+        self, sample_entities, training_data_small, monkeypatch
+    ):
+        trained_models = []
+
+        def fake_train(self, training_data, **kwargs):
+            trained_models.append(self.model_name)
+            self.is_trained = True
+
+        monkeypatch.setattr(EntityMatcher, "train", fake_train)
+
+        matcher = Matcher(entities=sample_entities, model="potion-8m")
+        matcher.fit(training_data_small, mode="head-only", show_progress=False)
+
+        assert trained_models == ["sentence-transformers/all-mpnet-base-v2"]
 
     def test_matcher_fit_without_training_data_raises(self, sample_entities):
         """Test fit() without training data for non-zero-shot mode raises."""

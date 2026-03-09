@@ -1,4 +1,14 @@
-from semanticmatcher.config import Config, resolve_matcher_mode
+from semanticmatcher.config import (
+    Config,
+    RETRIEVAL_DEFAULT_MODEL,
+    TRAINING_DEFAULT_MODEL,
+    get_embedding_model_aliases,
+    get_training_model_aliases,
+    is_static_embedding_model,
+    resolve_matcher_mode,
+    resolve_training_model_alias,
+    supports_training_model,
+)
 
 
 def test_config_loads_default_and_nested_access(tmp_path, monkeypatch):
@@ -85,3 +95,28 @@ def test_resolve_matcher_mode_supported_values():
 
 def test_resolve_matcher_mode_unsupported_value_passthrough():
     assert resolve_matcher_mode("custom-mode") == "custom-mode"
+
+
+def test_training_model_resolution_uses_training_default_for_public_default():
+    assert resolve_training_model_alias("default").endswith("all-mpnet-base-v2")
+
+
+def test_static_models_are_marked_retrieval_only():
+    assert is_static_embedding_model(RETRIEVAL_DEFAULT_MODEL) is True
+    assert supports_training_model(RETRIEVAL_DEFAULT_MODEL) is False
+
+
+def test_dynamic_models_are_training_compatible():
+    assert supports_training_model(TRAINING_DEFAULT_MODEL) is True
+
+
+def test_training_model_aliases_exclude_static_models():
+    aliases = get_training_model_aliases()
+    assert "mpnet" in aliases
+    assert "potion-8m" not in aliases
+
+
+def test_embedding_model_aliases_include_static_and_dynamic_entries():
+    aliases = get_embedding_model_aliases()
+    assert "potion-8m" in aliases
+    assert "mpnet" in aliases
