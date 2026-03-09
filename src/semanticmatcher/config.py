@@ -7,15 +7,80 @@ import yaml
 PathLike = Union[str, Path]
 
 
-# Model registries for easy model selection
-MODEL_REGISTRY = {
-    "bge-base": "BAAI/bge-base-en-v1.5",
-    "bge-m3": "BAAI/bge-m3",
-    "nomic": "nomic-ai/nomic-embed-text-v1",
-    "mpnet": "sentence-transformers/all-mpnet-base-v2",
-    "minilm": "sentence-transformers/all-MiniLM-L6-v2",
-    "default": "sentence-transformers/all-mpnet-base-v2",
+# Model registries for easy model selection.
+MODEL_SPECS = {
+    "potion-8m": {
+        "name": "minishlab/potion-base-8M",
+        "backend": "static",
+        "supports_training": False,
+        "language": "en",
+    },
+    "potion-32m": {
+        "name": "minishlab/potion-base-32M",
+        "backend": "static",
+        "supports_training": False,
+        "language": "en",
+    },
+    "mrl-en": {
+        "name": "RikkaBotan/stable-static-embedding-fast-retrieval-mrl-en",
+        "backend": "static",
+        "supports_training": False,
+        "language": "en",
+    },
+    "mrl-multi": {
+        "name": "sentence-transformers/static-similarity-mrl-multilingual-v1",
+        "backend": "static",
+        "supports_training": False,
+        "language": "multilingual",
+    },
+    "bge-base": {
+        "name": "BAAI/bge-base-en-v1.5",
+        "backend": "sentence-transformers",
+        "supports_training": True,
+        "language": "en",
+    },
+    "bge-m3": {
+        "name": "BAAI/bge-m3",
+        "backend": "sentence-transformers",
+        "supports_training": True,
+        "language": "multilingual",
+    },
+    "nomic": {
+        "name": "nomic-ai/nomic-embed-text-v1",
+        "backend": "sentence-transformers",
+        "supports_training": True,
+        "language": "en",
+    },
+    "mpnet": {
+        "name": "sentence-transformers/all-mpnet-base-v2",
+        "backend": "sentence-transformers",
+        "supports_training": True,
+        "language": "en",
+    },
+    "minilm": {
+        "name": "sentence-transformers/all-MiniLM-L6-v2",
+        "backend": "sentence-transformers",
+        "supports_training": True,
+        "language": "en",
+    },
 }
+
+STATIC_MODEL_REGISTRY = {
+    alias: spec["name"]
+    for alias, spec in MODEL_SPECS.items()
+    if spec["backend"] == "static"
+}
+
+DYNAMIC_MODEL_REGISTRY = {
+    alias: spec["name"]
+    for alias, spec in MODEL_SPECS.items()
+    if spec["backend"] != "static"
+}
+
+MODEL_REGISTRY = {alias: spec["name"] for alias, spec in MODEL_SPECS.items()}
+RETRIEVAL_DEFAULT_MODEL = "potion-8m"
+TRAINING_DEFAULT_MODEL = "mpnet"
+MODEL_REGISTRY["default"] = MODEL_SPECS[RETRIEVAL_DEFAULT_MODEL]["name"]
 
 RERANKER_REGISTRY = {
     "bge-m3": "BAAI/bge-reranker-v2-m3",
@@ -37,6 +102,68 @@ MATCHER_MODE_REGISTRY = {
 def resolve_model_alias(model_name: str) -> str:
     """Resolve model alias to full model name."""
     return MODEL_REGISTRY.get(model_name, model_name)
+
+
+def get_model_spec(model_name: str) -> Optional[Dict[str, Any]]:
+    """Return registry metadata for an alias or resolved model name."""
+    if model_name == "default":
+        model_name = RETRIEVAL_DEFAULT_MODEL
+
+    if model_name in MODEL_SPECS:
+        return dict(MODEL_SPECS[model_name])
+
+    resolved_name = resolve_model_alias(model_name)
+    for alias, spec in MODEL_SPECS.items():
+        if spec["name"] == resolved_name:
+            model_spec = dict(spec)
+            model_spec["alias"] = alias
+            return model_spec
+    return None
+
+
+def is_static_embedding_model(model_name: str) -> bool:
+    """Return True when the model should use the static embedding backend."""
+    spec = get_model_spec(model_name)
+    if spec is not None:
+        return spec["backend"] == "static"
+    resolved_name = resolve_model_alias(model_name)
+    return resolved_name.startswith(("RikkaBotan/", "minishlab/")) or (
+        "static-" in resolved_name
+    )
+
+
+def supports_training_model(model_name: str) -> bool:
+    """Return whether the model can be used as a SetFit/SentenceTransformer backbone."""
+    spec = get_model_spec(model_name)
+    if spec is not None:
+        return bool(spec["supports_training"])
+    return not is_static_embedding_model(model_name)
+
+
+def resolve_training_model_alias(model_name: str) -> str:
+    """
+    Resolve the effective training backbone.
+
+    The public default stays retrieval-first, but trained modes must use a
+    SentenceTransformer-compatible backbone.
+    """
+    if model_name == "default":
+        return resolve_model_alias(TRAINING_DEFAULT_MODEL)
+
+    if supports_training_model(model_name):
+        return resolve_model_alias(model_name)
+
+    return resolve_model_alias(TRAINING_DEFAULT_MODEL)
+
+
+def get_embedding_model_aliases() -> list[str]:
+    """Return embedding aliases in a stable order for benchmarks."""
+    return list(MODEL_SPECS.keys())
+
+
+def get_training_model_aliases() -> list[str]:
+    """Return aliases that support SetFit-based training."""
+    return [alias for alias, spec in MODEL_SPECS.items() if spec["supports_training"]]
 
 
 def resolve_reranker_alias(model_name: str) -> str:
@@ -66,6 +193,9 @@ def recommend_model(use_case: str = "general", language: str = "en") -> str:
     """
     Recommend appropriate model based on use case and language.
 
+    Static embeddings are the default for retrieval-oriented use cases due to
+    their speed improvement with modest quality tradeoffs.
+
     Args:
         use_case: Type of matching - "general", "fast", "multilingual", "accurate"
         language: Primary language - "en", "zh", "multilingual"
@@ -74,14 +204,19 @@ def recommend_model(use_case: str = "general", language: str = "en") -> str:
         Model alias or full model name
     """
     recommendations = {
-        ("general", "en"): "mpnet",
-        ("general", "multilingual"): "bge-m3",
-        ("fast", "en"): "minilm",
-        ("fast", "multilingual"): "bge-m3",
-        ("accurate", "en"): "bge-base",
-        ("accurate", "multilingual"): "bge-m3",
+        # Static embeddings as default for English
+        ("general", "en"): "potion-8m",
+        ("fast", "en"): "potion-8m",
+        ("accurate", "en"): "potion-8m",
+        # Static embeddings for multilingual (MRL model)
+        ("general", "multilingual"): "mrl-multi",
+        ("fast", "multilingual"): "mrl-multi",
+        ("accurate", "multilingual"): "mrl-multi",
+        # Dynamic models for trained or context-heavy workflows.
+        ("dynamic", "en"): "bge-base",
+        ("dynamic", "multilingual"): "bge-m3",
     }
-    return recommendations.get((use_case, language), "mpnet")
+    return recommendations.get((use_case, language), RETRIEVAL_DEFAULT_MODEL)
 
 
 class Config:
