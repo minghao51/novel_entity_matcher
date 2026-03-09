@@ -1,6 +1,13 @@
-from typing import Optional, Union, List, Dict, Any, Tuple
+import os
+import platform
+from typing import Optional, Union, List, Dict, Any, Tuple, TYPE_CHECKING
 from collections import defaultdict
 import numpy as np
+
+# Enable CPU fallback for unsupported MPS ops before torch/sentence-transformers import.
+if platform.system() == "Darwin" and platform.machine() == "arm64":
+    os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -12,8 +19,19 @@ from ..utils.validation import (
     validate_threshold,
 )
 from ..utils.embeddings import ModelCache, get_default_cache
-from ..config import resolve_model_alias
+from ..config import (
+    is_static_embedding_model,
+    resolve_model_alias,
+    resolve_training_model_alias,
+    supports_training_model,
+)
 from ..exceptions import ModeError, TrainingError, ValidationError
+
+if TYPE_CHECKING:
+    from ..backends.static_embedding import StaticEmbeddingBackend
+
+# Type alias for embedding backend models
+EmbeddingModel = Union[SentenceTransformer, "StaticEmbeddingBackend"]
 
 TextInput = Union[str, List[str]]
 
@@ -134,6 +152,8 @@ class Matcher:
 
         self.entities = entities
         self.model_name = resolve_model_alias(model)
+        self._requested_model = model
+        self._training_model_name = resolve_training_model_alias(model)
         self.threshold = threshold
         self.normalize = normalize
         self.mode = mode
@@ -181,7 +201,7 @@ class Matcher:
             # Reference classes defined later in this module
             self._entity_matcher = EntityMatcher(
                 entities=self.entities,
-                model_name=self.model_name,
+                model_name=self._training_model_name,
                 threshold=self.threshold,
                 normalize=self.normalize,
             )
@@ -363,6 +383,12 @@ class Matcher:
         # In the future, we can add explicit head_only parameter to EntityMatcher.train()
         if self._training_mode in ("head-only", "full"):
             self._log(f"Training in {self._training_mode} mode")
+            if not supports_training_model(self._requested_model):
+                self._log(
+                    "Requested model is retrieval-only; falling back to "
+                    f"{self._training_model_name} for training",
+                    "warning",
+                )
             self.entity_matcher.train(
                 training_data, show_progress=show_progress, **kwargs
             )
@@ -837,7 +863,7 @@ class EmbeddingMatcher:
 
         self.normalizer = TextNormalizer() if normalize else None
         self.cache = cache if cache is not None else get_default_cache()
-        self.model: Optional[SentenceTransformer] = None
+        self.model: Optional[EmbeddingModel] = None
         self.entity_texts: List[str] = []
         self.entity_ids: List[str] = []
         self.embeddings: Optional[np.ndarray] = None
@@ -849,15 +875,30 @@ class EmbeddingMatcher:
         Args:
             batch_size: Batch size for encoding. None = use model's default.
         """
-        # Use cache to get or load the model
-        self.model = self.cache.get_or_load(
-            self.model_name, lambda: SentenceTransformer(self.model_name)
-        )
+        resolved_name = resolve_model_alias(self.model_name)
+
+        if is_static_embedding_model(resolved_name):
+            # Use StaticEmbeddingBackend for static models
+            from ..backends.static_embedding import StaticEmbeddingBackend
+
+            self.model = StaticEmbeddingBackend(
+                resolved_name, embedding_dim=self.embedding_dim
+            )
+        else:
+            # Use cache to get or load the SentenceTransformer model
+            self.model = self.cache.get_or_load(
+                resolved_name, lambda: SentenceTransformer(resolved_name)
+            )
 
         # Validate embedding_dim if provided
         if self.embedding_dim is not None:
             # Get actual model embedding dimension
-            actual_dim = self.model.get_sentence_embedding_dimension()
+            if isinstance(self.model, SentenceTransformer):
+                actual_dim = self.model.get_sentence_embedding_dimension()
+            elif hasattr(self.model, "embedding_dimension"):
+                actual_dim = self.model.embedding_dimension
+            else:
+                actual_dim = None
 
             # Validate against model's actual dimension
             if actual_dim is not None and self.embedding_dim > actual_dim:
@@ -883,6 +924,10 @@ class EmbeddingMatcher:
             )
         else:
             self.embeddings = self.model.encode(self.entity_texts)
+
+        # Convert to numpy array if the model returns a list
+        if isinstance(self.embeddings, list):
+            self.embeddings = np.array(self.embeddings)
 
         # Matryoshka embedding support: truncate to specified dimension
         if (
@@ -939,6 +984,10 @@ class EmbeddingMatcher:
             query_embeddings = self.model.encode(texts, batch_size=batch_size)
         else:
             query_embeddings = self.model.encode(texts)
+
+        # Convert to numpy array if the model returns a list
+        if isinstance(query_embeddings, list):
+            query_embeddings = np.array(query_embeddings)
 
         # Ensure both query and candidate embeddings use same dimension
         # Use the smaller of: model's output dim or configured embedding_dim
