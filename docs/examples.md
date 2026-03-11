@@ -1,106 +1,50 @@
-# Examples (`examples/`)
+# Examples
 
-Related docs: [`index.md`](./index.md) | [`quickstart.md`](./quickstart.md) | [`notebooks.md`](./notebooks.md)
+Related docs: [`index.md`](./index.md) | [`quickstart.md`](./quickstart.md) | [`experiments/index.md`](./experiments/index.md)
 
-This page catalogs all examples in `examples/` and helps you choose where to start.
+This page catalogs the organized example layout under `examples/`.
 
-> **⚠️ Deprecation Notice**: The wrapper API examples below use the deprecated `EmbeddingMatcher` and `EntityMatcher` classes. For the current unified `Matcher` API with smart auto-selection, see [`quickstart.md`](./quickstart.md) and [`migration-guide.md`](./migration-guide.md). These examples will be updated in a future release.
+## Current Examples
 
-## Two Learning Paths
+These are the maintained examples for the unified `Matcher` API.
 
-### Path 1: Wrapper API (Recommended)
-Start here for production use. These examples use the official `semanticmatcher` wrapper APIs.
-
-### Path 2: Raw Library Examples (Advanced)
-These examples demonstrate direct use of lower-level libraries like `setfit` and `sentence-transformers`. They're useful for advanced customization and understanding internals, but aren't the fastest way to get started.
-
----
-
-## Wrapper API Examples (Recommended Path)
-
-Start with these examples to learn the official API:
-
-| Example | Difficulty | Runtime | API Features Demonstrated |
+| Example | Difficulty | Runtime | What it covers |
 |---|---|---|---|
-| [`embedding_matcher_demo.py`](../examples/embedding_matcher_demo.py) | Beginner | 30s | ⚠️ Deprecated: EmbeddingMatcher, build_index(), match(), threshold, top_k, TextNormalizer |
-| [`entity_matcher_demo.py`](../examples/entity_matcher_demo.py) | Beginner | 2-3 min | ⚠️ Deprecated: EntityMatcher, train(), predict(), predict_proba(), threshold, model selection |
-| [`model_persistence.py`](../examples/model_persistence.py) | Intermediate | 3-4 min | ⚠️ Deprecated: SetFitClassifier.save/load, model versioning, production deployment |
-| [`batch_processing.py`](../examples/batch_processing.py) | Intermediate | 1-2 min | ⚠️ Deprecated: match_bulk(), parallel processing, performance benchmarking |
-| [`matcher_comparison.py`](../examples/matcher_comparison.py) | Intermediate | 4-5 min | ⚠️ Deprecated: EntityMatcher vs EmbeddingMatcher comparison, decision matrix |
-| [`threshold_tuning.py`](../examples/threshold_tuning.py) | Intermediate | 2 min | ⚠️ Deprecated: Threshold parameter impact, validation, precision/recall tradeoffs |
-| [`hybrid_matching_demo.py`](../examples/hybrid_matching_demo.py) | Intermediate | 30s | ⚠️ Deprecated: HybridMatcher, three-stage pipeline, blocking strategies, BM25Blocking |
+| [`current/basic_matcher.py`](../examples/current/basic_matcher.py) | Beginner | 30s | Zero-shot matching with the unified `Matcher` API |
+| [`current/trained_matcher.py`](../examples/current/trained_matcher.py) | Beginner | 1-2 min | Few-shot training with `Matcher.fit(training_data=...)` |
+| [`current/hierarchical_matching.py`](../examples/current/hierarchical_matching.py) | Intermediate | 30s | Hierarchical matching with `HierarchicalMatcher` |
 
-### Learning Sequence
+## Legacy Examples
 
-**Absolute Beginner**:
-1. Start with [`embedding_matcher_demo.py`](../examples/embedding_matcher_demo.py) - No training required, immediate results
-2. Then [`entity_matcher_demo.py`](../examples/entity_matcher_demo.py) - Learn training workflow
-3. Then [`matcher_comparison.py`](../examples/matcher_comparison.py) - Understand when to use each approach
+These files are intentionally kept in `examples/legacy/` for migration help only. They use deprecated classes and should not be the default path for new users.
 
-**Production Readiness**:
-4. [`model_persistence.py`](../examples/model_persistence.py) - Save/load models for deployment
-5. [`batch_processing.py`](../examples/batch_processing.py) - Handle bulk queries efficiently
-6. [`threshold_tuning.py`](../examples/threshold_tuning.py) - Optimize accuracy for your use case
+| Example | Status | Notes |
+|---|---|---|
+| [`legacy/embedding_matcher_demo.py`](../examples/legacy/embedding_matcher_demo.py) | Deprecated | Uses `EmbeddingMatcher` |
+| [`legacy/entity_matcher_demo.py`](../examples/legacy/entity_matcher_demo.py) | Deprecated | Uses `EntityMatcher` |
+| [`legacy/matcher_comparison.py`](../examples/legacy/matcher_comparison.py) | Deprecated | Compares deprecated APIs |
+| [`legacy/model_persistence.py`](../examples/legacy/model_persistence.py) | Deprecated | References legacy classifier persistence flows |
+| [`legacy/batch_processing.py`](../examples/legacy/batch_processing.py) | Deprecated | Uses legacy bulk APIs |
+| [`legacy/threshold_tuning.py`](../examples/legacy/threshold_tuning.py) | Deprecated | Threshold tuning examples on deprecated matchers |
+| [`legacy/hybrid_matching_demo.py`](../examples/legacy/hybrid_matching_demo.py) | Deprecated | Uses `HybridMatcher` directly |
 
-**Large Scale / Advanced**:
-7. [`hybrid_matching_demo.py`](../examples/hybrid_matching_demo.py) - Three-stage pipeline for big datasets
+For migration details, see [`migration-guide.md`](./migration-guide.md).
 
-### ⚠️ Unified Matcher API
+## Raw Examples
 
-The examples above use deprecated classes. The current recommended approach is the unified `Matcher` class which:
+These files use lower-level libraries directly and are intended for advanced experimentation.
 
-- **Auto-selects** the best mode based on your training data
-- **Supports explicit modes**: zero-shot, head-only, full, hybrid
-- **Simpler API**: Single `fit()` method for all modes
+| Example | Category | What it demonstrates |
+|---|---|---|
+| [`raw/basic_usage.py`](../examples/raw/basic_usage.py) | Raw SetFit training | Minimal direct SetFit workflow |
+| [`raw/country_matching.py`](../examples/raw/country_matching.py) | Raw SetFit training | Country-code matching outside wrapper APIs |
+| [`raw/custom_backend.py`](../examples/raw/custom_backend.py) | Backend exploration | Model/backend tradeoffs via direct library usage |
+| [`raw/zero_shot_classification.py`](../examples/raw/zero_shot_classification.py) | Generic classification | Non-entity SetFit classification examples |
 
-**See the current API in**:
-- [`quickstart.md`](./quickstart.md) - Getting started with the unified `Matcher`
-- [`matcher-modes.md`](./matcher-modes.md) - Detailed guide to matcher modes
-- [`migration-guide.md`](./migration-guide.md) - Migrating from deprecated classes
+## Recommended Order
 
----
-
-## Raw Library Examples (Advanced Path)
-
-These examples use `setfit`, `sentence-transformers`, or `datasets` directly. They're useful for:
-- Understanding the underlying libraries
-- Advanced customization beyond what wrappers provide
-- Experimental workflows
-
-| Example | Category | What it demonstrates | When to use it |
-|---|---|---|---|
-| [`basic_usage.py`](../examples/basic_usage.py) | Raw SetFit training | Minimal few-shot entity matching with direct SetFit trainer/model usage | Learn/control SetFit internals |
-| [`country_matching.py`](../examples/country_matching.py) | Raw SetFit training | Country-code matching with expanded labels/training data | Build a larger SetFit baseline outside wrappers |
-| [`custom_backend.py`](../examples/custom_backend.py) | Model/backend exploration | Multilingual/small/large model tradeoffs via direct SetFit usage | Compare embedding backbone choices |
-| [`zero_shot_classification.py`](../examples/zero_shot_classification.py) | Generic SetFit classification | Sentiment/intent examples using SetFit for text classification | Non-entity use cases / SetFit learning |
-
-### Notes for Raw Examples
-
-- These files may bypass `semanticmatcher.EntityMatcher` / `EmbeddingMatcher`
-- They may use APIs/options that differ from the wrapper defaults
-- Read [`quickstart.md`](./quickstart.md) first if your goal is entity matching with the project API
-- The examples in this category are provided for learning and experimentation
-
----
-
-## Suggested Workflow
-
-1. **Start here**: Read [`quickstart.md`](./quickstart.md) for the wrapper API introduction
-2. **Learn by doing**: Run the wrapper API examples in order (Beginner → Intermediate → Advanced)
-3. **Experiment**: Use [`notebooks.md`](./notebooks.md) for project experiments and exploratory work
-4. **Advanced**: Explore raw examples when you need lower-level control or customization
-
----
-
-## Quick Reference by Use Case
-
-**I want to...**
-- ...match entities without training → [`embedding_matcher_demo.py`](../examples/embedding_matcher_demo.py)
-- ...train a model with labeled data → [`entity_matcher_demo.py`](../examples/entity_matcher_demo.py)
-- ...choose between matchers → [`matcher_comparison.py`](../examples/matcher_comparison.py)
-- ...process many queries efficiently → [`batch_processing.py`](../examples/batch_processing.py)
-- ...save/load models → [`model_persistence.py`](../examples/model_persistence.py)
-- ...improve accuracy → [`threshold_tuning.py`](../examples/threshold_tuning.py)
-- ...handle large datasets (10k+ entities) → [`hybrid_matching_demo.py`](../examples/hybrid_matching_demo.py)
-- ...understand SetFit internals → [`basic_usage.py`](../examples/basic_usage.py)
-- ...compare different models → [`custom_backend.py`](../examples/custom_backend.py)
+1. Read [`quickstart.md`](./quickstart.md).
+2. Run [`current/basic_matcher.py`](../examples/current/basic_matcher.py).
+3. Run [`current/trained_matcher.py`](../examples/current/trained_matcher.py) if you have labels.
+4. Use `examples/legacy/` only when migrating older code.
+5. Use `examples/raw/` when you need lower-level control.

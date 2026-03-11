@@ -9,6 +9,7 @@ def test_cli_lists_datasets(capsys):
     out = capsys.readouterr().out
     assert "Available datasets:" in out
     assert "languages" in out
+    assert "occupations" in out
     assert "all" in out
 
 

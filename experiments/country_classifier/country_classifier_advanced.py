@@ -1,7 +1,7 @@
 """
 Country Code Classifier - Advanced Optimization
 
-This notebook explores methods to improve beyond baseline 90.91% accuracy.
+This experiment explores methods to improve beyond baseline 90.91% accuracy.
 
 Improvement Strategies:
   D) More epochs (6, 8) with optimized learning rates
@@ -9,14 +9,14 @@ Improvement Strategies:
   F) Different classifier heads (LinearSVC, SVC)
 
 Usage:
-    uv run python notebooks/country_classifier_advanced.py
+    uv run python experiments/country_classifier/country_classifier_advanced.py
 """
 
 import sys
 from pathlib import Path
 
 # Support local imports if this script starts using project modules under src/.
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_DIR = REPO_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
@@ -31,7 +31,7 @@ import numpy as np  # noqa: E402
 from typing import Optional  # noqa: E402
 import time  # noqa: E402
 
-DATA_PATH = Path(__file__).parent.parent / "data" / "country_training_data.csv"
+DATA_PATH = REPO_ROOT / "data" / "country_training_data.csv"
 TRAIN_RATIO = 0.8
 
 

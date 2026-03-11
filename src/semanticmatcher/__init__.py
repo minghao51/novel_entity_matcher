@@ -1,5 +1,16 @@
 from importlib import import_module
 import warnings
+import os
+
+# Configure logging early, before other imports
+# Check SEMANTIC_MATCHER_VERBOSE environment variable
+_verbose = os.getenv("SEMANTIC_MATCHER_VERBOSE", "false").lower() == "true"
+try:
+    from .utils.logging_config import configure_logging
+    configure_logging(verbose=_verbose)
+except Exception:
+    # If logging configuration fails, continue without it
+    pass
 
 try:
     from importlib.metadata import version as _pkg_version

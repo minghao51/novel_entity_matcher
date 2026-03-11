@@ -3,6 +3,7 @@ import numpy as np
 from datasets import Dataset
 
 from semanticmatcher.exceptions import TrainingError
+from ..utils.logging_config import get_logger, suppress_third_party_loggers
 
 try:
     from setfit import SetFitModel, Trainer, TrainingArguments
@@ -31,6 +32,7 @@ class SetFitClassifier:
         self.batch_size = batch_size
         self.model: Optional[SetFitModel] = None
         self.is_trained = False
+        self.logger = get_logger(__name__)
 
     def train(
         self,
@@ -47,6 +49,9 @@ class SetFitClassifier:
             batch_size: Batch size for training (overrides default)
             show_progress: Whether to show progress bar during training
         """
+        # Suppress third-party library logs
+        suppress_third_party_loggers()
+
         epochs = num_epochs or self.num_epochs
         batch = batch_size or self.batch_size
 

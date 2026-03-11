@@ -47,7 +47,13 @@ checkpoints/
 
 # Local runtime outputs
 tmp/
+.tmp/
 logs/
+artifacts/
+benchmark-results.json
+benchmarks_bert_results.json
+benchmarks_embedding_results.json
+benchmarks_training_results.json
 
 # Local config (user-specific)
 config.yaml

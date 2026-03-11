@@ -1,5 +1,5 @@
 """
-Country Code Semantic Categorization Notebook
+Country Code Semantic Categorization Experiment
 
 This script demonstrates training and evaluating a semantic classifier
 for mapping country names/variations to ISO 3166-1 alpha-2 country codes.
@@ -10,14 +10,14 @@ Three scenarios are compared:
   C) Full SetFit training (already done)
 
 Usage:
-    uv run python notebooks/country_classifier.py
+    uv run python experiments/country_classifier/country_classifier.py
 """
 
 import sys
 from pathlib import Path
 
 # Support running from the repo without manually setting PYTHONPATH.
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_DIR = REPO_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
@@ -28,7 +28,7 @@ from semanticmatcher.core.classifier import SetFitClassifier  # noqa: E402
 from sentence_transformers import SentenceTransformer  # noqa: E402
 from sklearn.metrics.pairwise import cosine_similarity  # noqa: E402
 
-DATA_PATH = Path(__file__).parent.parent / "data" / "country_training_data.csv"
+DATA_PATH = REPO_ROOT / "data" / "country_training_data.csv"
 TRAIN_RATIO = 0.8
 MODEL_NAME = "sentence-transformers/paraphrase-mpnet-base-v2"
 

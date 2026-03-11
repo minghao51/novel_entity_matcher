@@ -1,6 +1,6 @@
 # Country Code Classifier Scripts
 
-Related docs: [`index.md`](./index.md) | [`quickstart.md`](./quickstart.md) | [`notebooks.md`](./notebooks.md)
+Related docs: [`index.md`](./index.md) | [`../quickstart.md`](../quickstart.md) | [`./index.md`](./index.md)
 
 This document explains the different Python scripts in `experiments/country_classifier/` and their differences.
 
@@ -32,7 +32,7 @@ This document explains the different Python scripts in `experiments/country_clas
 
 **Usage:**
 ```bash
-PYTHONPATH=. uv run python experiments/country_classifier/country_classifier.py
+uv run python experiments/country_classifier/country_classifier.py
 ```
 
 ---
@@ -55,7 +55,7 @@ PYTHONPATH=. uv run python experiments/country_classifier/country_classifier.py
 
 **Usage:**
 ```bash
-PYTHONPATH=. uv run python experiments/country_classifier/country_classifier_quick.py
+uv run python experiments/country_classifier/country_classifier_quick.py
 ```
 
 **Findings:**
@@ -82,7 +82,7 @@ PYTHONPATH=. uv run python experiments/country_classifier/country_classifier_qui
 
 **Usage:**
 ```bash
-PYTHONPATH=. uv run python experiments/country_classifier/country_classifier_advanced.py
+uv run python experiments/country_classifier/country_classifier_advanced.py
 ```
 
 ---
@@ -179,4 +179,4 @@ UK,GB
 
 For new users, start with `country_classifier.py` to understand the fundamentals, then use `country_classifier_quick.py` for quick optimizations.
 
-For a full experiment inventory (including notebook conventions), see [`notebooks.md`](./notebooks.md).
+For the current experiment inventory, see [`index.md`](./index.md).

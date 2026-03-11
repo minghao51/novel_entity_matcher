@@ -1,6 +1,6 @@
 # Benchmarking Guide
 
-Related docs: [`index.md`](./index.md) | [`models.md`](./models.md) | [`static-embeddings.md`](./static-embeddings.md) | [`benchmark.md`](./benchmark.md) (results)
+Related docs: [`../index.md`](../index.md) | [`../models.md`](../models.md) | [`../static-embeddings.md`](../static-embeddings.md) | [`benchmark-results.md`](./benchmark-results.md) (results)
 
 ## Overview
 
@@ -34,7 +34,7 @@ uv run python scripts/benchmark_embeddings.py \
 
 # Save results
 uv run python scripts/benchmark_embeddings.py \
-  --output benchmark-results.json
+  --output artifacts/benchmarks/benchmark-results.json
 
 # Limit data size (faster testing)
 uv run python scripts/benchmark_embeddings.py \
@@ -284,7 +284,7 @@ print(results)
 ```python
 import pandas as pd
 
-results = pd.read_json("benchmark-results.json")
+results = pd.read_json("artifacts/benchmarks/benchmark-results.json")
 
 # Your custom analysis
 avg_accuracy = results.groupby("model")["accuracy"].mean()
@@ -312,7 +312,7 @@ Compare your results with [`benchmark.md`](./benchmark.md):
 
 ```bash
 # View published results
-cat docs/benchmark.md
+cat docs/experiments/benchmark-results.md
 
 # Compare with your results
 echo "Your results:"

@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Related docs: [`quickstart.md`](./quickstart.md) | [`notebooks.md`](./notebooks.md) | [`index.md`](./index.md)
+Related docs: [`quickstart.md`](./quickstart.md) | [`examples.md`](./examples.md) | [`experiments/index.md`](./experiments/index.md) | [`index.md`](./index.md)
 
 This page covers common setup and first-run issues for the package plus exploratory scripts/notebooks.
 
@@ -116,7 +116,7 @@ If you're getting **too few matches** (low recall):
 - **Balanced** (0.7, default): General purpose
 - **High recall** (0.5-0.6): Fuzzy search, data cleaning
 
-See [`examples/threshold_tuning.py`](../examples/threshold_tuning.py) for a complete guide.
+See [`examples/legacy/threshold_tuning.py`](../examples/legacy/threshold_tuning.py) for a legacy threshold tuning walkthrough.
 
 ## Model Selection Issues
 
@@ -152,12 +152,9 @@ matcher = EmbeddingMatcher(entities, model_name="minilm")
 
 - If you add a local `geograpy` notebook experiment, expect extra installs and dependency troubleshooting beyond the core project
 
-## Path Migration Note (`notebook/` -> `experiments/` / `notebooks/`)
+## Path Migration Note (`notebook/` -> `experiments/`)
 
-The old experiment script path `notebook/...` is now split by artifact type:
-
-- script experiments -> `experiments/...`
-- Jupyter notebooks -> `notebooks/...`
+The old experiment script path `notebook/...` was moved into `experiments/...`.
 
 Updated examples:
 

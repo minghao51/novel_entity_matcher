@@ -28,6 +28,7 @@ from ..config import (
     resolve_training_model_alias,
     supports_training_model,
 )
+from ..utils.logging_config import configure_logging, get_logger
 from ..exceptions import ModeError, TrainingError, ValidationError
 
 if TYPE_CHECKING:
@@ -154,6 +155,14 @@ class Matcher:
         validate_entities(entities)
         validate_threshold(threshold)
 
+        # Check environment variable for verbose setting
+        env_verbose = os.getenv("SEMANTIC_MATCHER_VERBOSE", "false").lower() == "true"
+        verbose = verbose or env_verbose
+
+        # Configure logging
+        configure_logging(verbose=verbose)
+        self.logger = get_logger(__name__)
+
         self.entities = entities
         self.model_name = resolve_model_alias(model)
         self._requested_model = model
@@ -242,21 +251,6 @@ class Matcher:
                 normalize=self.normalize,
             )
         return self._hybrid_matcher
-
-    def _log(self, message: str, level: str = "info") -> None:
-        """Log message if verbose mode is enabled.
-
-        Args:
-            message: The message to log
-            level: Log level ('info', 'warning', 'debug')
-        """
-        if self._verbose:
-            prefix = {
-                "info": "[INFO]",
-                "warning": "[WARN]",
-                "debug": "[DEBUG]",
-            }.get(level, "[LOG]")
-            print(f"{prefix} {message}")
 
     def _detect_training_mode(self, training_data: Optional[List[dict]]) -> str:
         """
@@ -363,7 +357,7 @@ class Matcher:
             # Explicit full training
             matcher.fit(training_data, mode="full")
         """
-        self._log(f"Starting fit with mode: {self._training_mode}")
+        self.logger.info(f"Starting fit with mode: {self._training_mode}")
 
         # Determine the mode to use
         if mode is not None:
@@ -376,7 +370,7 @@ class Matcher:
         elif training_data is not None and self._training_mode == "auto":
             # Auto-detect mode based on training data
             self._training_mode = self._detect_training_mode(training_data)
-            self._log(f"Auto-detected mode: {self._training_mode}", "debug")
+            self.logger.debug(f"Auto-detected mode: {self._training_mode}")
         elif training_data is None and self._training_mode == "auto":
             # No training data, use zero-shot
             self._training_mode = "zero-shot"
@@ -395,18 +389,17 @@ class Matcher:
 
         if self._training_mode == "hybrid":
             if training_data is not None:
-                self._log(
-                    "Ignoring training_data in hybrid mode; hybrid matching is inference-only",
-                    "warning",
+                self.logger.warning(
+                    "Ignoring training_data in hybrid mode; hybrid matching is inference-only"
                 )
-            self._log("Initializing hybrid pipeline")
+            self.logger.info("Initializing hybrid pipeline")
             self._active_matcher = self.hybrid_matcher
             self._has_training_data = False
             return self
 
         # Build index for zero-shot mode
         if self._training_mode == "zero-shot":
-            self._log("Building zero-shot index (no training required)")
+            self.logger.info("Building zero-shot index (no training required)")
             self.embedding_matcher.build_index()
             self._active_matcher = self.embedding_matcher
             return self
@@ -422,33 +415,31 @@ class Matcher:
         # SetFit handles head-only vs full via different internal settings
         # In the future, we can add explicit head_only parameter to EntityMatcher.train()
         if self._training_mode in ("head-only", "full", "bert"):
-            self._log(f"Training in {self._training_mode} mode")
+            self.logger.info(f"Training in {self._training_mode} mode")
 
             # Check if model supports the selected mode
             if self._training_mode == "bert" and not is_bert_model(
                 self._requested_model
             ):
                 # Using a non-BERT model with bert mode - warn but proceed
-                self._log(
+                self.logger.warning(
                     f"Using non-BERT model '{self._requested_model}' with bert mode. "
-                    "For optimal results, use a BERT-based model.",
-                    "warning",
+                    "For optimal results, use a BERT-based model."
                 )
             elif self._training_mode in (
                 "head-only",
                 "full",
             ) and not supports_training_model(self._requested_model):
-                self._log(
+                self.logger.warning(
                     "Requested model is retrieval-only; falling back to "
-                    f"{self._training_model_name} for training",
-                    "warning",
+                    f"{self._training_model_name} for training"
                 )
 
             matcher = self._resolve_classifier_matcher()
             matcher.train(training_data, show_progress=show_progress, **kwargs)
             self._active_matcher = matcher
             self._has_training_data = True
-            self._log("Training complete")
+            self.logger.info("Training complete")
             return self
 
         raise ModeError(

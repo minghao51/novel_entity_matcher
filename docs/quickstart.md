@@ -284,12 +284,12 @@ Project examples live in [`examples/`](../examples/).
 From the repository root:
 
 ```bash
-uv run python examples/embedding_matcher_demo.py
-uv run python examples/entity_matcher_demo.py
+uv run python examples/current/basic_matcher.py
+uv run python examples/current/trained_matcher.py
 ```
 
 ## Next Steps
 
-- See [`examples.md`](./examples.md) for the example catalog.
+- See [`examples.md`](./examples.md) for the organized example catalog.
 - See [`migration-guide.md`](./migration-guide.md) if you are moving off deprecated matcher classes.
 - See [`troubleshooting.md`](./troubleshooting.md) if model downloads or imports fail.

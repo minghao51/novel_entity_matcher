@@ -4,14 +4,14 @@ Country Code Classifier - Quick Optimization Test
 Quick test to improve beyond 90.91% baseline.
 
 Usage:
-    uv run python notebooks/country_classifier_quick.py
+    uv run python experiments/country_classifier/country_classifier_quick.py
 """
 
 import sys
 from pathlib import Path
 
 # Support local imports if this script starts using project modules under src/.
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_DIR = REPO_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
@@ -24,7 +24,7 @@ from sentence_transformers import SentenceTransformer  # noqa: E402
 from datasets import Dataset  # noqa: E402
 import time  # noqa: E402
 
-DATA_PATH = Path(__file__).parent.parent / "data" / "country_training_data.csv"
+DATA_PATH = REPO_ROOT / "data" / "country_training_data.csv"
 TRAIN_RATIO = 0.8
 
 

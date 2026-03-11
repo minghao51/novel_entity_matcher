@@ -936,7 +936,7 @@ class TestMatcherBERTMode:
         assert matcher._training_model_name == "sentence-transformers/all-mpnet-base-v2"
 
     def test_matcher_bert_mode_non_bert_model_warns_and_falls_back(
-        self, sample_entities, training_data_rich, monkeypatch, capsys
+        self, sample_entities, training_data_rich, monkeypatch, caplog
     ):
         """Test explicit bert mode falls back to the default BERT backbone."""
         trained_models = []
@@ -953,12 +953,12 @@ class TestMatcherBERTMode:
             model="mpnet",
             verbose=True,
         )
-        matcher.fit(training_data_rich, show_progress=False)
-        captured = capsys.readouterr()
+        with caplog.at_level("WARNING"):
+            matcher.fit(training_data_rich, show_progress=False)
 
         assert matcher._bert_model_name == "distilbert-base-uncased"
         assert trained_models == ["distilbert-base-uncased"]
-        assert "Using non-BERT model 'mpnet' with bert mode" in captured.out
+        assert "Using non-BERT model 'mpnet' with bert mode" in caplog.text
 
     def test_matcher_auto_detected_bert_uses_bert_backbone(
         self, sample_entities, training_data_rich, monkeypatch

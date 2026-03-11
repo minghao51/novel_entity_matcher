@@ -147,21 +147,21 @@ matcher = Matcher(mode="zero-shot", model="bge-m3")
 Run the comprehensive benchmark suite with:
 
 ```bash
-uv run python scripts/benchmark_embeddings.py --track all --output benchmark-results.json
+uv run python scripts/benchmark_embeddings.py --track all --output artifacts/benchmarks/benchmark-results.json
 ```
 
 ## Documentation
 
-- [Migration Guide](docs/migration-guide.md) - Migrate from old API to unified Matcher
+- [Documentation Index](docs/index.md) - Organized entry point for guides, experiments, and archive material
 - [Quick Start Guide](docs/quickstart.md) - Complete getting started guide
-- [Examples Catalog](docs/examples.md) - All examples with difficulty ratings
+- [Examples Catalog](docs/examples.md) - Current, legacy, and raw examples
 - [Troubleshooting](docs/troubleshooting.md) - Common issues and fixes
 - [Architecture](docs/architecture.md) - Module layout and design
 
 ## Where To Start
 
 1. **New Users**: [Quick Start Guide](docs/quickstart.md)
-2. **Working Examples**: [examples/embedding_matcher_demo.py](examples/embedding_matcher_demo.py)
+2. **Working Examples**: [examples/current/basic_matcher.py](examples/current/basic_matcher.py)
 3. **Advanced**: [docs/examples.md](docs/examples.md)
 
 ## Project Layout
@@ -169,8 +169,9 @@ uv run python scripts/benchmark_embeddings.py --track all --output benchmark-res
 ```text
 semantic_matcher/              # Repository root
 ├── src/semanticmatcher/       # Python package
-├── examples/                  # Runnable examples (wrapper API)
+├── examples/                  # Current, legacy, and raw runnable examples
 ├── experiments/               # Exploratory scripts
+├── artifacts/                 # Local generated benchmark outputs
 ├── tests/                     # Automated tests
 ├── docs/                      # Documentation
 └── pyproject.toml             # Packaging config

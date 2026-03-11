@@ -11,6 +11,7 @@ from typing import Any, List, Optional, Union
 import numpy as np
 
 from semanticmatcher.exceptions import TrainingError
+from ..utils.logging_config import get_logger, suppress_third_party_loggers
 
 try:
     from transformers import (
@@ -88,6 +89,7 @@ class BERTClassifier:
         self.model: Optional[Any] = None
         self.tokenizer: Optional[Any] = None
         self.is_trained = False
+        self.logger = get_logger(__name__)
 
     def train(
         self,
@@ -107,6 +109,9 @@ class BERTClassifier:
         Raises:
             TrainingError: If training fails or data is invalid.
         """
+        # Suppress third-party library logs
+        suppress_third_party_loggers()
+
         epochs = num_epochs or self.num_epochs
         batch = batch_size or self.batch_size
 
