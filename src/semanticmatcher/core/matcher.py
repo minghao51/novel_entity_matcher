@@ -175,6 +175,9 @@ class Matcher:
         self.reranker_model = reranker_model
         self._verbose = verbose
 
+        # Async support
+        self._async_executor = None
+
         # Auto-detect mode if not explicitly set
         if mode is None or mode == "auto":
             self._training_mode = "auto"
@@ -446,6 +449,41 @@ class Matcher:
             f"Unknown mode: {self._training_mode}",
             invalid_mode=self._training_mode,
         )
+
+    async def fit_async(
+        self,
+        training_data: Optional[List[dict]] = None,
+        mode: Optional[str] = None,
+        show_progress: bool = True,
+        **kwargs,
+    ) -> "Matcher":
+        """
+        Async version of fit(). Train the matcher if needed.
+
+        Args:
+            training_data: Optional training examples with 'text' and 'label' keys
+            mode: Override auto-detection (None, 'zero-shot', 'head-only', 'full', 'hybrid', 'bert')
+            show_progress: Whether to show progress bar during training
+            **kwargs: Additional arguments (num_epochs, batch_size)
+
+        Returns:
+            self, for method chaining
+        """
+        # Lazy initialization of async executor
+        if self._async_executor is None:
+            from .async_utils import AsyncExecutor
+            self._async_executor = AsyncExecutor()
+
+        # Run sync fit in thread pool
+        # The sync fit() handles all the mode detection and training logic
+        await self._async_executor.run_in_thread(
+            self.fit,
+            training_data,
+            mode,
+            show_progress,
+            **kwargs
+        )
+        return self
 
     def match(
         self,
@@ -776,6 +814,29 @@ class Matcher:
         """Simple string representation."""
         status = "trained" if self._active_matcher else "untrained"
         return f"Matcher(mode={self._training_mode}, status={status})"
+
+    async def aclose(self) -> None:
+        """
+        Async cleanup of resources.
+
+        Shuts down the async executor if it was initialized.
+        This is called automatically when using the matcher as an async context manager.
+        """
+        if self._async_executor:
+            self._async_executor.shutdown()
+            self._async_executor = None
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        # Initialize async executor on context entry
+        if self._async_executor is None:
+            from .async_utils import AsyncExecutor
+            self._async_executor = AsyncExecutor()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit - ensures cleanup."""
+        await self.aclose()
 
 
 class EntityMatcher:
