@@ -1,7 +1,7 @@
 import asyncio
 import os
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable, List
+from typing import Any, Callable, List, Optional
 import functools
 
 
@@ -13,7 +13,7 @@ class AsyncExecutor:
     allowing async code to proceed without blocking the event loop.
     """
 
-    def __init__(self, max_workers: int = None):
+    def __init__(self, max_workers: Optional[int] = None):
         """
         Initialize the async executor.
 
@@ -38,7 +38,7 @@ class AsyncExecutor:
         Returns:
             The return value of func
         """
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             self._executor,
             functools.partial(func, *args, **kwargs)
@@ -70,5 +70,7 @@ class AsyncExecutor:
         return [item for batch in results for item in batch]
 
     def shutdown(self):
-        """Clean up resources by shutting down the thread pool."""
-        self._executor.shutdown(wait=True)
+        """Clean up resources by shutting down the thread pool. Idempotent."""
+        if hasattr(self, '_executor') and self._executor is not None:
+            self._executor.shutdown(wait=True)
+            self._executor = None

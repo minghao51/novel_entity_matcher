@@ -1,5 +1,4 @@
 import pytest
-import asyncio
 from semanticmatcher.core.async_utils import AsyncExecutor
 
 
