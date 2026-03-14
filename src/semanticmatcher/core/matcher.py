@@ -473,16 +473,13 @@ class Matcher:
         # Lazy initialization of async executor
         if self._async_executor is None:
             from .async_utils import AsyncExecutor
+
             self._async_executor = AsyncExecutor()
 
         # Run sync fit in thread pool
         # The sync fit() handles all the mode detection and training logic
         await self._async_executor.run_in_thread(
-            self.fit,
-            training_data,
-            mode,
-            show_progress,
-            **kwargs
+            self.fit, training_data, mode, show_progress, **kwargs
         )
         return self
 
@@ -569,6 +566,7 @@ class Matcher:
         # Lazy initialization of async executor
         if self._async_executor is None:
             from .async_utils import AsyncExecutor
+
             self._async_executor = AsyncExecutor()
 
         # Route to appropriate matcher based on mode
@@ -581,7 +579,7 @@ class Matcher:
                 texts=texts,
                 candidates=kwargs.get("candidates"),
                 top_k=top_k,
-                batch_size=kwargs.get("batch_size")
+                batch_size=kwargs.get("batch_size"),
             )
         elif self._training_mode == "bert":
             return await self._async_executor.run_in_thread(
@@ -676,11 +674,14 @@ class Matcher:
             self._format_hybrid_results(results, top_k=top_k) for results in raw_results
         ]
 
-    async def _match_hybrid_async(self, texts: TextInput, top_k: int = 1, **kwargs) -> Any:
+    async def _match_hybrid_async(
+        self, texts: TextInput, top_k: int = 1, **kwargs
+    ) -> Any:
         """Async version of _match_hybrid."""
         # Lazy initialization of async executor
         if self._async_executor is None:
             from .async_utils import AsyncExecutor
+
             self._async_executor = AsyncExecutor()
 
         texts, single_input = _coerce_texts(texts)
@@ -740,6 +741,7 @@ class Matcher:
         # Lazy initialization of async executor
         if self._async_executor is None:
             from .async_utils import AsyncExecutor
+
             self._async_executor = AsyncExecutor()
 
         total = len(queries)
@@ -766,14 +768,11 @@ class Matcher:
                 if asyncio.current_task().cancelled():
                     raise asyncio.CancelledError()
 
-                batch = queries[i:i+batch_size]
+                batch = queries[i : i + batch_size]
 
                 # Run batch matching in thread pool
                 batch_results = await self._async_executor.run_in_thread(
-                    self.match,
-                    batch,
-                    top_k,
-                    **kwargs
+                    self.match, batch, top_k, **kwargs
                 )
 
                 # Ensure batch_results is always a list
@@ -830,6 +829,7 @@ class Matcher:
         # Lazy initialization of async executor
         if self._async_executor is None:
             from .async_utils import AsyncExecutor
+
             self._async_executor = AsyncExecutor()
 
         if not self._active_matcher:
@@ -845,7 +845,9 @@ class Matcher:
         try:
             results = await self.match_async(query, top_k=top_k)
         finally:
-            await self._async_executor.run_in_thread(self.set_threshold, original_threshold)
+            await self._async_executor.run_in_thread(
+                self.set_threshold, original_threshold
+            )
 
         if results is None:
             result_list = []
@@ -896,7 +898,9 @@ class Matcher:
 
         if not self._active_matcher:
             diagnosis["issue"] = "Matcher not ready"
-            diagnosis["suggestion"] = "Call matcher.fit() or matcher.fit_async() to initialize"
+            diagnosis["suggestion"] = (
+                "Call matcher.fit() or matcher.fit_async() to initialize"
+            )
             return diagnosis
 
         # Try the match
@@ -1139,6 +1143,7 @@ class Matcher:
         # Initialize async executor on context entry
         if self._async_executor is None:
             from .async_utils import AsyncExecutor
+
             self._async_executor = AsyncExecutor()
         return self
 
@@ -1290,8 +1295,9 @@ class EntityMatcher:
     ):
         """Async version of train()."""
         # Lazy initialization of async executor
-        if not hasattr(self, '_async_executor') or self._async_executor is None:
+        if not hasattr(self, "_async_executor") or self._async_executor is None:
             from .async_utils import AsyncExecutor
+
             self._async_executor = AsyncExecutor()
 
         await self._async_executor.run_in_thread(
@@ -1310,11 +1316,14 @@ class EntityMatcher:
     ) -> Any:
         """Async version of match()."""
         if not self.is_trained or self.classifier is None:
-            raise RuntimeError("Model not trained. Call train() or train_async() first.")
+            raise RuntimeError(
+                "Model not trained. Call train() or train_async() first."
+            )
 
         # Lazy initialization of async executor
-        if not hasattr(self, '_async_executor') or self._async_executor is None:
+        if not hasattr(self, "_async_executor") or self._async_executor is None:
             from .async_utils import AsyncExecutor
+
             self._async_executor = AsyncExecutor()
 
         return await self._async_executor.run_in_thread(
@@ -1324,10 +1333,14 @@ class EntityMatcher:
             top_k,
         )
 
-    async def predict_async(self, texts: TextInput) -> Union[Optional[str], List[Optional[str]]]:
+    async def predict_async(
+        self, texts: TextInput
+    ) -> Union[Optional[str], List[Optional[str]]]:
         """Async version of predict()."""
         if not self.is_trained or self.classifier is None:
-            raise RuntimeError("Model not trained. Call train() or train_async() first.")
+            raise RuntimeError(
+                "Model not trained. Call train() or train_async() first."
+            )
 
         matches = await self.match_async(texts, top_k=1)
 
@@ -1550,8 +1563,9 @@ class EmbeddingMatcher:
     async def build_index_async(self, batch_size: Optional[int] = None):
         """Async version of build_index()."""
         # Lazy initialization of async executor
-        if not hasattr(self, '_async_executor') or self._async_executor is None:
+        if not hasattr(self, "_async_executor") or self._async_executor is None:
             from .async_utils import AsyncExecutor
+
             self._async_executor = AsyncExecutor()
 
         await self._async_executor.run_in_thread(
@@ -1568,11 +1582,14 @@ class EmbeddingMatcher:
     ) -> Any:
         """Async version of match()."""
         if self.embeddings is None or self.model is None:
-            raise RuntimeError("Index not built. Call build_index() or build_index_async() first.")
+            raise RuntimeError(
+                "Index not built. Call build_index() or build_index_async() first."
+            )
 
         # Lazy initialization of async executor
-        if not hasattr(self, '_async_executor') or self._async_executor is None:
+        if not hasattr(self, "_async_executor") or self._async_executor is None:
             from .async_utils import AsyncExecutor
+
             self._async_executor = AsyncExecutor()
 
         return await self._async_executor.run_in_thread(

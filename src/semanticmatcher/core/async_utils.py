@@ -40,15 +40,11 @@ class AsyncExecutor:
         """
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
-            self._executor,
-            functools.partial(func, *args, **kwargs)
+            self._executor, functools.partial(func, *args, **kwargs)
         )
 
     async def run_in_thread_batch(
-        self,
-        func: Callable,
-        items: List[Any],
-        batch_size: int = 32
+        self, func: Callable, items: List[Any], batch_size: int = 32
     ) -> List[Any]:
         """
         Run sync function on batches concurrently.
@@ -64,13 +60,13 @@ class AsyncExecutor:
         Returns:
             Flattened list of results from all batches
         """
-        batches = [items[i:i+batch_size] for i in range(0, len(items), batch_size)]
+        batches = [items[i : i + batch_size] for i in range(0, len(items), batch_size)]
         tasks = [self.run_in_thread(func, batch) for batch in batches]
         results = await asyncio.gather(*tasks)
         return [item for batch in results for item in batch]
 
     def shutdown(self):
         """Clean up resources by shutting down the thread pool. Idempotent."""
-        if hasattr(self, '_executor') and self._executor is not None:
+        if hasattr(self, "_executor") and self._executor is not None:
             self._executor.shutdown(wait=True)
             self._executor = None
