@@ -131,3 +131,71 @@ class TestMatcherMatchAsync:
             assert result is None
 
 
+class TestMatcherMatchBatchAsync:
+    @pytest.fixture
+    def sample_entities(self):
+        return [
+            {"id": "DE", "name": "Germany", "aliases": ["Deutschland"]},
+            {"id": "US", "name": "United States", "aliases": ["USA"]},
+            {"id": "FR", "name": "France", "aliases": ["Frankreich"]},
+        ]
+
+    @pytest.mark.asyncio
+    async def test_match_batch_async_basic(self, sample_entities):
+        """Test basic async batch matching"""
+        async with Matcher(entities=sample_entities) as matcher:
+            await matcher.fit_async()
+            queries = ["USA", "Germany", "France"]
+            results = await matcher.match_batch_async(queries)
+            assert len(results) == 3
+            assert results[0]["id"] == "US"
+            assert results[1]["id"] == "DE"
+            assert results[2]["id"] == "FR"
+
+    @pytest.mark.asyncio
+    async def test_match_batch_async_with_progress(self, sample_entities):
+        """Test batch matching with progress callback"""
+        async with Matcher(entities=sample_entities) as matcher:
+            await matcher.fit_async()
+
+            progress_updates = []
+
+            async def progress_callback(completed, total):
+                progress_updates.append((completed, total))
+
+            queries = ["USA", "Germany"] * 5
+            results = await matcher.match_batch_async(
+                queries,
+                batch_size=2,
+                on_progress=progress_callback
+            )
+
+            assert len(results) == 10
+            assert len(progress_updates) > 0
+            # Verify progress was reported
+            assert all(c <= t for c, t in progress_updates)
+
+    @pytest.mark.asyncio
+    async def test_match_batch_async_top_k(self, sample_entities):
+        """Test batch matching with top_k"""
+        async with Matcher(entities=sample_entities) as matcher:
+            await matcher.fit_async()
+            queries = ["USA", "Germany"]
+            results = await matcher.match_batch_async(queries, top_k=2)
+            assert len(results) == 2
+            # Each result should be a list when top_k > 1
+            assert isinstance(results[0], list)
+
+    @pytest.mark.asyncio
+    async def test_match_batch_async_threshold(self, sample_entities):
+        """Test batch matching with threshold filtering"""
+        async with Matcher(entities=sample_entities, threshold=0.99) as matcher:
+            await matcher.fit_async()
+            queries = ["USA", "TotallyNotACountry"]
+            results = await matcher.match_batch_async(queries)
+            assert len(results) == 2
+            # First might not match due to high threshold
+            # Second definitely won't match
+            assert results[1] is None
+
+

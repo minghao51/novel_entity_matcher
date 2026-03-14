@@ -1,6 +1,7 @@
 import os
 import platform
-from typing import Optional, Union, List, Dict, Any, Tuple, TYPE_CHECKING
+import asyncio
+from typing import Optional, Union, List, Dict, Any, Tuple, TYPE_CHECKING, Callable
 from collections import defaultdict
 import numpy as np
 
@@ -706,6 +707,99 @@ class Matcher:
         return [
             self._format_hybrid_results(results, top_k=top_k) for results in raw_results
         ]
+
+    async def match_batch_async(
+        self,
+        queries: List[str],
+        threshold: Optional[float] = None,
+        top_k: int = 1,
+        batch_size: int = 32,
+        on_progress: Optional[Callable[[int, int], None]] = None,
+        **kwargs,
+    ) -> List[Any]:
+        """
+        Async batch matching with progress tracking.
+
+        Processes queries in batches, reporting progress via callback.
+
+        Args:
+            queries: List of query texts to match
+            threshold: Optional override of matcher threshold
+            top_k: Number of top results per query
+            batch_size: Number of queries to process per batch
+            on_progress: Optional callback(completed, total) for progress updates
+            **kwargs: Additional arguments passed to underlying matcher
+
+        Returns:
+            List of match results (one per query)
+        """
+        if self._active_matcher is None:
+            await self.fit_async()
+
+        # Lazy initialization of async executor
+        if self._async_executor is None:
+            from .async_utils import AsyncExecutor
+            self._async_executor = AsyncExecutor()
+
+        total = len(queries)
+        results = []
+        completed = 0
+
+        # Save original threshold
+        original_threshold = self.threshold
+
+        # Apply temporary threshold if provided
+        if threshold is not None:
+            self.threshold = threshold
+            # Update threshold in active matcher
+            if self._embedding_matcher:
+                self._embedding_matcher.threshold = threshold
+            if self._entity_matcher:
+                self._entity_matcher.threshold = threshold
+            if self._bert_matcher:
+                self._bert_matcher.threshold = threshold
+
+        try:
+            # Process in batches
+            for i in range(0, total, batch_size):
+                batch = queries[i:i+batch_size]
+
+                # Run batch matching in thread pool
+                batch_results = await self._async_executor.run_in_thread(
+                    self.match,
+                    batch,
+                    top_k,
+                    **kwargs
+                )
+
+                # Ensure batch_results is always a list
+                if isinstance(batch_results, dict):
+                    batch_results = [batch_results]
+                elif not isinstance(batch_results, list):
+                    batch_results = list(batch_results)
+
+                results.extend(batch_results)
+                completed += len(batch)
+
+                # Report progress non-blocking
+                if on_progress:
+                    if asyncio.iscoroutinefunction(on_progress):
+                        await on_progress(completed, total)
+                    else:
+                        on_progress(completed, total)
+
+        finally:
+            # Restore original threshold
+            if threshold is not None:
+                self.threshold = original_threshold
+                if self._embedding_matcher:
+                    self._embedding_matcher.threshold = original_threshold
+                if self._entity_matcher:
+                    self._entity_matcher.threshold = original_threshold
+                if self._bert_matcher:
+                    self._bert_matcher.threshold = original_threshold
+
+        return results
 
     def _format_hybrid_results(
         self, results: Optional[List[Dict[str, Any]]], top_k: int
