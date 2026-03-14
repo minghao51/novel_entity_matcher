@@ -1270,6 +1270,60 @@ class EntityMatcher:
 
         return _unwrap_single(results, single_input)
 
+    async def train_async(
+        self,
+        training_data: List[dict],
+        num_epochs: int = 4,
+        batch_size: int = 16,
+        show_progress: bool = True,
+    ):
+        """Async version of train()."""
+        # Lazy initialization of async executor
+        if not hasattr(self, '_async_executor') or self._async_executor is None:
+            from .async_utils import AsyncExecutor
+            self._async_executor = AsyncExecutor()
+
+        await self._async_executor.run_in_thread(
+            self.train,
+            training_data,
+            num_epochs,
+            batch_size,
+            show_progress,
+        )
+
+    async def match_async(
+        self,
+        texts: TextInput,
+        candidates: Optional[List[Dict[str, Any]]] = None,
+        top_k: int = 1,
+    ) -> Any:
+        """Async version of match()."""
+        if not self.is_trained or self.classifier is None:
+            raise RuntimeError("Model not trained. Call train() or train_async() first.")
+
+        # Lazy initialization of async executor
+        if not hasattr(self, '_async_executor') or self._async_executor is None:
+            from .async_utils import AsyncExecutor
+            self._async_executor = AsyncExecutor()
+
+        return await self._async_executor.run_in_thread(
+            self.match,
+            texts,
+            candidates,
+            top_k,
+        )
+
+    async def predict_async(self, texts: TextInput) -> Union[Optional[str], List[Optional[str]]]:
+        """Async version of predict()."""
+        if not self.is_trained or self.classifier is None:
+            raise RuntimeError("Model not trained. Call train() or train_async() first.")
+
+        matches = await self.match_async(texts, top_k=1)
+
+        if isinstance(matches, list):
+            return [match["id"] if match else None for match in matches]
+        return matches["id"] if matches else None
+
 
 class EmbeddingMatcher:
     """Embedding-based similarity matching without training."""

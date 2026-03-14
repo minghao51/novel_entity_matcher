@@ -232,3 +232,48 @@ class TestMatcherExplainAsync:
             assert "matched" in diagnosis
 
 
+class TestEntityMatcherAsync:
+    @pytest.fixture
+    def sample_entities(self):
+        return [
+            {"id": "DE", "name": "Germany", "aliases": ["Deutschland"]},
+            {"id": "US", "name": "United States", "aliases": ["USA"]},
+        ]
+
+    @pytest.fixture
+    def training_data(self):
+        return [
+            {"text": "Germany", "label": "DE"},
+            {"text": "USA", "label": "US"},
+        ]
+
+    @pytest.mark.asyncio
+    async def test_entity_matcher_train_async(self, sample_entities, training_data):
+        """Test EntityMatcher.train_async"""
+        from semanticmatcher.core.matcher import EntityMatcher
+
+        matcher = EntityMatcher(entities=sample_entities)
+        await matcher.train_async(training_data, num_epochs=1)
+        assert matcher.is_trained
+
+    @pytest.mark.asyncio
+    async def test_entity_matcher_match_async(self, sample_entities, training_data):
+        """Test EntityMatcher.match_async"""
+        from semanticmatcher.core.matcher import EntityMatcher
+
+        matcher = EntityMatcher(entities=sample_entities)
+        await matcher.train_async(training_data, num_epochs=1)
+        result = await matcher.match_async("USA")
+        assert result["id"] == "US"
+
+    @pytest.mark.asyncio
+    async def test_entity_matcher_predict_async(self, sample_entities, training_data):
+        """Test EntityMatcher.predict_async"""
+        from semanticmatcher.core.matcher import EntityMatcher
+
+        matcher = EntityMatcher(entities=sample_entities)
+        await matcher.train_async(training_data, num_epochs=1)
+        result = await matcher.predict_async("USA")
+        assert result == "US"
+
+
