@@ -544,6 +544,60 @@ class Matcher:
                 top_k=top_k,
             )
 
+    async def match_async(
+        self,
+        texts: TextInput,
+        top_k: int = 1,
+        **kwargs,
+    ) -> Any:
+        """
+        Async version of match(). Match texts against entities.
+
+        Args:
+            texts: Query text(s) to match. Can be string or list of strings.
+            top_k: Number of top results to return.
+            **kwargs: Additional arguments (candidates, batch_size)
+
+        Returns:
+            Matched entity/ies with scores (same format as match())
+        """
+        # Auto-fit if not yet fitted
+        if self._active_matcher is None:
+            await self.fit_async()
+
+        # Lazy initialization of async executor
+        if self._async_executor is None:
+            from .async_utils import AsyncExecutor
+            self._async_executor = AsyncExecutor()
+
+        # Route to appropriate matcher based on mode
+        if self._training_mode == "hybrid":
+            # Hybrid matcher needs special handling
+            return await self._match_hybrid_async(texts, top_k=top_k, **kwargs)
+        elif self._training_mode == "zero-shot":
+            return await self._async_executor.run_in_thread(
+                self.embedding_matcher.match,
+                texts=texts,
+                candidates=kwargs.get("candidates"),
+                top_k=top_k,
+                batch_size=kwargs.get("batch_size")
+            )
+        elif self._training_mode == "bert":
+            return await self._async_executor.run_in_thread(
+                self.bert_matcher.match,
+                texts=texts,
+                candidates=kwargs.get("candidates"),
+                top_k=top_k,
+            )
+        else:
+            # Trained mode (head-only, full)
+            return await self._async_executor.run_in_thread(
+                self.entity_matcher.match,
+                texts=texts,
+                candidates=kwargs.get("candidates"),
+                top_k=top_k,
+            )
+
     def predict(
         self,
         texts: TextInput,
@@ -616,6 +670,38 @@ class Matcher:
             final_top_k=final_top_k,
             n_jobs=n_jobs,
             chunk_size=chunk_size,
+        )
+        return [
+            self._format_hybrid_results(results, top_k=top_k) for results in raw_results
+        ]
+
+    async def _match_hybrid_async(self, texts: TextInput, top_k: int = 1, **kwargs) -> Any:
+        """Async version of _match_hybrid."""
+        # Lazy initialization of async executor
+        if self._async_executor is None:
+            from .async_utils import AsyncExecutor
+            self._async_executor = AsyncExecutor()
+
+        texts, single_input = _coerce_texts(texts)
+
+        if single_input:
+            raw_results = await self._async_executor.run_in_thread(
+                self.hybrid_matcher.match,
+                texts[0],
+                kwargs.get("blocking_top_k", 1000),
+                kwargs.get("retrieval_top_k", max(50, top_k)),
+                kwargs.get("final_top_k", top_k),
+            )
+            return self._format_hybrid_results(raw_results, top_k=top_k)
+
+        raw_results = await self._async_executor.run_in_thread(
+            self.hybrid_matcher.match_bulk,
+            texts,
+            kwargs.get("blocking_top_k", 1000),
+            kwargs.get("retrieval_top_k", max(50, top_k)),
+            kwargs.get("final_top_k", top_k),
+            kwargs.get("n_jobs", -1),
+            kwargs.get("chunk_size"),
         )
         return [
             self._format_hybrid_results(results, top_k=top_k) for results in raw_results

@@ -84,3 +84,50 @@ class TestMatcherFitAsync:
             result = await matcher.fit_async()
             assert result is matcher
 
+
+class TestMatcherMatchAsync:
+    @pytest.fixture
+    def sample_entities(self):
+        return [
+            {"id": "DE", "name": "Germany", "aliases": ["Deutschland"]},
+            {"id": "US", "name": "United States", "aliases": ["USA"]},
+        ]
+
+    @pytest.mark.asyncio
+    async def test_match_async_single(self, sample_entities):
+        """Test async match with single query"""
+        async with Matcher(entities=sample_entities) as matcher:
+            await matcher.fit_async()
+            result = await matcher.match_async("USA")
+            assert result is not None
+            assert result["id"] == "US"
+            assert result["score"] > 0.7
+
+    @pytest.mark.asyncio
+    async def test_match_async_multiple(self, sample_entities):
+        """Test async match with multiple queries"""
+        async with Matcher(entities=sample_entities) as matcher:
+            await matcher.fit_async()
+            results = await matcher.match_async(["USA", "Germany"])
+            assert len(results) == 2
+            assert results[0]["id"] == "US"
+            assert results[1]["id"] == "DE"
+
+    @pytest.mark.asyncio
+    async def test_match_async_top_k(self, sample_entities):
+        """Test async match with top_k parameter"""
+        async with Matcher(entities=sample_entities) as matcher:
+            await matcher.fit_async()
+            results = await matcher.match_async("United States", top_k=2)
+            assert isinstance(results, list)
+            assert len(results) <= 2
+
+    @pytest.mark.asyncio
+    async def test_match_async_below_threshold(self, sample_entities):
+        """Test async match returns None when below threshold"""
+        async with Matcher(entities=sample_entities, threshold=0.99) as matcher:
+            await matcher.fit_async()
+            result = await matcher.match_async("TotallyNotACountry123")
+            assert result is None
+
+
