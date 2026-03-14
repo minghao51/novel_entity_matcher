@@ -5,6 +5,7 @@ This folder is split into stable user guides, experiment docs, and archived proj
 ## Guides
 
 - [`quickstart.md`](./quickstart.md): unified `Matcher` class with smart auto-selection
+- [`async-guide.md`](./async-guide.md): async/await API for high-concurrency scenarios
 - [`examples.md`](./examples.md): maintained example inventory across `examples/current`, `examples/legacy`, and `examples/raw`
 - [`troubleshooting.md`](./troubleshooting.md): common install and first-run errors
 - [`migration-guide.md`](./migration-guide.md): migrating from deprecated classes
@@ -36,9 +37,10 @@ This folder is split into stable user guides, experiment docs, and archived proj
 ### I want to use the library
 
 1. Read [`quickstart.md`](./quickstart.md).
-2. Run one of the maintained examples from `examples/current/`.
-3. Use [`models.md`](./models.md) and [`matcher-modes.md`](./matcher-modes.md) to refine behavior.
-4. Use [`troubleshooting.md`](./troubleshooting.md) if setup/runtime issues appear.
+2. If processing large batches (1K+ queries), read [`async-guide.md`](./async-guide.md).
+3. Run one of the maintained examples from `examples/current/`.
+4. Use [`models.md`](./models.md) and [`matcher-modes.md`](./matcher-modes.md) to refine behavior.
+5. Use [`troubleshooting.md`](./troubleshooting.md) if setup/runtime issues appear.
 
 ### I want to reproduce experiments
 

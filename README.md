@@ -83,6 +83,58 @@ results = matcher.match("America", top_k=3)
 
 **The new `Matcher` class auto-selects the best mode** based on your training data.
 
+## Async API
+
+For high-concurrency scenarios (1K-100K queries), the async API provides non-blocking operations with progress tracking and cancellation support:
+
+```python
+import asyncio
+from semanticmatcher import Matcher
+
+async def main():
+    entities = [
+        {"id": "DE", "name": "Germany", "aliases": ["Deutschland"]},
+        {"id": "US", "name": "United States", "aliases": ["USA"]},
+    ]
+
+    # Use async context manager for automatic cleanup
+    async with Matcher(entities=entities) as matcher:
+        await matcher.fit_async()
+
+        # Batch processing with progress tracking
+        async def show_progress(completed, total):
+            print(f"Progress: {completed}/{total}")
+
+        results = await matcher.match_batch_async(
+            queries=["USA", "Germany"] * 1000,
+            batch_size=100,
+            on_progress=show_progress
+        )
+
+        # Or use concurrent matchers
+        async def match_category(category_entities):
+            async with Matcher(entities=category_entities) as m:
+                await m.fit_async()
+                return await m.match_async("query")
+
+        results = await asyncio.gather(
+            match_category(entities_1),
+            match_category(entities_2),
+            match_category(entities_3),
+        )
+
+asyncio.run(main())
+```
+
+**Key features:**
+- `fit_async()`, `match_async()`, `match_batch_async()` - Async versions of core methods
+- Progress tracking via `on_progress` callback
+- Cancellation support for long-running operations
+- Thread-safe concurrent matching
+- Full backward compatibility with sync API
+
+See [Async API Guide](docs/async-guide.md) for comprehensive documentation.
+
 ## Embedding Models
 
 ### Default: Static Embeddings
