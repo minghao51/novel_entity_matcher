@@ -277,3 +277,31 @@ class TestEntityMatcherAsync:
         assert result == "US"
 
 
+class TestEmbeddingMatcherAsync:
+    @pytest.fixture
+    def sample_entities(self):
+        return [
+            {"id": "DE", "name": "Germany", "aliases": ["Deutschland"]},
+            {"id": "US", "name": "United States", "aliases": ["USA"]},
+        ]
+
+    @pytest.mark.asyncio
+    async def test_embedding_matcher_build_index_async(self, sample_entities):
+        """Test EmbeddingMatcher.build_index_async"""
+        from semanticmatcher.core.matcher import EmbeddingMatcher
+
+        matcher = EmbeddingMatcher(entities=sample_entities)
+        await matcher.build_index_async()
+        assert matcher.embeddings is not None
+
+    @pytest.mark.asyncio
+    async def test_embedding_matcher_match_async(self, sample_entities):
+        """Test EmbeddingMatcher.match_async"""
+        from semanticmatcher.core.matcher import EmbeddingMatcher
+
+        matcher = EmbeddingMatcher(entities=sample_entities)
+        await matcher.build_index_async()
+        result = await matcher.match_async("USA")
+        assert result["id"] == "US"
+
+

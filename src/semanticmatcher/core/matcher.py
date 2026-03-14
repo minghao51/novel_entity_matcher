@@ -1535,3 +1535,39 @@ class EmbeddingMatcher:
                 results.append(matches)
 
         return _unwrap_single(results, single_input)
+
+    async def build_index_async(self, batch_size: Optional[int] = None):
+        """Async version of build_index()."""
+        # Lazy initialization of async executor
+        if not hasattr(self, '_async_executor') or self._async_executor is None:
+            from .async_utils import AsyncExecutor
+            self._async_executor = AsyncExecutor()
+
+        await self._async_executor.run_in_thread(
+            self.build_index,
+            batch_size,
+        )
+
+    async def match_async(
+        self,
+        texts: TextInput,
+        candidates: Optional[List[Dict[str, Any]]] = None,
+        top_k: int = 1,
+        batch_size: Optional[int] = None,
+    ) -> Any:
+        """Async version of match()."""
+        if self.embeddings is None or self.model is None:
+            raise RuntimeError("Index not built. Call build_index() or build_index_async() first.")
+
+        # Lazy initialization of async executor
+        if not hasattr(self, '_async_executor') or self._async_executor is None:
+            from .async_utils import AsyncExecutor
+            self._async_executor = AsyncExecutor()
+
+        return await self._async_executor.run_in_thread(
+            self.match,
+            texts,
+            candidates,
+            top_k,
+            batch_size,
+        )
