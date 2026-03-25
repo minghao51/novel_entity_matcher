@@ -29,6 +29,17 @@ src/novelentitymatcher/
 │   ├── reranker_st.py
 │   ├── litellm.py           # Planned/in-progress cloud backend support
 │   └── ...
+├── pipeline/                # Internal stage contracts and orchestrator
+│   ├── contracts.py         # StageContext / StageResult / PipelineStage
+│   ├── orchestrator.py      # Ordered stage execution
+│   └── adapters.py          # Wrappers around matcher, OOD, and proposal flows
+├── novelty/                 # Novelty detection, discovery, and persistence
+│   ├── entity_matcher.py    # Public novelty-aware API
+│   ├── match_result.py      # Stable metadata/result contract for discovery work
+│   ├── core/
+│   ├── proposal/
+│   ├── schemas/
+│   └── storage/
 ├── ingestion/               # Dataset ingestion and normalization CLI/pipelines
 │   ├── cli.py               # `novelentitymatcher-ingest` entrypoint target
 │   └── *.py                 # Source-specific ingestors (countries/products/etc.)
@@ -39,6 +50,8 @@ src/novelentitymatcher/
 ## Package Boundaries
 
 - `core/`: orchestration and domain logic for matching, retrieval/reranking pipelines, and normalization.
+- `pipeline/`: internal stage-oriented contracts used to compose discovery flows without exposing unstable stage APIs yet.
+- `novelty/`: novelty detection, discovery reports, proposal generation, and persistence.
 - `backends/`: provider-specific integrations for embeddings and rerankers (Hugging Face, LiteLLM, etc.).
 - `ingestion/`: data acquisition/transformation utilities and the ingestion CLI.
 - `utils/`: shared helpers used across modules that are not themselves product/domain entrypoints.
@@ -47,7 +60,9 @@ src/novelentitymatcher/
 ## Module Placement Rules
 
 - Add a new matcher or pipeline stage to `core/` unless it is provider-specific.
+- Add internal discovery-stage contracts or orchestrators to `pipeline/`.
 - Add a new model/provider integration to `backends/`.
+- Add novelty scoring, proposal generation, and review/persistence logic to `novelty/`.
 - Add dataset import/transformation logic or CLI wiring to `ingestion/`.
 - Put generic helpers in `utils/`; avoid moving domain logic there just to “reuse” it.
 - Keep the public import surface curated through `src/novelentitymatcher/__init__.py` (avoid exposing internal modules unintentionally).
@@ -133,11 +148,15 @@ Input Text
     ↓
 TextNormalizer (optional)
     ↓
-Embedding Model (SentenceTransformer)
+Matcher metadata collection
     ↓
-Similarity Computation / Classification
+Known-entity routing / top-k candidates
     ↓
-Result (entity ID or score)
+OOD / novelty detection
+    ↓
+Optional class proposal generation
+    ↓
+Result (entity match, novelty report, and optional proposals)
 ```
 
 ## Backends

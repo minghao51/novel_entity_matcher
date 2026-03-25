@@ -30,7 +30,7 @@ This folder is split into stable user guides, experiment docs, and archived proj
 
 ## Planning
 
-- [`roadmap.md`](./roadmap.md): project roadmap from v0.4.0 to v1.0.0 with milestones and deliverables
+- [`technical-roadmap.md`](./technical-roadmap.md): active technical roadmap grounded in the current repo and target discovery-pipeline architecture
 - [`related-work.md`](./related-work.md): research landscape and comparative analysis of semantic matching systems
 - [`novelty-methods-research.md`](./novelty-methods-research.md): forward-looking research notes and implementation proposals for additional novelty detection methods
 
@@ -58,7 +58,7 @@ This folder is split into stable user guides, experiment docs, and archived proj
 
 ### I want to contribute or plan features
 
-1. Read [`roadmap.md`](./roadmap.md) for planned milestones
+1. Read [`technical-roadmap.md`](./technical-roadmap.md) for the active implementation plan
 2. Review [`related-work.md`](./related-work.md) for context on similar systems
 3. Review [`novelty-methods-research.md`](./novelty-methods-research.md) for proposed novelty-detection extensions
 4. Check [`architecture.md`](./architecture.md) for implementation details

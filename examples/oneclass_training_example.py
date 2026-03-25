@@ -5,7 +5,9 @@ Demonstrates how to use the OneClassNoveltyDetector to detect
 novel entities using one-class SVM with sentence transformer embeddings.
 """
 
-from novelentitymatcher.novelty.strategies.oneclass_strategy import OneClassNoveltyDetector
+from novelentitymatcher.novelty.strategies.oneclass_strategy import (
+    OneClassNoveltyDetector,
+)
 
 
 def main():
