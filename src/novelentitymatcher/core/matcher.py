@@ -71,7 +71,7 @@ class _EntityMatcher:
         self.normalizer = TextNormalizer() if normalize else None
         self.classifier: Optional[Union[SetFitClassifier, BERTClassifier]] = None
         self.is_trained = False
-        self._async_executor = None
+        self._async_executor: Optional[Any] = None
         self._reference_texts: List[str] = []
         self._reference_labels: List[str] = []
         self._reference_embeddings: Optional[np.ndarray] = None
@@ -155,7 +155,7 @@ class _EntityMatcher:
         if candidates is not None:
             candidate_ids = {candidate["id"] for candidate in candidates}
 
-        results = []
+        results: List[Any] = []
         for text in texts:
             try:
                 proba = self.classifier.predict_proba(text)
@@ -164,7 +164,7 @@ class _EntityMatcher:
                     key=lambda item: item[1],
                     reverse=True,
                 )
-                matches = []
+                matches: List[Dict[str, Any]] = []
                 for label, score in ranked_matches:
                     score = float(score)
                     if score < effective_threshold:
@@ -585,13 +585,13 @@ class Matcher:
             }
 
         if self._training_mode in ("head-only", "full"):
-            return self.entity_matcher.get_reference_corpus()  # type: ignore[no-any-return]
+            return self.entity_matcher.get_reference_corpus()
 
         if self._training_mode == "bert":
             encoder_matcher = self.embedding_matcher
             if encoder_matcher.model is None:
                 encoder_matcher.build_index()
-            return self.bert_matcher.get_reference_corpus(encoder=encoder_matcher.model)  # type: ignore[no-any-return]
+            return self.bert_matcher.get_reference_corpus(encoder=encoder_matcher.model)
 
         raise RuntimeError(
             f"Reference corpus is not available for matcher mode '{self._training_mode}'"

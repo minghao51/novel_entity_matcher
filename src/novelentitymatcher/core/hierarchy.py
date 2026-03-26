@@ -49,7 +49,7 @@ class HierarchyIndex:
         self.entities = {e["id"]: e for e in entities}
         self.graph = nx.DiGraph()
         self._build_graph()
-        self._cache = {}
+        self._cache: Dict[str, Any] = {}
 
     def _build_graph(self) -> None:
         """Build directed acyclic graph from entity definitions."""
@@ -371,9 +371,9 @@ class HierarchicalMatcher:
         self.scorer = HierarchicalScoring(self.hierarchy_index, alpha=alpha, beta=beta)
 
         # Will be initialized in build_index()
-        self.embedding_matcher = None
-        self.entity_embeddings = {}
-        self.entity_texts = {}
+        self.embedding_matcher: Any = None
+        self.entity_embeddings: Dict[str, Any] = {}
+        self.entity_texts: Dict[str, str] = {}
 
     def build_index(self):
         """
@@ -557,7 +557,7 @@ class HierarchicalMatcher:
                     )
 
         # Remove duplicates (keep highest score)
-        seen = {}
+        seen: Dict[str, Dict[str, Any]] = {}
         for candidate in candidates:
             cid = candidate["id"]
             if cid not in seen or candidate["score"] > seen[cid]["score"]:

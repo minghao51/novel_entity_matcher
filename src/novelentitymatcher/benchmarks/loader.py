@@ -7,7 +7,7 @@ import hashlib
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict
 
 import pandas as pd
 
@@ -278,7 +278,7 @@ class DatasetLoader:
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        output = {}
+        output: Dict[str, Any] = {}
         for name, result in zip(datasets, results):
             if isinstance(result, Exception):
                 logger.error(f"Failed to load {name}: {result}")

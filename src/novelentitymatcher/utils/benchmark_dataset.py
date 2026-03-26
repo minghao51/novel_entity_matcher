@@ -35,7 +35,7 @@ def row_to_entity(
             for alias in aliases
             if alias_counts.get(alias, 0) == 1 and alias != row["id"]
         ]
-    entity = {"id": row["id"], "name": row["name"]}
+    entity: Dict[str, Any] = {"id": row["id"], "name": row["name"]}
     if aliases:
         entity["aliases"] = aliases
     if row.get("type"):
@@ -114,7 +114,7 @@ def generate_holdout_queries(
 
 def build_split_pairs(entity: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
     indexed_texts = dedupe_texts(entity, include_id=False)
-    empty_split = {
+    empty_split: Dict[str, List[Dict[str, Any]]] = {
         "base": [],
         "train": [],
         "val": [],
@@ -205,11 +205,11 @@ def load_processed_sections(
 
         entities = []
         training_data = []
-        base_pairs = []
-        train_pairs = []
-        val_pairs = []
-        test_pairs = []
-        perturbation_pairs = {
+        base_pairs: List[Dict[str, Any]] = []
+        train_pairs: List[Dict[str, Any]] = []
+        val_pairs: List[Dict[str, Any]] = []
+        test_pairs: List[Dict[str, Any]] = []
+        perturbation_pairs: Dict[str, List[Dict[str, Any]]] = {
             "typo": [],
             "remove_parenthetical": [],
             "ampersand_expanded": [],

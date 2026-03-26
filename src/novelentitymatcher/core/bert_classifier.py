@@ -137,8 +137,9 @@ class BERTClassifier:
             dataset = Dataset.from_list(training_data)
 
             # Tokenize data
+            tokenizer = self.tokenizer
             def tokenize_function(examples):
-                return self.tokenizer(
+                return tokenizer(
                     examples["text"],
                     padding="max_length",
                     truncation=True,
@@ -259,11 +260,14 @@ class BERTClassifier:
 
         single_input = isinstance(texts, str)
         if single_input:
-            texts = [texts]
+            texts_list: List[str] = [texts]  # type: ignore[list-item]
+        else:
+            texts_list = texts  # type: ignore[assignment]
 
         # Tokenize
-        inputs = self.tokenizer(
-            texts,
+        tokenizer = self.tokenizer
+        inputs = tokenizer(
+            texts_list,
             padding=True,
             truncation=True,
             max_length=self.max_length,

@@ -70,6 +70,8 @@ def main(argv=None):
             print(f"Ingesting {name}...")
             print("=" * 50)
             try:
+                if func is None:
+                    continue
                 func(raw_dir=args.raw_dir, processed_dir=args.processed_dir)
             except Exception as e:
                 print(f"Error ingesting {name}: {e}")

@@ -45,7 +45,11 @@ def validate_entities(entities: List[Dict[str, Any]]) -> bool:
     if len(ids) != len(set(ids)):
         # Find duplicate IDs
         seen = set()
-        duplicates = [eid for eid in ids if eid in seen or seen.add(eid)]
+        duplicates = []
+        for eid in ids:
+            if eid in seen:
+                duplicates.append(eid)
+            seen.add(eid)
         raise ValidationError(
             f"Entity IDs must be unique. Found duplicates: {duplicates}",
             suggestion="Ensure each entity has a unique ID. Check for typos or repeated entries.",

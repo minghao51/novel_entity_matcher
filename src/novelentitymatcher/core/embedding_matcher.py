@@ -57,7 +57,7 @@ class EmbeddingMatcher:
         self.entity_texts: List[str] = []
         self.entity_ids: List[str] = []
         self.embeddings: Optional[np.ndarray] = None
-        self._async_executor = None
+        self._async_executor: Optional[Any] = None
 
     def _ensure_async_executor(self):
         if self._async_executor is None:
@@ -150,7 +150,7 @@ class EmbeddingMatcher:
             candidate_indices = list(range(len(self.entity_ids)))
 
         if not candidate_indices:
-            empty = None if top_k == 1 else []
+            empty: Optional[List[Any]] = None if top_k == 1 else []
             return empty if single_input else [empty for _ in texts]
 
         candidate_embeddings = self.embeddings[candidate_indices]
@@ -176,10 +176,10 @@ class EmbeddingMatcher:
 
         similarities = cosine_similarity(query_embeddings, candidate_embeddings)
 
-        results = []
+        results: List[Any] = []
         for sim_row in similarities:
             sorted_indices = np.argsort(sim_row)[::-1]
-            matches = []
+            matches: List[Dict[str, Any]] = []
             seen_ids = set()
             for idx in sorted_indices:
                 score = sim_row[idx]

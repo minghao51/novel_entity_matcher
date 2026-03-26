@@ -82,6 +82,7 @@ class NoveltyEvaluator(BaseEvaluator[tuple[pd.DataFrame, pd.DataFrame]]):
             if novelty_score_fn:
                 score = novelty_score_fn(str(row[text_col]))
             else:
+                assert detector_fn is not None
                 is_novel, score = detector_fn(str(row[text_col]))
                 score = 1.0 - score if is_novel else score
             novelty_scores.append(score)
@@ -91,6 +92,7 @@ class NoveltyEvaluator(BaseEvaluator[tuple[pd.DataFrame, pd.DataFrame]]):
             if novelty_score_fn:
                 score = novelty_score_fn(str(row[text_col]))
             else:
+                assert detector_fn is not None
                 is_novel, score = detector_fn(str(row[text_col]))
                 score = 1.0 - score if is_novel else score
             novelty_scores.append(score)

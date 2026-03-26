@@ -90,7 +90,7 @@ class ClassificationEvaluator(BaseEvaluator[pd.DataFrame]):
             zero_division=0,
         )
         per_class_f1_dict = {
-            str(label): f1 for label, f1 in zip(unique_labels, per_class_f1)
+            str(label): float(f1) for label, f1 in zip(unique_labels, per_class_f1)
         }
 
         class_names = (
@@ -123,7 +123,6 @@ class ClassificationEvaluator(BaseEvaluator[pd.DataFrame]):
                 "accuracy": accuracy,
                 "macro_f1": macro_f1,
                 "weighted_f1": weighted_f1,
-                "per_class_f1": per_class_f1_dict,
             },
             details={
                 "num_samples": len(data),
@@ -131,6 +130,7 @@ class ClassificationEvaluator(BaseEvaluator[pd.DataFrame]):
                 "classes": class_names,
                 "classification_report": report,
                 "confusion_matrix": cm.tolist(),
+                "per_class_f1": per_class_f1_dict,
             },
             dataframe=per_sample_results,
         )

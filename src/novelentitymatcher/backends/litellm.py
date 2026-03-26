@@ -10,7 +10,7 @@ try:
     LITELLM_AVAILABLE = True
 except ImportError:
     LITELLM_AVAILABLE = False
-    embedding = rerank = None  # type: ignore[assignment]
+    embedding = rerank = None
 
 
 class LiteLLMEmbedding(EmbeddingBackend):
