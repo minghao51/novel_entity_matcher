@@ -33,6 +33,11 @@ class TestSetFitClassifier:
         clf = SetFitClassifier(labels=labels)
         assert clf.num_epochs == 4
         assert clf.batch_size == 16
+        assert clf.weight_decay == 0.01
+        assert clf.head_c == 1.0
+        assert clf.num_iterations == 5
+        assert clf.pca_dims is None
+        assert clf.skip_body_training is False
 
     def test_classifier_custom_params(self, labels):
         clf = SetFitClassifier(labels=labels, num_epochs=2, batch_size=8)

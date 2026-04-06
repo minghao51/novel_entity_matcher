@@ -77,7 +77,7 @@ class AsyncExecutor:
 
     def shutdown(self):
         """Clean up resources by shutting down the thread pool. Idempotent."""
-        if hasattr(self, "_executor") and self._executor is not None:
+        if self._executor is not None:
             self._executor.shutdown(wait=True)
             self._executor = None
         self._is_shutdown = True

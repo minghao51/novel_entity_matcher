@@ -12,8 +12,8 @@ import networkx as nx
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
-from novelentitymatcher.core.matcher import EmbeddingMatcher
-from novelentitymatcher.core.normalizer import TextNormalizer
+from .matcher import EmbeddingMatcher
+from .normalizer import TextNormalizer
 
 __all__ = [
     "HierarchyIndex",
@@ -78,6 +78,27 @@ class HierarchyIndex:
                     weight = child_weights.get(entity_id, 1.0)
                     self.graph.add_edge(entity_id, child, weight=weight)
 
+    def _bfs_traverse(
+        self, entity_id: str, max_depth: Optional[int], neighbor_fn
+    ) -> List[str]:
+        if entity_id not in self.graph:
+            return []
+        cache_key = f"{neighbor_fn.__name__}_{entity_id}_{max_depth}"
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+        results, visited, queue = [], set(), [(entity_id, 0)]
+        while queue:
+            current, depth = queue.pop(0)
+            if current in visited:
+                continue
+            visited.add(current)
+            for neighbor in neighbor_fn(current):
+                if neighbor not in visited and (max_depth is None or depth < max_depth):
+                    results.append(neighbor)
+                    queue.append((neighbor, depth + 1))
+        self._cache[cache_key] = results
+        return results
+
     def get_ancestors(
         self, entity_id: str, max_depth: Optional[int] = None
     ) -> List[str]:
@@ -91,33 +112,7 @@ class HierarchyIndex:
         Returns:
             List of ancestor entity IDs
         """
-        if entity_id not in self.graph:
-            return []
-
-        cache_key = f"ancestors_{entity_id}_{max_depth}"
-        if cache_key in self._cache:
-            return self._cache[cache_key]
-
-        ancestors = []
-        visited = set()
-        to_visit = [(entity_id, 0)]  # (node, depth)
-
-        while to_visit:
-            current, depth = to_visit.pop(0)
-
-            if current in visited:
-                continue
-            visited.add(current)
-
-            # Get predecessors (parents in our graph)
-            for parent in self.graph.predecessors(current):
-                if parent not in visited:
-                    if max_depth is None or depth < max_depth:
-                        ancestors.append(parent)
-                        to_visit.append((parent, depth + 1))
-
-        self._cache[cache_key] = ancestors
-        return ancestors
+        return self._bfs_traverse(entity_id, max_depth, self.graph.predecessors)
 
     def get_descendants(
         self, entity_id: str, max_depth: Optional[int] = None
@@ -132,33 +127,7 @@ class HierarchyIndex:
         Returns:
             List of descendant entity IDs
         """
-        if entity_id not in self.graph:
-            return []
-
-        cache_key = f"descendants_{entity_id}_{max_depth}"
-        if cache_key in self._cache:
-            return self._cache[cache_key]
-
-        descendants = []
-        visited = set()
-        to_visit = [(entity_id, 0)]  # (node, depth)
-
-        while to_visit:
-            current, depth = to_visit.pop(0)
-
-            if current in visited:
-                continue
-            visited.add(current)
-
-            # Get successors (children in our graph)
-            for child in self.graph.successors(current):
-                if child not in visited:
-                    if max_depth is None or depth < max_depth:
-                        descendants.append(child)
-                        to_visit.append((child, depth + 1))
-
-        self._cache[cache_key] = descendants
-        return descendants
+        return self._bfs_traverse(entity_id, max_depth, self.graph.successors)
 
     def get_relationship_depth(self, entity_a: str, entity_b: str) -> int:
         """

@@ -4,14 +4,35 @@ from __future__ import annotations
 
 import json
 import uuid
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from novelentitymatcher.novelty.schemas import (
+from ..schemas import (
     NovelClassDiscoveryReport,
     ProposalReviewRecord,
 )
+
+
+@dataclass
+class PromotionResult:
+    """Captures what happened during a promotion."""
+
+    review_record: ProposalReviewRecord
+    entities_added: list[dict[str, Any]] = field(default_factory=list)
+    index_updated: bool = False
+    retrain_required: bool = False
+
+    @property
+    def state(self) -> str:
+        """Backward-compatible alias for review_record.state."""
+        return self.review_record.state
+
+    @property
+    def promoted_at(self):
+        """Backward-compatible alias for review_record.promoted_at."""
+        return self.review_record.promoted_at
 
 
 class ProposalReviewManager:
@@ -110,7 +131,10 @@ class ProposalReviewManager:
         review_id: str,
         *,
         promoter: Callable[[ProposalReviewRecord], Any] | None = None,
-    ) -> ProposalReviewRecord:
+        entities: list[dict[str, Any]] | None = None,
+        index_updater: Callable[[list[dict[str, Any]]], Any] | None = None,
+        retrain_callback: Callable[[], Any] | None = None,
+    ) -> PromotionResult:
         current = next(
             (record for record in self.list_records() if record.review_id == review_id),
             None,
@@ -125,7 +149,74 @@ class ProposalReviewManager:
             approved = current
         if promoter is not None:
             promoter(approved)
-        return self.update_state(review_id, "promoted")
+
+        promoted = self.update_state(review_id, "promoted")
+
+        entities_added: list[dict[str, Any]] = []
+        proposal = promoted.proposal
+        new_entity: dict[str, Any] = {
+            "id": proposal.name,
+            "name": proposal.name,
+            "description": proposal.description,
+            "examples": list(proposal.example_samples),
+        }
+        entities_added.append(new_entity)
+
+        if entities is not None:
+            entities.extend(entities_added)
+
+        index_updated = False
+        if index_updater is not None:
+            index_updater(entities_added)
+            index_updated = True
+
+        retrain_required = retrain_callback is not None
+        if retrain_callback is not None:
+            retrain_callback()
+
+        return PromotionResult(
+            review_record=promoted,
+            entities_added=entities_added,
+            index_updated=index_updated,
+            retrain_required=retrain_required,
+        )
+
+    def promote_with_index_update(
+        self,
+        review_id: str,
+        matcher: Any,
+    ) -> PromotionResult:
+        """Promote and automatically update the matcher's entity index.
+
+        Args:
+            review_id: The review record to promote.
+            matcher: A NovelEntityMatcher or similar object with ``entities``
+                and optional ``reindex`` / ``fit`` methods.
+
+        Returns:
+            PromotionResult with full details of the promotion.
+        """
+        entities = list(getattr(matcher, "entities", []))
+
+        def index_updater(new_entities: list[dict[str, Any]]) -> None:
+            matcher.entities = entities
+            reindex = getattr(matcher, "reindex", None)
+            if callable(reindex):
+                reindex()
+            else:
+                fit = getattr(matcher, "fit", None)
+                if callable(fit):
+                    fit(entities)
+
+        def retrain_callback() -> None:
+            pass
+
+        return self.promote(
+            review_id,
+            entities=entities,
+            index_updater=index_updater,
+            retrain_callback=retrain_callback,
+        )
 
     def _read_storage(self) -> list[dict[str, Any]]:
         if not self.storage_path.exists():

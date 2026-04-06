@@ -5,12 +5,12 @@ from collections import defaultdict
 from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING, Union
 
 import numpy as np
+from sentence_transformers import SentenceTransformer
 
 # Enable CPU fallback for unsupported MPS ops before torch/sentence-transformers import.
 if platform.system() == "Darwin" and platform.machine() == "arm64":
     os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
-from sentence_transformers import SentenceTransformer
 
 from .embedding_matcher import EmbeddingMatcher
 from .matcher_shared import (
@@ -33,16 +33,20 @@ from ..config import (
 )
 from ..exceptions import ModeError, TrainingError, ValidationError
 from ..utils.logging_config import configure_logging, get_logger
-from ..utils.validation import validate_entities, validate_model_name, validate_threshold
+from ..utils.validation import (
+    validate_entities,
+    validate_model_name,
+    validate_threshold,
+)
 
 if TYPE_CHECKING:
-    from ..backends.static_embedding import StaticEmbeddingBackend
     from .async_utils import AsyncExecutor
     from .bert_classifier import BERTClassifier
     from .classifier import SetFitClassifier
 
+EmbeddingModel = SentenceTransformer
+
 # Backwards-compatible aliases for internal helpers that some callers may import.
-EmbeddingModel = Union[SentenceTransformer, "StaticEmbeddingBackend"]
 _coerce_texts = coerce_texts
 _extract_top_prediction_metadata = extract_top_prediction_metadata
 _resolve_threshold = resolve_threshold
@@ -92,6 +96,11 @@ class _EntityMatcher:
         num_epochs: int = 4,
         batch_size: int = 16,
         show_progress: bool = True,
+        weight_decay: float = 0.01,
+        head_c: float = 1.0,
+        num_iterations: int = 5,
+        pca_dims: Optional[int] = None,
+        skip_body_training: bool = False,
     ):
         normalized_data = self._get_training_data(training_data)
         labels = list(dict.fromkeys(item["label"] for item in normalized_data))
@@ -113,6 +122,11 @@ class _EntityMatcher:
                 model_name=self.model_name,
                 num_epochs=num_epochs,
                 batch_size=batch_size,
+                weight_decay=weight_decay,
+                head_c=head_c,
+                num_iterations=num_iterations,
+                pca_dims=pca_dims,
+                skip_body_training=skip_body_training,
             )
 
         self.classifier.train(
@@ -338,12 +352,13 @@ class Matcher:
 
     def _apply_threshold(self, threshold: float) -> None:
         self.threshold = validate_threshold(threshold)
-        if self._embedding_matcher:
-            self._embedding_matcher.threshold = self.threshold
-        if self._entity_matcher:
-            self._entity_matcher.threshold = self.threshold
-        if self._bert_matcher:
-            self._bert_matcher.threshold = self.threshold
+        for matcher in (
+            self._embedding_matcher,
+            self._entity_matcher,
+            self._bert_matcher,
+        ):
+            if matcher:
+                matcher.threshold = self.threshold
 
     @staticmethod
     def _resolve_threshold(
@@ -964,21 +979,69 @@ class Matcher:
 
         return results
 
-    async def explain_match_async(
+    def _format_hybrid_results(
         self,
-        query: str,
-        top_k: int = 5,
-    ) -> Dict[str, Any]:
-        executor = self._ensure_async_executor()
+        results: Optional[List[Dict[str, Any]]],
+        top_k: int,
+        threshold: Optional[float] = None,
+    ) -> Any:
+        effective_threshold = self._resolve_threshold(threshold, self.threshold)
+        filtered = [
+            result
+            for result in (results or [])
+            if result.get("score", 0.0) >= effective_threshold
+        ]
+        if top_k == 1:
+            return filtered[0] if filtered else None
+        return filtered[:top_k]
 
-        if not self._active_matcher:
-            raise TrainingError(
-                "Matcher not ready. Call fit() or fit_async() first.",
-                details={"mode": self._training_mode},
+    def get_training_info(self) -> Dict[str, Any]:
+        return {
+            "mode": self._training_mode,
+            "detected_mode": self._detected_mode,
+            "is_trained": self._active_matcher is not None,
+            "active_matcher": (
+                type(self._active_matcher).__name__ if self._active_matcher else None
+            ),
+            "has_training_data": self._has_training_data,
+            "threshold": self.threshold,
+        }
+
+    def get_statistics(self) -> Dict[str, Any]:
+        stats = {
+            "num_entities": len(self.entities),
+            "model_name": self.model_name,
+            "threshold": self.threshold,
+            "normalize": self.normalize,
+            "training_mode": self._training_mode,
+            "is_trained": self._active_matcher is not None,
+        }
+
+        if self._embedding_matcher:
+            stats["has_embeddings"] = self._embedding_matcher.embeddings is not None
+
+        if self._entity_matcher:
+            classifier = getattr(self._entity_matcher, "classifier", None)
+            stats["classifier_trained"] = (
+                getattr(classifier, "is_trained", self._entity_matcher.is_trained)
+                if classifier is not None
+                else False
             )
 
+        if self._bert_matcher:
+            classifier = getattr(self._bert_matcher, "classifier", None)
+            stats["bert_classifier_trained"] = (
+                getattr(classifier, "is_trained", self._bert_matcher.is_trained)
+                if classifier is not None
+                else False
+            )
+
+        return stats
+
+    def _build_explanation(
+        self, query: str, results: Any, query_normalized: Optional[str]
+    ) -> Dict[str, Any]:
         evaluation_threshold = self.threshold
-        results = await self.match_async(query, top_k=top_k, _threshold_override=0.0)
 
         if results is None:
             result_list = []
@@ -986,11 +1049,6 @@ class Matcher:
             result_list = results
         else:
             result_list = [results]
-
-        query_normalized = None
-        if self.normalize:
-            normalizer = TextNormalizer()
-            query_normalized = await executor.run_in_thread(normalizer.normalize, query)
 
         best = result_list[0] if result_list else None
         matched = bool(best and best.get("score", 0) >= evaluation_threshold)
@@ -1004,6 +1062,93 @@ class Matcher:
             "threshold": evaluation_threshold,
             "mode": self._training_mode,
         }
+
+    def _explain_match_impl(self, query: str, top_k: int) -> Dict[str, Any]:
+        if not self._active_matcher:
+            raise TrainingError(
+                "Matcher not ready. Call fit() first.",
+                details={"mode": self._training_mode},
+            )
+
+        results = self.match(query, top_k=top_k, _threshold_override=0.0)
+
+        query_normalized = None
+        if self.normalize:
+            normalizer = TextNormalizer()
+            query_normalized = normalizer.normalize(query)
+
+        return self._build_explanation(query, results, query_normalized)
+
+    def explain_match(
+        self,
+        query: str,
+        top_k: int = 5,
+    ) -> Dict[str, Any]:
+        return self._explain_match_impl(query, top_k)
+
+    async def explain_match_async(
+        self,
+        query: str,
+        top_k: int = 5,
+    ) -> Dict[str, Any]:
+        executor = self._ensure_async_executor()
+
+        if not self._active_matcher:
+            raise TrainingError(
+                "Matcher not ready. Call fit() or fit_async() first.",
+                details={"mode": self._training_mode},
+            )
+
+        results = await self.match_async(query, top_k=top_k, _threshold_override=0.0)
+
+        query_normalized = None
+        if self.normalize:
+            normalizer = TextNormalizer()
+            query_normalized = await executor.run_in_thread(normalizer.normalize, query)
+
+        return self._build_explanation(query, results, query_normalized)
+
+    def diagnose(self, query: str) -> Dict[str, Any]:
+        diagnosis = {
+            "query": query,
+            "matcher_ready": self._active_matcher is not None,
+            "active_matcher": (
+                type(self._active_matcher).__name__ if self._active_matcher else None
+            ),
+        }
+
+        if not self._active_matcher:
+            diagnosis["issue"] = "Matcher not ready"
+            diagnosis["suggestion"] = "Call matcher.fit() to initialize the matcher"
+            return diagnosis
+
+        try:
+            explanation = self.explain_match(query, top_k=3)
+            diagnosis.update(explanation)
+
+            if not explanation["matched"]:
+                if explanation["best_match"]:
+                    score = explanation["best_match"].get("score", 0)
+                    threshold = explanation["threshold"]
+                    diagnosis["issue"] = (
+                        f"Score {score:.2f} below threshold {threshold}"
+                    )
+                    suggested_threshold = max(0.1, threshold - 0.1)
+                    diagnosis["suggestion"] = (
+                        f"Lower threshold with matcher.set_threshold({suggested_threshold:.1f}) "
+                        f"or add more training examples"
+                    )
+                else:
+                    diagnosis["issue"] = "No candidates found"
+                    diagnosis["suggestion"] = (
+                        "Check entity data and text normalization. "
+                        "Ensure entities have relevant names/aliases."
+                    )
+        except (ValueError, TypeError, RuntimeError, KeyError) as exc:
+            diagnosis["error"] = str(exc)
+            diagnosis["suggestion"] = "Check input format and entity configuration"
+
+        return diagnosis
 
     async def diagnose_async(self, query: str) -> Dict[str, Any]:
         diagnosis = {
@@ -1043,148 +1188,7 @@ class Matcher:
                         "Check entity data and text normalization. "
                         "Ensure entities have relevant names/aliases."
                     )
-        except Exception as exc:
-            diagnosis["error"] = str(exc)
-            diagnosis["suggestion"] = "Check input format and entity configuration"
-
-        return diagnosis
-
-    def _format_hybrid_results(
-        self,
-        results: Optional[List[Dict[str, Any]]],
-        top_k: int,
-        threshold: Optional[float] = None,
-    ) -> Any:
-        effective_threshold = self._resolve_threshold(threshold, self.threshold)
-        filtered = []
-        for result in results or []:
-            if result.get("score", 0.0) < effective_threshold:
-                continue
-            filtered.append(result)
-
-        if top_k == 1:
-            return filtered[0] if filtered else None
-        return filtered[:top_k]
-
-    def get_training_info(self) -> Dict[str, Any]:
-        return {
-            "mode": self._training_mode,
-            "detected_mode": self._detected_mode,
-            "is_trained": self._active_matcher is not None,
-            "active_matcher": (
-                type(self._active_matcher).__name__ if self._active_matcher else None
-            ),
-            "has_training_data": self._has_training_data,
-            "threshold": self.threshold,
-        }
-
-    def get_statistics(self) -> Dict[str, Any]:
-        stats = {
-            "num_entities": len(self.entities),
-            "model_name": self.model_name,
-            "threshold": self.threshold,
-            "normalize": self.normalize,
-            "training_mode": self._training_mode,
-            "is_trained": self._active_matcher is not None,
-        }
-
-        if hasattr(self, "_embedding_matcher") and self._embedding_matcher:
-            stats["has_embeddings"] = self._embedding_matcher.embeddings is not None
-
-        if hasattr(self, "_entity_matcher") and self._entity_matcher:
-            classifier = getattr(self._entity_matcher, "classifier", None)
-            stats["classifier_trained"] = (
-                getattr(classifier, "is_trained", self._entity_matcher.is_trained)
-                if classifier is not None
-                else False
-            )
-
-        if hasattr(self, "_bert_matcher") and self._bert_matcher:
-            classifier = getattr(self._bert_matcher, "classifier", None)
-            stats["bert_classifier_trained"] = (
-                getattr(classifier, "is_trained", self._bert_matcher.is_trained)
-                if classifier is not None
-                else False
-            )
-
-        return stats
-
-    def explain_match(
-        self,
-        query: str,
-        top_k: int = 5,
-    ) -> Dict[str, Any]:
-        if not self._active_matcher:
-            raise TrainingError(
-                "Matcher not ready. Call fit() first.",
-                details={"mode": self._training_mode},
-            )
-
-        evaluation_threshold = self.threshold
-        results = self.match(query, top_k=top_k, _threshold_override=0.0)
-
-        if results is None:
-            result_list = []
-        elif isinstance(results, list):
-            result_list = results
-        else:
-            result_list = [results]
-
-        query_normalized = None
-        if self.normalize:
-            normalizer = TextNormalizer()
-            query_normalized = normalizer.normalize(query)
-
-        best = result_list[0] if result_list else None
-        matched = bool(best and best.get("score", 0) >= evaluation_threshold)
-
-        return {
-            "query": query,
-            "query_normalized": query_normalized,
-            "matched": matched,
-            "best_match": best,
-            "top_k": result_list,
-            "threshold": evaluation_threshold,
-            "mode": self._training_mode,
-        }
-
-    def diagnose(self, query: str) -> Dict[str, Any]:
-        diagnosis = {
-            "query": query,
-            "matcher_ready": self._active_matcher is not None,
-            "active_matcher": (
-                type(self._active_matcher).__name__ if self._active_matcher else None
-            ),
-        }
-
-        if not self._active_matcher:
-            diagnosis["issue"] = "Matcher not ready"
-            diagnosis["suggestion"] = "Call matcher.fit() to initialize the matcher"
-            return diagnosis
-
-        try:
-            explanation = self.explain_match(query, top_k=3)
-            diagnosis.update(explanation)
-
-            if not explanation["matched"]:
-                if explanation["best_match"]:
-                    score = explanation["best_match"].get("score", 0)
-                    threshold = explanation["threshold"]
-                    diagnosis["issue"] = (
-                        f"Score {score:.2f} below threshold {threshold}"
-                    )
-                    suggested_threshold = max(0.1, threshold - 0.1)
-                    diagnosis["suggestion"] = (
-                        f"Lower threshold with matcher.set_threshold({suggested_threshold:.1f}) "
-                        f"or add more training examples"
-                    )
-                else:
-                    diagnosis["issue"] = "No candidates found"
-                    diagnosis["suggestion"] = (
-                        "Check entity data and text normalization. "
-                        "Ensure entities have relevant names/aliases."
-                    )
-        except Exception as exc:
+        except (ValueError, TypeError, RuntimeError, KeyError) as exc:
             diagnosis["error"] = str(exc)
             diagnosis["suggestion"] = "Check input format and entity configuration"
 

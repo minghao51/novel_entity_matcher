@@ -46,6 +46,13 @@ class WeightConfig(BaseModel):
     setfit: float = Field(default=0.1, ge=0.0, le=1.0)
     """Weight for SetFit contrastive strategy."""
 
+    setfit_centroid: float = Field(default=0.45, ge=0.0, le=1.0)
+    """Weight for SetFit centroid distance strategy (recommended, highest weight)."""
+
+    # Adaptive weight control
+    adaptive: bool = Field(default=False)
+    """Enable adaptive weight computation based on dataset characteristics."""
+
     # Decision thresholds
     novelty_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
     """Final novelty score threshold for flagging samples."""
@@ -75,6 +82,7 @@ class WeightConfig(BaseModel):
             self.oneclass,
             self.prototypical,
             self.setfit,
+            self.setfit_centroid,
         ]
 
         total = sum(strategy_weights)
@@ -92,6 +100,7 @@ class WeightConfig(BaseModel):
             oneclass=self.oneclass * factor,
             prototypical=self.prototypical * factor,
             setfit=self.setfit * factor,
+            setfit_centroid=self.setfit_centroid * factor,
             # Keep thresholds unchanged
             novelty_threshold=self.novelty_threshold,
             knn_gate_threshold=self.knn_gate_threshold,

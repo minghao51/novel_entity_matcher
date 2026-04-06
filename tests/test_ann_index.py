@@ -5,13 +5,15 @@ import pytest
 
 from novelentitymatcher.novelty.storage.index import ANNIndex, ANNBackend
 
-# Check if hnswlib is available
+# Check if optional ANN backends are available.
 try:
     import importlib.util
 
     HAS_HNSWLIB = importlib.util.find_spec("hnswlib") is not None
+    HAS_FAISS = importlib.util.find_spec("faiss") is not None
 except ImportError:
     HAS_HNSWLIB = False
+    HAS_FAISS = False
 
 
 class TestANNIndex:
@@ -24,20 +26,32 @@ class TestANNIndex:
         return np.random.randn(100, 128).astype(np.float32)
 
     @pytest.fixture
-    def hnswlib_index(self, sample_embeddings):
+    def require_hnswlib(self):
+        """Skip test when hnswlib is not installed."""
+        if not HAS_HNSWLIB:
+            pytest.skip("hnswlib not available")
+
+    @pytest.fixture
+    def require_faiss(self):
+        """Skip test when faiss is not installed."""
+        if not HAS_FAISS:
+            pytest.skip("faiss not available")
+
+    @pytest.fixture
+    def hnswlib_index(self, require_hnswlib, sample_embeddings):
         """Create HNSWlib index with sample data."""
         index = ANNIndex(dim=128, backend=ANNBackend.HNSWLIB)
         index.add_vectors(sample_embeddings, [f"doc_{i}" for i in range(100)])
         return index
 
-    def test_hnswlib_initialization(self):
+    def test_hnswlib_initialization(self, require_hnswlib):
         """Test HNSWlib index initialization."""
         index = ANNIndex(dim=128, backend=ANNBackend.HNSWLIB)
         assert index.dim == 128
         assert index.backend == ANNBackend.HNSWLIB
         assert index.n_elements == 0
 
-    def test_faiss_initialization(self):
+    def test_faiss_initialization(self, require_faiss):
         """Test FAISS index initialization."""
         index = ANNIndex(dim=128, backend=ANNBackend.FAISS)
         assert index.dim == 128
@@ -49,13 +63,13 @@ class TestANNIndex:
         with pytest.raises(ValueError, match="Unsupported backend"):
             ANNIndex(dim=128, backend="invalid_backend")
 
-    def test_add_vectors(self, sample_embeddings):
+    def test_add_vectors(self, require_hnswlib, sample_embeddings):
         """Test adding vectors to index."""
         index = ANNIndex(dim=128, backend=ANNBackend.HNSWLIB)
         index.add_vectors(sample_embeddings)
         assert index.n_elements == 100
 
-    def test_add_vectors_with_labels(self, sample_embeddings):
+    def test_add_vectors_with_labels(self, require_hnswlib, sample_embeddings):
         """Test adding vectors with labels."""
         index = ANNIndex(dim=128, backend=ANNBackend.HNSWLIB)
         labels = [f"doc_{i}" for i in range(100)]
@@ -63,7 +77,7 @@ class TestANNIndex:
         assert len(index._labels) == 100
         assert index._labels[0] == "doc_0"
 
-    def test_dimension_mismatch(self, sample_embeddings):
+    def test_dimension_mismatch(self, require_hnswlib, sample_embeddings):
         """Test that dimension mismatch raises ValueError."""
         index = ANNIndex(dim=64, backend=ANNBackend.HNSWLIB)
         with pytest.raises(ValueError, match="Vector dimension mismatch"):
@@ -137,7 +151,6 @@ class TestANNIndex:
         assert similarities.shape == (0, 5)
         assert indices.shape == (0, 5)
 
-    @pytest.mark.skipif(not HAS_HNSWLIB, reason="hnswlib not available")
     def test_save_load_hnswlib(self, hnswlib_index, tmp_path):
         """Test saving and loading HNSWlib index."""
         save_path = tmp_path / "test_index"
@@ -156,7 +169,7 @@ class TestANNIndex:
         assert new_index.labels == hnswlib_index.labels
         np.testing.assert_allclose(new_index.get_distance_matrix(queries), before)
 
-    def test_faiss_save_load(self, sample_embeddings, tmp_path):
+    def test_faiss_save_load(self, require_faiss, sample_embeddings, tmp_path):
         """Test saving and loading FAISS index."""
         index = ANNIndex(dim=128, backend=ANNBackend.FAISS)
         labels = [f"doc_{i}" for i in range(100)]
@@ -175,13 +188,13 @@ class TestANNIndex:
         assert new_index.labels == labels
         np.testing.assert_allclose(new_index.get_distance_matrix(queries), before)
 
-    def test_load_nonexistent_file(self):
+    def test_load_nonexistent_file(self, require_hnswlib):
         """Test that loading non-existent file raises FileNotFoundError."""
         index = ANNIndex(dim=128, backend=ANNBackend.HNSWLIB)
         with pytest.raises(FileNotFoundError):
             index.load("/nonexistent/path/index")
 
-    def test_faiss_clear(self, sample_embeddings):
+    def test_faiss_clear(self, require_faiss, sample_embeddings):
         """Test clearing FAISS index."""
         index = ANNIndex(dim=128, backend=ANNBackend.FAISS)
         index.add_vectors(sample_embeddings)
@@ -190,7 +203,7 @@ class TestANNIndex:
         index.clear()
         assert index.n_elements == 0
 
-    def test_hnswlib_clear_not_supported(self, sample_embeddings):
+    def test_hnswlib_clear_not_supported(self, require_hnswlib, sample_embeddings):
         """Test that HNSWlib doesn't support clear."""
         index = ANNIndex(dim=128, backend=ANNBackend.HNSWLIB)
         index.add_vectors(sample_embeddings)

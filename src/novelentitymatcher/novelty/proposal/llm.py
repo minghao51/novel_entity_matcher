@@ -5,10 +5,12 @@ Uses litellm with structured output to generate meaningful class names
 and descriptions for clusters of novel samples.
 """
 
+import json
 import os
+from collections import defaultdict
 from typing import Any, Dict, List, Optional
 
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from ..schemas import (
     ClassProposal,
@@ -16,9 +18,36 @@ from ..schemas import (
     NovelClassAnalysis,
     NovelSampleMetadata,
 )
-from novelentitymatcher.utils.logging_config import get_logger
+from ...utils.logging_config import get_logger
 
 logger = get_logger(__name__)
+
+
+class LLMProposalSchema(BaseModel):
+    """Schema enforcing the exact JSON structure expected from LLM proposals."""
+
+    proposed_classes: list[dict] = Field(
+        default_factory=list,
+        description="List of proposed classes, each with name, description, confidence, sample_count, example_samples, justification",
+    )
+    rejected_as_noise: list[str] = Field(
+        default_factory=list,
+        description="List of sample texts or cluster IDs to reject as noise",
+    )
+    analysis_summary: str = Field(
+        ...,
+        description="Brief summary of the analysis",
+    )
+    cluster_count: int = Field(
+        ...,
+        description="Number of distinct clusters found",
+    )
+
+    @classmethod
+    def schema_json(cls) -> str:
+        """Return the JSON Schema representation."""
+        return json.dumps(cls.model_json_schema(), indent=2)
+
 
 # Default LLM providers with fallback chain
 DEFAULT_PROVIDERS = [
@@ -60,6 +89,7 @@ class LLMClassProposer:
         api_keys: Optional[Dict[str, str]] = None,
         temperature: float = 0.3,
         max_tokens: int = 4096,
+        max_clusters_per_summary: int = 20,
     ):
         """
         Initialize LLM class proposer.
@@ -71,6 +101,7 @@ class LLMClassProposer:
             api_keys: API keys for providers (e.g., {'openrouter': 'sk-...'})
             temperature: Sampling temperature
             max_tokens: Maximum tokens in response
+            max_clusters_per_summary: Maximum clusters to include per LLM summary call (for hierarchical mode)
         """
         self.primary_model = primary_model or os.getenv(
             "LLM_CLASS_PROPOSER_MODEL",
@@ -80,12 +111,13 @@ class LLMClassProposer:
             model for model in DEFAULT_PROVIDERS if model != self.primary_model
         ]
         self.fallback_models = fallback_models or default_fallbacks
-        self.api_keys = api_keys or self._get_api_keys_from_env()
+        self._api_keys = api_keys or self._get_api_keys_from_env()
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.max_clusters_per_summary = max_clusters_per_summary
 
         # Set API keys as environment variables for litellm
-        for provider, key in self.api_keys.items():
+        for provider, key in self._api_keys.items():
             env_var = self._provider_to_env_var(provider)
             if env_var and not os.getenv(env_var):
                 os.environ[env_var] = key
@@ -179,10 +211,24 @@ class LLMClassProposer:
         existing_classes: List[str],
         context: Optional[str] = None,
         max_retries: int = 2,
+        hierarchical: bool = True,
     ) -> NovelClassAnalysis:
-        """Generate proposals from cluster-level evidence."""
+        """Generate proposals from cluster-level evidence.
+
+        Args:
+            discovery_clusters: List of discovery clusters.
+            existing_classes: List of existing class names.
+            context: Optional domain context.
+            max_retries: Maximum retry attempts.
+            hierarchical: If True, use hierarchical summarization for large cluster sets.
+        """
         if not discovery_clusters:
             raise ValueError("discovery_clusters cannot be empty")
+
+        if hierarchical and len(discovery_clusters) > self.max_clusters_per_summary:
+            return self._propose_hierarchical(
+                discovery_clusters, existing_classes, context, max_retries
+            )
 
         prompt = self._build_cluster_prompt(
             discovery_clusters=discovery_clusters,
@@ -195,17 +241,116 @@ class LLMClassProposer:
             max_retries=max_retries,
         )
 
+    def _propose_hierarchical(
+        self,
+        discovery_clusters: List[DiscoveryCluster],
+        existing_classes: List[str],
+        context: Optional[str],
+        max_retries: int,
+    ) -> NovelClassAnalysis:
+        """Generate proposals using hierarchical summarization for large cluster sets."""
+        summaries = self._hierarchical_summarize_clusters(
+            discovery_clusters, existing_classes, context
+        )
+        prompt = self._build_hierarchical_prompt(
+            summaries, existing_classes, context
+        )
+
+        top_clusters = discovery_clusters[: self.max_clusters_per_summary]
+        return self._run_structured_cluster_proposal(
+            prompt=prompt,
+            discovery_clusters=top_clusters,
+            max_retries=max_retries,
+        )
+
+    def _build_hierarchical_prompt(
+        self,
+        summaries: List[Dict[str, Any]],
+        existing_classes: List[str],
+        context: Optional[str],
+    ) -> str:
+        """Build prompt from hierarchical cluster summaries."""
+        summary_lines = []
+        for i, summary in enumerate(summaries):
+            cluster_ids = ", ".join(str(c) for c in summary["cluster_ids"])
+            summary_lines.append(
+                f"- Group {i + 1} (clusters {cluster_ids}, {summary['total_samples']} samples): "
+                f"keywords=[{summary['keywords']}]; examples=[{summary['representative_examples']}]"
+            )
+
+        context_section = f"\nDomain Context: {context}" if context else ""
+        return f"""You are reviewing summarized groups of likely novel concepts.
+
+Existing Classes: {", ".join(existing_classes)}{context_section}
+
+Cluster Groups:
+{chr(10).join(summary_lines)}
+
+Return valid JSON with this schema:
+{{
+  "proposed_classes": [
+    {{
+      "name": "class name",
+      "description": "what the class represents",
+      "confidence": 0.0,
+      "sample_count": 0,
+      "example_samples": ["example"],
+      "justification": "why this cluster group suggests a class",
+      "suggested_parent": null,
+      "source_cluster_ids": [0],
+      "provenance": {{"keywords": ["keyword"]}}
+    }}
+  ],
+  "rejected_as_noise": ["group ids or sample text"],
+  "analysis_summary": "brief summary",
+  "cluster_count": {sum(s['total_samples'] for s in summaries)}
+}}
+
+Prefer one proposal per coherent group. Use source_cluster_ids for traceability."""
+
     def _group_by_cluster(
         self, samples: List[NovelSampleMetadata]
     ) -> Dict[Optional[int], List[NovelSampleMetadata]]:
         """Group samples by cluster ID."""
-        clusters: Dict[Optional[int], List[NovelSampleMetadata]] = {}
+        clusters: Dict[Optional[int], List[NovelSampleMetadata]] = defaultdict(list)
         for sample in samples:
-            cluster_id = sample.cluster_id
-            if cluster_id not in clusters:
-                clusters[cluster_id] = []
-            clusters[cluster_id].append(sample)
-        return clusters
+            clusters[sample.cluster_id].append(sample)
+        return dict(clusters)
+
+    def _hierarchical_summarize_clusters(
+        self,
+        discovery_clusters: List[DiscoveryCluster],
+        existing_classes: List[str],
+        context: Optional[str],
+    ) -> List[Dict[str, Any]]:
+        """Create hierarchical summaries of clusters to manage token budget."""
+        if len(discovery_clusters) <= self.max_clusters_per_summary:
+            return [self._summarize_cluster_group(discovery_clusters)]
+
+        summaries = []
+        for i in range(0, len(discovery_clusters), self.max_clusters_per_summary):
+            chunk = discovery_clusters[i : i + self.max_clusters_per_summary]
+            summaries.append(self._summarize_cluster_group(chunk))
+        return summaries
+
+    def _summarize_cluster_group(self, clusters: List[DiscoveryCluster]) -> Dict[str, Any]:
+        """Create a summary dict for a group of clusters."""
+        return {
+            "cluster_ids": [c.cluster_id for c in clusters],
+            "total_samples": sum(c.sample_count for c in clusters),
+            "keywords": ", ".join(
+                ", ".join(c.keywords or []) for c in clusters[:3]
+            ),
+            "representative_examples": "; ".join(
+                ex
+                for c in clusters[:2]
+                for ex in (
+                    c.evidence.representative_examples[:2]
+                    if c.evidence
+                    else c.example_texts[:2]
+                )
+            ),
+        }
 
     def _build_proposal_prompt(
         self,
@@ -363,9 +508,18 @@ Prefer one proposal per coherent cluster. Use source_cluster_ids for traceabilit
                     analysis.cluster_count = len(discovery_clusters)
                 analysis.proposal_metadata.setdefault("attempts", attempts + 1)
                 return analysis
-            except Exception as exc:
+            except ValidationError as exc:
                 last_error = exc
                 attempts += 1
+                if attempts > max_retries:
+                    break
+                field_errors = self._format_validation_errors(exc)
+                retry_prompt = self._build_retry_prompt(prompt, field_errors, exc)
+            except (ValueError, TypeError, ConnectionError, RuntimeError) as exc:
+                last_error = exc
+                attempts += 1
+                if attempts > max_retries:
+                    break
                 retry_prompt = (
                     f"{prompt}\n\nThe previous response was invalid: {exc}. "
                     "Return only valid JSON matching the requested schema."
@@ -383,6 +537,46 @@ Prefer one proposal per coherent cluster. Use source_cluster_ids for traceabilit
             validation_errors=[str(last_error)] if last_error else [],
             proposal_metadata={"attempts": attempts},
         )
+
+    def _format_validation_errors(self, exc: ValidationError) -> list[dict[str, Any]]:
+        """Extract structured field-level errors from a Pydantic ValidationError."""
+        errors = []
+        for error in exc.errors():
+            loc = error.get("loc", [])
+            field_path = ".".join(str(part) for part in loc) if loc else "root"
+            errors.append(
+                {
+                    "field": field_path,
+                    "type": error.get("type", "unknown"),
+                    "message": error.get("msg", ""),
+                    "input": str(error.get("input", ""))[:100],
+                }
+            )
+        return errors
+
+    def _build_retry_prompt(
+        self,
+        original_prompt: str,
+        field_errors: list[dict[str, Any]],
+        exc: ValidationError,
+    ) -> str:
+        """Build a structured retry prompt with schema and field-level errors."""
+        error_lines = []
+        for err in field_errors:
+            error_lines.append(
+                f"  - Field '{err['field']}': {err['message']} (got: {err['input']})"
+            )
+
+        return f"""{original_prompt}
+
+--- VALIDATION ERRORS ---
+Your previous response failed validation with the following errors:
+{chr(10).join(error_lines)}
+
+--- REQUIRED JSON SCHEMA ---
+{LLMProposalSchema.schema_json()}
+
+Please fix the errors above and return ONLY valid JSON matching the schema."""
 
     def _clusters_from_samples(
         self,
@@ -478,8 +672,6 @@ Prefer one proposal per coherent cluster. Use source_cluster_ids for traceabilit
         model_used: Optional[str] = None,
     ) -> NovelClassAnalysis:
         """Parse structured LLM response into NovelClassAnalysis."""
-        import json
-
         # Extract JSON from response (handle markdown code blocks)
         response = response.strip()
         if response.startswith("```"):

@@ -63,7 +63,8 @@ def test_cli_all_exits_non_zero_on_failure(monkeypatch, capsys):
     else:
         raise AssertionError("Expected SystemExit(1)")
 
-    out = capsys.readouterr().out
     assert calls == ["ok", "fail"]
-    assert "Error ingesting currencies: boom" in out
-    assert "Ingestion completed with failures:" in out
+
+    captured = capsys.readouterr()
+    assert "Error ingesting currencies: boom" in captured.err
+    assert "Ingestion completed with failures:" in captured.err

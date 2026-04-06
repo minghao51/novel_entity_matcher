@@ -1,7 +1,10 @@
-from .base import EmbeddingBackend, RerankerBackend
 import numpy as np
+
+from .base import EmbeddingBackend, RerankerBackend
 from sentence_transformers import CrossEncoder, SentenceTransformer
 from sentence_transformers.util import semantic_search
+
+from ..utils.embeddings import get_cached_sentence_transformer
 
 
 def _to_numpy(embeddings):
@@ -14,13 +17,12 @@ def _to_numpy(embeddings):
 
 class HFEmbedding(EmbeddingBackend):
     def __init__(self, model_name: str):
-        self.model = SentenceTransformer(model_name)
+        self.model = get_cached_sentence_transformer(model_name)
 
     def encode(self, texts):
         return self.model.encode(texts).tolist()
 
     def similarity(self, query_embeddings, corpus_embeddings, top_k):
-        # Hook for future ANN backends (FAISS/Annoy) if needed.
         query_embeddings = _to_numpy(query_embeddings)
         corpus_embeddings = _to_numpy(corpus_embeddings)
         return semantic_search(query_embeddings, corpus_embeddings, top_k=top_k)

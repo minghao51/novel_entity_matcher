@@ -9,6 +9,7 @@ from .adapters import (
     OODDetectionStage,
     ProposalStage,
 )
+from .config import PipelineConfig
 from .contracts import PipelineRunResult, PipelineStage, StageContext, StageResult
 from .match_result import MatchRecord, MatchResultWithMetadata
 from .orchestrator import PipelineOrchestrator
@@ -21,6 +22,7 @@ __all__ = [
     "MatchRecord",
     "MatchResultWithMetadata",
     "OODDetectionStage",
+    "PipelineConfig",
     "PipelineOrchestrator",
     "PipelineRunResult",
     "PipelineStage",

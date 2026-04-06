@@ -48,7 +48,7 @@ class DatasetLoader:
 
             info = huggingface_hub.get_dataset_config_info(config.hf_path)
             return info.version if hasattr(info, "version") else str(hash(info.sha))
-        except Exception:
+        except (ConnectionError, ValueError, OSError, RuntimeError):
             return None
 
     def _compute_version_hash(self, config: DatasetConfig) -> str:
@@ -78,68 +78,26 @@ class DatasetLoader:
         return metadata.get("version_hash") == current_hash
 
     def _convert_to_parquet(
-        self, dataset: Dataset, config: DatasetConfig
+        self, dataset: Dataset, config: DatasetConfig, max_samples: int | None = None
     ) -> dict[str, Path]:
-        if config.has_pairs:
-            return self._convert_pairs_to_parquet(dataset, config)
-        else:
-            return self._convert_classification_to_parquet(dataset, config)
+        def to_df(ds):
+            return ds.to_pandas() if hasattr(ds, "to_pandas") else pd.DataFrame(ds)
 
-    def _convert_pairs_to_parquet(
-        self, dataset: Dataset, config: DatasetConfig
-    ) -> dict[str, Path]:
         if isinstance(dataset, dict):
             splits = {}
             for split_name, split_ds in dataset.items():
-                if hasattr(split_ds, "to_pandas"):
-                    df = split_ds.to_pandas()
-                else:
-                    df = pd.DataFrame(split_ds)
-
+                df = to_df(split_ds)
+                if max_samples and len(df) > max_samples:
+                    df = df.sample(n=max_samples, random_state=42)
                 output_path = config.cache_path / f"{split_name}.parquet"
                 config.cache_path.mkdir(parents=True, exist_ok=True)
                 df.to_parquet(output_path, index=False)
                 splits[split_name] = output_path
             return splits
         else:
-            if hasattr(dataset, "to_pandas"):
-                df = dataset.to_pandas()
-            else:
-                df = pd.DataFrame(dataset)
-
-            output_path = config.cache_path / f"{config.split}.parquet"
-            config.cache_path.mkdir(parents=True, exist_ok=True)
-            df.to_parquet(output_path, index=False)
-            return {config.split: output_path}
-
-    def _convert_classification_to_parquet(
-        self, dataset: Dataset, config: DatasetConfig
-    ) -> dict[str, Path]:
-        if isinstance(dataset, dict):
-            splits = {}
-            for split_name, split_ds in dataset.items():
-                if hasattr(split_ds, "to_pandas"):
-                    df = split_ds.to_pandas()
-                else:
-                    df = pd.DataFrame(split_ds)
-
-                if config.max_samples and len(df) > config.max_samples:
-                    df = df.sample(n=config.max_samples, random_state=42)
-
-                output_path = config.cache_path / f"{split_name}.parquet"
-                config.cache_path.mkdir(parents=True, exist_ok=True)
-                df.to_parquet(output_path, index=False)
-                splits[split_name] = output_path
-            return splits
-        else:
-            if hasattr(dataset, "to_pandas"):
-                df = dataset.to_pandas()
-            else:
-                df = pd.DataFrame(dataset)
-
-            if config.max_samples and len(df) > config.max_samples:
-                df = df.sample(n=config.max_samples, random_state=42)
-
+            df = to_df(dataset)
+            if max_samples and len(df) > max_samples:
+                df = df.sample(n=max_samples, random_state=42)
             output_path = config.cache_path / f"{config.split}.parquet"
             config.cache_path.mkdir(parents=True, exist_ok=True)
             df.to_parquet(output_path, index=False)
@@ -171,9 +129,13 @@ class DatasetLoader:
             def _load_sync():
                 return load_dataset(config.hf_path)
 
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             dataset = await loop.run_in_executor(None, _load_sync)
-            parquet_paths = self._convert_to_parquet(dataset, config)
+            parquet_paths = self._convert_to_parquet(
+                dataset,
+                config,
+                max_samples=config.max_samples if not config.has_pairs else None,
+            )
 
         metadata = {
             "name": config.name,
@@ -207,7 +169,7 @@ class DatasetLoader:
             test_pairs = _fetch_csv("test.csv")
             return tableA, tableB, test_pairs
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         tableA, tableB, test_pairs = await loop.run_in_executor(None, _fetch_all)
 
         merged = test_pairs.merge(

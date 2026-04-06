@@ -1,9 +1,10 @@
 """CLI for running data ingestion scripts."""
 
 import argparse
+import sys
 from pathlib import Path
 
-from novelentitymatcher.ingestion import (
+from . import (
     run_languages,
     run_currencies,
     run_industries,
@@ -12,6 +13,9 @@ from novelentitymatcher.ingestion import (
     run_products,
     run_universities,
 )
+from ..utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 INGESTORS = {
     "languages": run_languages,
@@ -74,12 +78,12 @@ def main(argv=None):
                     continue
                 func(raw_dir=args.raw_dir, processed_dir=args.processed_dir)
             except Exception as e:
-                print(f"Error ingesting {name}: {e}")
+                print(f"Error ingesting {name}: {e}", file=sys.stderr)
                 failures.append((name, e))
         if failures:
-            print("\nIngestion completed with failures:")
+            print("\nIngestion completed with failures:", file=sys.stderr)
             for name, error in failures:
-                print(f"  - {name}: {error}")
+                print(f"  - {name}: {error}", file=sys.stderr)
             raise SystemExit(1)
         print("\nAll ingestions complete!")
     else:
@@ -87,7 +91,7 @@ def main(argv=None):
         if func:
             func(raw_dir=args.raw_dir, processed_dir=args.processed_dir)
         else:
-            print(f"Unknown dataset: {args.dataset}")
+            print(f"Unknown dataset: {args.dataset}", file=sys.stderr)
             raise SystemExit(1)
 
 

@@ -122,7 +122,9 @@ class TestDiscoveryPipelineReviewLifecycle:
             )()
         )
 
-        rejected = pipeline.reject_proposal(records[0].review_id, notes="not convincing")
+        rejected = pipeline.reject_proposal(
+            records[0].review_id, notes="not convincing"
+        )
 
         assert rejected.state == "rejected"
         assert rejected.reviewed_at is not None
@@ -156,7 +158,14 @@ class TestDiscoveryPipelineReviewLifecycle:
                     "timestamp": datetime.now(),
                     "class_proposals": NovelClassAnalysis(
                         proposed_classes=[
-                            ClassProposal(name="A", description="d", confidence=0.9, sample_count=1, example_samples=["a"], justification="j")
+                            ClassProposal(
+                                name="A",
+                                description="d",
+                                confidence=0.9,
+                                sample_count=1,
+                                example_samples=["a"],
+                                justification="j",
+                            )
                         ],
                         rejected_as_noise=[],
                         analysis_summary="",
@@ -176,7 +185,14 @@ class TestDiscoveryPipelineReviewLifecycle:
                     "timestamp": datetime.now(),
                     "class_proposals": NovelClassAnalysis(
                         proposed_classes=[
-                            ClassProposal(name="B", description="d", confidence=0.9, sample_count=1, example_samples=["a"], justification="j")
+                            ClassProposal(
+                                name="B",
+                                description="d",
+                                confidence=0.9,
+                                sample_count=1,
+                                example_samples=["a"],
+                                justification="j",
+                            )
                         ],
                         rejected_as_noise=[],
                         analysis_summary="",
@@ -209,7 +225,14 @@ class TestDiscoveryPipelineReviewLifecycle:
                     "timestamp": datetime.now(),
                     "class_proposals": NovelClassAnalysis(
                         proposed_classes=[
-                            ClassProposal(name="A", description="d", confidence=0.9, sample_count=1, example_samples=["a"], justification="j")
+                            ClassProposal(
+                                name="A",
+                                description="d",
+                                confidence=0.9,
+                                sample_count=1,
+                                example_samples=["a"],
+                                justification="j",
+                            )
                         ],
                         rejected_as_noise=[],
                         analysis_summary="",
@@ -229,7 +252,14 @@ class TestDiscoveryPipelineReviewLifecycle:
                     "timestamp": datetime.now(),
                     "class_proposals": NovelClassAnalysis(
                         proposed_classes=[
-                            ClassProposal(name="B", description="d", confidence=0.9, sample_count=1, example_samples=["a"], justification="j")
+                            ClassProposal(
+                                name="B",
+                                description="d",
+                                confidence=0.9,
+                                sample_count=1,
+                                example_samples=["a"],
+                                justification="j",
+                            )
                         ],
                         rejected_as_noise=[],
                         analysis_summary="",
@@ -267,7 +297,14 @@ class TestDiscoveryPipelinePromote:
                     "timestamp": datetime.now(),
                     "class_proposals": NovelClassAnalysis(
                         proposed_classes=[
-                            ClassProposal(name="X", description="d", confidence=0.9, sample_count=1, example_samples=["a"], justification="j")
+                            ClassProposal(
+                                name="X",
+                                description="d",
+                                confidence=0.9,
+                                sample_count=1,
+                                example_samples=["a"],
+                                justification="j",
+                            )
                         ],
                         rejected_as_noise=[],
                         analysis_summary="",
@@ -301,7 +338,14 @@ class TestDiscoveryPipelinePromote:
                     "timestamp": datetime.now(),
                     "class_proposals": NovelClassAnalysis(
                         proposed_classes=[
-                            ClassProposal(name="X", description="d", confidence=0.9, sample_count=1, example_samples=["a"], justification="j")
+                            ClassProposal(
+                                name="X",
+                                description="d",
+                                confidence=0.9,
+                                sample_count=1,
+                                example_samples=["a"],
+                                justification="j",
+                            )
                         ],
                         rejected_as_noise=[],
                         analysis_summary="",
@@ -339,7 +383,14 @@ class TestDiscoveryPipelineApprove:
                     "timestamp": datetime.now(),
                     "class_proposals": NovelClassAnalysis(
                         proposed_classes=[
-                            ClassProposal(name="X", description="d", confidence=0.9, sample_count=1, example_samples=["a"], justification="j")
+                            ClassProposal(
+                                name="X",
+                                description="d",
+                                confidence=0.9,
+                                sample_count=1,
+                                example_samples=["a"],
+                                justification="j",
+                            )
                         ],
                         rejected_as_noise=[],
                         analysis_summary="",

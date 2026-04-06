@@ -126,7 +126,13 @@ class TestSignalCombinerVoting:
         """Voting should flag samples flagged by majority of strategies."""
         detector = NoveltyDetector(
             config=DetectionConfig(
-                strategies=["confidence", "knn_distance", "clustering", "pattern", "oneclass"],
+                strategies=[
+                    "confidence",
+                    "knn_distance",
+                    "clustering",
+                    "pattern",
+                    "oneclass",
+                ],
                 combine_method="voting",
             )
         )

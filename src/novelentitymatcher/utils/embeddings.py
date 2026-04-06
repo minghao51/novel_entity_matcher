@@ -10,6 +10,7 @@ __all__ = [
     "batch_encode",
     "ModelCache",
     "get_default_cache",
+    "get_cached_sentence_transformer",
 ]
 
 
@@ -122,11 +123,33 @@ def get_default_cache() -> ModelCache:
         return _default_cache
 
 
+def get_cached_sentence_transformer(
+    model_name: str, cache: Optional[ModelCache] = None, trust_remote_code: bool = False
+) -> SentenceTransformer:
+    """Get a SentenceTransformer from cache or load it.
+
+    Args:
+        model_name: HuggingFace model name or path.
+        cache: Optional ModelCache instance. Uses global default if None.
+        trust_remote_code: Whether to trust remote code (for custom models).
+
+    Returns:
+        Cached or newly loaded SentenceTransformer instance.
+    """
+    if cache is None:
+        cache = get_default_cache()
+
+    def factory() -> SentenceTransformer:
+        return SentenceTransformer(model_name, trust_remote_code=trust_remote_code)
+
+    return cache.get_or_load(f"{model_name}:{trust_remote_code}", factory)
+
+
 def compute_embeddings(
     texts: List[str], model_name: str = "sentence-transformers/paraphrase-mpnet-base-v2"
 ) -> np.ndarray:
     """Compute embeddings for a list of texts."""
-    model = SentenceTransformer(model_name)
+    model = get_cached_sentence_transformer(model_name)
     return model.encode(texts)
 
 
@@ -148,7 +171,7 @@ def batch_encode(
     batch_size: int = 32,
 ) -> Iterator[np.ndarray]:
     """Encode texts in batches."""
-    model = SentenceTransformer(model_name)
+    model = get_cached_sentence_transformer(model_name)
     for i in range(0, len(texts), batch_size):
         batch = texts[i : i + batch_size]
         yield model.encode(batch)

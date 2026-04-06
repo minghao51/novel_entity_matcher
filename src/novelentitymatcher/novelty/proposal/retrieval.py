@@ -10,7 +10,8 @@ from __future__ import annotations
 import numpy as np
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
-from novelentitymatcher.utils.logging_config import get_logger
+from ...utils.logging_config import get_logger
+from ...utils.embeddings import get_cached_sentence_transformer
 
 if TYPE_CHECKING:
     from ...backends.embedding import EmbeddingBackend
@@ -283,7 +284,7 @@ Provide your analysis as a JSON object:"""
             response, model_used = self._call_llm_with_fallback(prompt)
             analysis = self._parse_response(response, model_used)
             return analysis
-        except Exception as e:
+        except (ValueError, TypeError, ConnectionError, RuntimeError) as e:
             logger.error(f"LLM proposal failed: {e}")
             return None
 
@@ -339,9 +340,7 @@ class BGERetriever:
             return
 
         try:
-            from sentence_transformers import SentenceTransformer
-
-            self._model = SentenceTransformer(self.model_name)
+            self._model = get_cached_sentence_transformer(self.model_name)
             if self.device:
                 self._model = self._model.to(self.device)
             self._is_initialized = True

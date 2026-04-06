@@ -45,6 +45,7 @@ class ClusterEvidence(BaseModel):
     """Compact statistical evidence extracted for a cluster."""
 
     keywords: list[str] = Field(default_factory=list)
+    rake_keywords: list[str] = Field(default_factory=list)
     representative_examples: list[str] = Field(default_factory=list)
     sample_indices: list[int] = Field(default_factory=list)
     predicted_classes: list[str] = Field(default_factory=list)

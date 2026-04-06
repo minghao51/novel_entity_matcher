@@ -121,7 +121,7 @@ DYNAMIC_MODEL_REGISTRY = {
 }
 
 MODEL_REGISTRY = {alias: spec["name"] for alias, spec in MODEL_SPECS.items()}
-RETRIEVAL_DEFAULT_MODEL = "potion-8m"
+RETRIEVAL_DEFAULT_MODEL = "potion-32m"
 TRAINING_DEFAULT_MODEL = "mpnet"
 BERT_DEFAULT_MODEL = "distilbert"
 MODEL_REGISTRY["default"] = MODEL_SPECS[RETRIEVAL_DEFAULT_MODEL]["name"]
@@ -294,9 +294,9 @@ def resolve_matcher_mode(mode: str) -> str:
 
 def recommend_model(use_case: str = "general", language: str = "en") -> str:
     recommendations = {
-        ("general", "en"): "potion-8m",
-        ("fast", "en"): "potion-8m",
-        ("accurate", "en"): "potion-8m",
+        ("general", "en"): "potion-32m",
+        ("fast", "en"): "potion-32m",
+        ("accurate", "en"): "potion-32m",
         ("general", "multilingual"): "mrl-multi",
         ("fast", "multilingual"): "mrl-multi",
         ("accurate", "multilingual"): "mrl-multi",

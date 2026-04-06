@@ -43,6 +43,7 @@ dependencies = [
 [project.scripts]
 novelentitymatcher-ingest = "novelentitymatcher.ingestion.cli:main"
 novelentitymatcher-bench = "novelentitymatcher.benchmarks.cli:main"
+novelentitymatcher-review = "novelentitymatcher.novelty.cli:main"
 
 [project.optional-dependencies]
 # Progress bars for notebooks and terminals
@@ -63,6 +64,12 @@ novelty = [
 llm = [
     "litellm>=1.50.0",
     "pydantic>=2.0.0",
+]
+
+# Clustering helpers for novelty discovery
+clustering = [
+    "hdbscan>=0.2",
+    "umap-learn>=0.5",
 ]
 
 # Plotting helpers for benchmark visualization scripts
@@ -104,6 +111,16 @@ all = [
     "seaborn>=0.13.2",
     "tqdm>=4.66.0",
     "twine>=5.1.1",
+]
+
+# Full feature set (novelty + LLM + clustering)
+full = [
+    "pydantic>=2.0.0",
+    "hnswlib>=0.8.0",
+    "hdbscan>=0.8.33",
+    "faiss-cpu>=1.7.4",
+    "litellm>=1.50.0",
+    "umap-learn>=0.5",
 ]
 
 [dependency-groups]

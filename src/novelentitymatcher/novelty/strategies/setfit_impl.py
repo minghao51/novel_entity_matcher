@@ -11,6 +11,10 @@ from pathlib import Path
 from typing import Any, List, Optional
 import numpy as np
 
+from novelentitymatcher.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 class SetFitDetector:
     def __init__(
@@ -52,7 +56,7 @@ class SetFitDetector:
             )
 
         if show_progress:
-            print(f"Loading SetFit model: {self.model_name}")
+            logger.info(f"Loading SetFit model: {self.model_name}")
 
         self.model = SetFitModel.from_pretrained(self.model_name)
 
@@ -70,7 +74,7 @@ class SetFitDetector:
             train_labels.append(1)
 
         if show_progress:
-            print(
+            logger.info(
                 f"Training with {len(train_texts)} examples ({len(self.known_entities)} known, {len(synthetic_novels)} novel)..."
             )
 
@@ -87,7 +91,7 @@ class SetFitDetector:
         trainer.train()
 
         if show_progress:
-            print("Calibrating novelty threshold...")
+            logger.info("Calibrating novelty threshold...")
 
         self.known_embeddings = self._encode_texts(
             self.known_entities, show_progress_bar=False
@@ -106,7 +110,7 @@ class SetFitDetector:
         self.is_trained = True
 
         if show_progress:
-            print(f"Training complete! Threshold: {self.novelty_threshold:.4f}")
+            logger.info(f"Training complete! Threshold: {self.novelty_threshold:.4f}")
 
     def is_novel(self, text: str):
         if not self.is_trained:

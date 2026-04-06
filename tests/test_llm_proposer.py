@@ -1,8 +1,11 @@
 """Tests for LLMClassProposer."""
 
 import json
-import pytest
+import sys
+from types import ModuleType
 from unittest.mock import Mock, patch
+
+import pytest
 
 from novelentitymatcher.novelty.proposal.llm import LLMClassProposer
 from novelentitymatcher.novelty.schemas import NovelSampleMetadata
@@ -99,7 +102,7 @@ class TestLLMClassProposer:
 
         proposer = LLMClassProposer(api_keys=api_keys)
 
-        assert proposer.api_keys == api_keys
+        assert proposer._api_keys == api_keys
 
     def test_group_by_cluster(self, proposer, sample_novel_samples):
         """Test grouping samples by cluster ID."""
@@ -287,13 +290,16 @@ class TestLLMClassProposer:
         assert fallback.model_used == "fallback"
         assert fallback.proposed_classes == []
 
-    @patch("litellm.completion")
-    def test_call_litellm_success(self, mock_completion, proposer):
+    def test_call_litellm_success(self, proposer, monkeypatch):
         """Test successful litellm call."""
+        mock_completion = Mock()
         mock_response = Mock()
         mock_response.choices = [Mock()]
         mock_response.choices[0].message.content = "Test response"
         mock_completion.return_value = mock_response
+        mock_litellm = ModuleType("litellm")
+        mock_litellm.completion = mock_completion
+        monkeypatch.setitem(sys.modules, "litellm", mock_litellm)
 
         prompt = "Test prompt"
         response = proposer._call_litellm("test-model", prompt)
@@ -309,15 +315,22 @@ class TestLLMClassProposer:
         assert hasattr(proposer, "_call_litellm")
         # Actual ImportError testing would require mocking sys.modules
 
-    @patch("litellm.completion")
     def test_propose_classes_success(
-        self, mock_completion, proposer, sample_novel_samples, mock_llm_response
+        self,
+        proposer,
+        sample_novel_samples,
+        mock_llm_response,
+        monkeypatch,
     ):
         """Test successful class proposal."""
+        mock_completion = Mock()
         mock_response = Mock()
         mock_response.choices = [Mock()]
         mock_response.choices[0].message.content = mock_llm_response
         mock_completion.return_value = mock_response
+        mock_litellm = ModuleType("litellm")
+        mock_litellm.completion = mock_completion
+        monkeypatch.setitem(sys.modules, "litellm", mock_litellm)
 
         existing_classes = ["physics", "cs", "biology"]
 
@@ -330,11 +343,11 @@ class TestLLMClassProposer:
         assert len(analysis.proposed_classes) == 2
         assert analysis.proposed_classes[0].name == "Quantum Biology"
 
-    @patch("litellm.completion")
     def test_propose_classes_with_fallback(
-        self, mock_completion, proposer, sample_novel_samples
+        self, proposer, sample_novel_samples, monkeypatch
     ):
         """Test class proposal with fallback on LLM failure."""
+        mock_completion = Mock()
         # First call fails, second call succeeds with fallback
         mock_completion.side_effect = [
             Exception("Primary model failed"),
@@ -348,6 +361,9 @@ class TestLLMClassProposer:
                 ]
             ),
         ]
+        mock_litellm = ModuleType("litellm")
+        mock_litellm.completion = mock_completion
+        monkeypatch.setitem(sys.modules, "litellm", mock_litellm)
 
         existing_classes = ["physics", "cs", "biology"]
 

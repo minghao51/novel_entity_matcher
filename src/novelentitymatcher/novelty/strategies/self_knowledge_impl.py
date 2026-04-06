@@ -11,7 +11,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from novelentitymatcher.utils.logging_config import get_logger
+from ...utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -328,7 +328,7 @@ class SparseAutoencoder:
     @classmethod
     def load(cls, path: str) -> "SparseAutoencoder":
         """Load trained autoencoder from disk."""
-        data = np.load(path, allow_pickle=True)
+        data = np.load(path, allow_pickle=False)
         instance = cls(
             hidden_dim=int(data["hidden_dim"]),
             sparsity_weight=float(data["sparsity_weight"]),

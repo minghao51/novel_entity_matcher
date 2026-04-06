@@ -10,9 +10,10 @@ from __future__ import annotations
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
-from sklearn.metrics import pairwise_distances
 
-from novelentitymatcher.utils.logging_config import get_logger
+from ...utils.logging_config import get_logger
+
+from .backends import ClusteringBackendRegistry
 
 logger = get_logger(__name__)
 
@@ -66,8 +67,7 @@ class ScalableClusterer:
         self.umap_metric = umap_metric
         self.prediction_data = prediction_data
 
-        self._clusterer: Optional[Any] = None
-        self._umap_model: Optional[Any] = None
+        self._backend_instance: Optional[Any] = None
         self._labels: Optional[np.ndarray] = None
         self._probabilities: Optional[np.ndarray] = None
         self._n_points: int = 0
@@ -81,148 +81,22 @@ class ScalableClusterer:
         else:
             return self.BACKEND_UMAP_HDBSCAN
 
-    def _preprocess_umap(
-        self,
-        embeddings: np.ndarray,
-    ) -> np.ndarray:
-        """Apply UMAP dimensionality reduction."""
-        try:
-            import umap
-        except ImportError:
-            raise ImportError(
-                "umap-learn is required for UMAP preprocessing. "
-                "Install with: pip install umap-learn"
+    def _create_backend(self, backend_name: str) -> Any:
+        """Create a backend instance from the registry."""
+        kwargs = {
+            "min_samples": self.min_samples,
+            "cluster_selection_epsilon": self.cluster_selection_epsilon,
+            "prediction_data": self.prediction_data,
+        }
+        if backend_name == self.BACKEND_UMAP_HDBSCAN:
+            kwargs.update(
+                {
+                    "n_neighbors": self.n_neighbors,
+                    "umap_dim": self.umap_dim,
+                    "umap_metric": self.umap_metric,
+                }
             )
-
-        logger.info(
-            f"Applying UMAP reduction: {embeddings.shape} -> ({embeddings.shape[0]}, {self.umap_dim})"
-        )
-
-        self._umap_model = umap.UMAP(
-            n_components=self.umap_dim,
-            n_neighbors=self.n_neighbors,
-            metric=self.umap_metric,
-            min_dist=0.0,
-            random_state=42,
-        )
-
-        reduced = self._umap_model.fit_transform(embeddings)
-        return reduced
-
-    def _run_hdbscan(
-        self,
-        distance_matrix: np.ndarray,
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """Run HDBSCAN on precomputed distance matrix."""
-        try:
-            import hdbscan
-        except ImportError:
-            raise ImportError(
-                "hdbscan is required for HDBSCAN clustering. "
-                "Install with: pip install hdbscan"
-            )
-
-        clusterer = hdbscan.HDBSCAN(
-            min_cluster_size=self.min_cluster_size,
-            min_samples=self.min_samples,
-            cluster_selection_epsilon=self.cluster_selection_epsilon,
-            metric="precomputed",
-            prediction_data=self.prediction_data,
-        )
-        labels = clusterer.fit_predict(distance_matrix.astype(np.float64))
-        probabilities = getattr(clusterer, "probabilities_", np.ones(len(labels)))
-        persistences = getattr(clusterer, "cluster_persistence_", [])
-
-        return labels, probabilities, persistences
-
-    def _run_soptics(
-        self,
-        distance_matrix: np.ndarray,
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Run sOPTICS (simplified OPTICS-style clustering).
-
-        Uses a simplified approach based on core distances and reachability
-        without full OPTICS extraction, optimized for speed.
-        """
-        n = distance_matrix.shape[0]
-
-        core_distances = np.zeros(n)
-        for i in range(n):
-            row = distance_matrix[i]
-            sorted_dists = np.partition(row, self.min_samples - 1)
-            if self.min_samples < len(sorted_dists):
-                core_distances[i] = sorted_dists[self.min_samples - 1]
-            else:
-                core_distances[i] = sorted_dists[-1]
-
-        reachability = (
-            np.maximum(core_distances[:, np.newaxis], core_distances[np.newaxis, :])
-            - distance_matrix
-        )
-        reachability = np.maximum(reachability, 0)
-        np.fill_diagonal(reachability, 0)
-
-        avg_reachability = np.mean(reachability[np.triu_indices(n, k=1)])
-        std_reachability = np.std(reachability[np.triu_indices(n, k=1)])
-
-        threshold = avg_reachability + 0.5 * std_reachability
-        is_core = core_distances <= threshold
-
-        labels = np.full(n, -1, dtype=int)
-        cluster_id = 0
-
-        for i in range(n):
-            if not is_core[i] or labels[i] != -1:
-                continue
-
-            queue = [i]
-            labels[i] = cluster_id
-
-            while queue:
-                current = queue.pop(0)
-                if not is_core[current]:
-                    continue
-
-                for j in range(n):
-                    if labels[j] == -1 and reachability[current, j] <= threshold:
-                        labels[j] = cluster_id
-                        queue.append(j)
-
-            cluster_id += 1
-
-        noise_mask = labels == -1
-        if np.sum(noise_mask) > 0 and self.min_cluster_size <= 3:
-            small_clusters = []
-            for i in range(n):
-                if labels[i] == -1:
-                    neighbors = np.where(distance_matrix[i] <= threshold)[0]
-                    if len(neighbors) >= self.min_cluster_size:
-                        small_clusters.append(i)
-
-            for idx in small_clusters:
-                labels[idx] = cluster_id
-                cluster_id += 1
-
-        noise_mask = labels == -1
-        labels[noise_mask] = -1
-
-        probabilities = np.ones(n)
-        for i in range(n):
-            if labels[i] >= 0:
-                cluster_members = np.where(labels == labels[i])[0]
-                if len(cluster_members) > 1:
-                    intra_dist = distance_matrix[i][cluster_members]
-                    probabilities[i] = (
-                        1.0 / (1.0 + np.mean(intra_dist[intra_dist > 0]))
-                        if np.any(intra_dist > 0)
-                        else 1.0
-                    )
-
-        logger.info(
-            f"sOPTICS: found {cluster_id} clusters, {np.sum(labels == -1)} noise points"
-        )
-        return labels, probabilities, np.ones(cluster_id)
+        return ClusteringBackendRegistry.create(backend_name, **kwargs)
 
     def fit_predict(
         self,
@@ -244,42 +118,31 @@ class ScalableClusterer:
             raise ValueError(f"Expected 2D array, got {X.ndim}D")
         self._n_points = X.shape[0]
 
-        backend = self.backend
-        if backend == self.BACKEND_AUTO:
-            backend = self._auto_backend(self._n_points)
-            logger.info(f"Auto-selected backend: {backend} for {self._n_points} points")
+        backend_name = self.backend
+        if backend_name == self.BACKEND_AUTO:
+            backend_name = self._auto_backend(self._n_points)
+            logger.info(
+                f"Auto-selected backend: {backend_name} for {self._n_points} points"
+            )
 
-        validation_info: Dict[str, Any] = {
-            "backend": backend,
-            "n_points": self._n_points,
-            "n_clusters": 0,
-            "n_noise": 0,
-        }
+        self._backend_instance = self._create_backend(backend_name)
 
-        if backend == self.BACKEND_UMAP_HDBSCAN:
-            X = self._preprocess_umap(X)
-            metric = "euclidean"
-
-        if metric == "precomputed":
-            distance_matrix = X
-        else:
-            distance_matrix = pairwise_distances(X, metric=metric).astype(np.float32)
-
-        if backend in (self.BACKEND_HDBSCAN, self.BACKEND_UMAP_HDBSCAN):
-            labels, probabilities, persistences = self._run_hdbscan(distance_matrix)
-        elif backend == self.BACKEND_SOPTICS:
-            labels, probabilities, persistences = self._run_soptics(distance_matrix)
-        else:
-            labels, probabilities, persistences = self._run_hdbscan(distance_matrix)
+        labels, probabilities, backend_info = self._backend_instance.fit_predict(
+            X, min_cluster_size=self.min_cluster_size, metric=metric
+        )
 
         self._labels = labels
         self._probabilities = probabilities
 
         unique_clusters = sorted({int(label) for label in labels if int(label) >= 0})
-        validation_info["n_clusters"] = len(unique_clusters)
-        validation_info["n_noise"] = int(np.sum(labels == -1))
-        validation_info["persistences"] = persistences
-        validation_info["unique_clusters"] = unique_clusters
+        validation_info: Dict[str, Any] = {
+            "backend": backend_name,
+            "n_points": self._n_points,
+            "n_clusters": len(unique_clusters),
+            "n_noise": int(np.sum(labels == -1)),
+            "persistences": backend_info.get("persistences", []),
+            "unique_clusters": unique_clusters,
+        }
 
         logger.info(
             f"Clustering complete: {validation_info['n_clusters']} clusters, "
@@ -356,6 +219,8 @@ def compute_cluster_quality(
             "known_ratio": 0.0,
         }
 
+    from sklearn.metrics import pairwise_distances
+
     cohesion_scores = []
     for cluster_id in unique_labels:
         member_indices = np.where(labels == cluster_id)[0]
@@ -386,7 +251,7 @@ def compute_cluster_quality(
             from sklearn.metrics import silhouette_score
 
             silhouette = float(silhouette_score(embeddings, labels, metric=metric))
-        except Exception:
+        except (ValueError, TypeError, RuntimeError):
             silhouette = 0.0
     else:
         silhouette = 0.0
@@ -428,6 +293,8 @@ def validate_novel_cluster(
     Returns:
         Tuple of (is_valid_novel, validation_score)
     """
+    from sklearn.metrics import pairwise_distances
+
     n_members = len(cluster_embeddings)
 
     if n_members < min_cluster_size:

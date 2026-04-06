@@ -11,7 +11,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 from sklearn.svm import OneClassSVM
-from sentence_transformers import SentenceTransformer
+
+from novelentitymatcher.utils.logging_config import get_logger
+from novelentitymatcher.utils.embeddings import get_cached_sentence_transformer
+
+logger = get_logger(__name__)
 
 
 class OneClassSVMDetector:
@@ -41,12 +45,12 @@ class OneClassSVMDetector:
             raise ValueError("known_entities cannot be empty")
 
         if show_progress:
-            print(f"Loading sentence transformer model: {self.model_name}")
+            logger.info(f"Loading sentence transformer model: {self.model_name}")
 
-        self.model = SentenceTransformer(self.model_name)
+        self.model = get_cached_sentence_transformer(self.model_name)
 
         if show_progress:
-            print(f"Encoding {len(known_entities)} known entities...")
+            logger.info(f"Encoding {len(known_entities)} known entities...")
 
         self.known_embeddings = self.model.encode(
             known_entities,
@@ -55,7 +59,7 @@ class OneClassSVMDetector:
         )
 
         if show_progress:
-            print(f"Training One-Class SVM (nu={self.nu}, kernel={self.kernel})...")
+            logger.info(f"Training One-Class SVM (nu={self.nu}, kernel={self.kernel})...")
 
         self.oc_svm = OneClassSVM(nu=self.nu, kernel=self.kernel, gamma=self.gamma)
         self.oc_svm.fit(self.known_embeddings)
@@ -63,7 +67,7 @@ class OneClassSVMDetector:
         self.is_trained = True
 
         if show_progress:
-            print("Training complete!")
+            logger.info("Training complete!")
 
     def is_novel(self, text: str) -> Tuple[bool, float]:
         if not self.is_trained:
@@ -151,7 +155,7 @@ class OneClassSVMDetector:
         detector.oc_svm = joblib.load(p / "oc_svm_model.pkl")
         detector.known_embeddings = np.load(p / "known_embeddings.npy")
         detector.is_trained = metadata["is_trained"]
-        detector.model = SentenceTransformer(metadata["model_name"])
+        detector.model = get_cached_sentence_transformer(metadata["model_name"])
 
         return detector
 

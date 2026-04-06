@@ -6,6 +6,9 @@ import json
 import requests
 
 from .base import BaseFetcher, resolve_output_dirs
+from novelentitymatcher.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class UNSPSCFetcher(BaseFetcher):
@@ -69,13 +72,16 @@ class UNSPSCFetcher(BaseFetcher):
         if not output_path.exists():
             try:
                 response = requests.get(common_url, timeout=30)
-                if response.status_code == 200:
-                    with open(output_path, "w", encoding="utf-8") as f:
-                        f.write(response.text)
-                else:
-                    raise Exception(f"Status code: {response.status_code}")
-            except Exception as e:
-                print(f"UNSPSC fetch failed: {e}, using fallback data")
+                response.raise_for_status()
+                content_type = response.headers.get("Content-Type", "")
+                if "json" not in content_type and "text" not in content_type:
+                    raise ValueError(f"Unexpected Content-Type: {content_type}")
+                if len(response.content) > 10 * 1024 * 1024:
+                    raise ValueError("Response exceeds 10MB size limit")
+                with open(output_path, "w", encoding="utf-8") as f:
+                    f.write(response.text)
+            except (requests.RequestException, ConnectionError, TimeoutError, ValueError) as e:
+                logger.warning(f"UNSPSC fetch failed: {e}, using fallback data")
                 with open(output_path, "w", encoding="utf-8") as f:
                     json.dump(self.FALLBACK_UNSPSC, f)
 
@@ -291,10 +297,15 @@ class MCCFetcher(BaseFetcher):
             try:
                 response = requests.get(url, timeout=30)
                 response.raise_for_status()
+                content_type = response.headers.get("Content-Type", "")
+                if "csv" not in content_type and "text" not in content_type:
+                    raise ValueError(f"Unexpected Content-Type: {content_type}")
+                if len(response.content) > 5 * 1024 * 1024:
+                    raise ValueError("Response exceeds 5MB size limit")
                 with open(output_path, "w", encoding="utf-8") as f:
                     f.write(response.text)
-            except Exception as e:
-                print(f"MCC fetch failed: {e}, using fallback data")
+            except (requests.RequestException, ConnectionError, TimeoutError, ValueError) as e:
+                logger.warning(f"MCC fetch failed: {e}, using fallback data")
                 with open(output_path, "w", encoding="utf-8") as f:
                     writer = csv.DictWriter(f, fieldnames=["mcc", "description"])
                     writer.writeheader()

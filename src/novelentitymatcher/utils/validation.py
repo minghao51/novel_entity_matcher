@@ -1,6 +1,6 @@
 from typing import List, Dict, Any
 
-from novelentitymatcher.exceptions import ValidationError
+from ..exceptions import ValidationError
 
 __all__ = [
     "validate_entity",
@@ -24,8 +24,7 @@ def validate_entity(entity: Dict[str, Any]) -> bool:
             "Entity must have 'name' field",
             entity=entity,
             field="name",
-            suggestion="Add 'name' field: {'id': '%s', 'name': 'Entity Name'}"
-            % entity.get("id", "unknown"),
+            suggestion=f"Add 'name' field: {{'id': '{entity.get('id', 'unknown')}', 'name': 'Entity Name'}}",
         )
     return True
 

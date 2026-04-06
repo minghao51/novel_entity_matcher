@@ -9,6 +9,10 @@ from typing import List, Optional
 
 import pandas as pd
 
+from .logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 def save_benchmark_report(results: pd.DataFrame, output_path: str | Path) -> Path:
     path = Path(output_path)
@@ -103,7 +107,7 @@ def format_benchmark_summary(results: pd.DataFrame) -> str:
 
 
 def print_benchmark_report(results: pd.DataFrame):
-    print(format_benchmark_summary(results))
+    logger.info(format_benchmark_summary(results))
 
 
 def parse_benchmark_args(argv: Optional[List[str]] = None) -> argparse.Namespace:

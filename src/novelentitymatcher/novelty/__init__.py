@@ -71,6 +71,9 @@ from .clustering.validation import ClusterValidator
 from .proposal.llm import LLMClassProposer
 from .proposal.retrieval import RetrievalAugmentedProposer
 
+from .strategies import _register_all
+_register_all()
+
 __all__ = [
     # Core
     "NoveltyDetector",

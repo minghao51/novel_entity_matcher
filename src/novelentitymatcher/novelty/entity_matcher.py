@@ -34,8 +34,9 @@ from ..pipeline.adapters import (
 )
 from ..pipeline.contracts import StageContext
 from ..pipeline.match_result import MatchResultWithMetadata
+from ..pipeline.match_pipeline_base import DiscoveryPipelineMixin
 from ..pipeline.orchestrator import PipelineOrchestrator
-from novelentitymatcher.utils.logging_config import get_logger
+from ..utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -59,7 +60,7 @@ class NovelEntityMatchResult:
 NoveltyMatchResult = NovelEntityMatchResult
 
 
-class NovelEntityMatcher:
+class NovelEntityMatcher(DiscoveryPipelineMixin):
     """
     Primary public API for novelty-aware matching.
 
@@ -74,7 +75,7 @@ class NovelEntityMatcher:
         entities: Optional[list[dict[str, Any]]] = None,
         *,
         matcher: Optional[Matcher] = None,
-        model: str = "potion-8m",
+        model: str = "potion-32m",
         mode: str = "zero-shot",
         acceptance_threshold: Optional[float] = None,
         detection_config: Optional[Union[DetectionConfig, Dict[str, Any]]] = None,
@@ -243,12 +244,7 @@ class NovelEntityMatcher:
     def _derive_existing_classes(
         self, existing_classes: Optional[List[str]] = None
     ) -> List[str]:
-        if existing_classes:
-            return list(existing_classes)
-        if self.entities:
-            return [str(entity["id"]) for entity in self.entities if "id" in entity]
-        reference = self.get_reference_corpus()
-        return list(reference.get("labels", []))
+        return super()._derive_existing_classes(existing_classes)
 
     async def _collect_match_result_async(
         self, queries: List[str]
@@ -287,38 +283,16 @@ class NovelEntityMatcher:
         context: Optional[str] = None,
         run_llm_proposal: bool = True,
     ) -> PipelineOrchestrator:
-        return PipelineOrchestrator(
-            stages=[
-                MatcherMetadataStage(
-                    collect_sync=self._collect_match_result_sync,
-                    collect_async=self._collect_match_result_async,
-                ),
-                OODDetectionStage(
-                    detector=self.detector,
-                    enabled=self.use_novelty_detector,
-                ),
-                CommunityDetectionStage(
-                    clusterer=self.clusterer,
-                    enabled=True,
-                    min_cluster_size=max(
-                        2,
-                        (
-                            self.detection_config.clustering.min_cluster_size
-                            if self.detection_config.clustering is not None
-                            else 2
-                        ),
-                    ),
-                ),
-                ClusterEvidenceStage(enabled=True),
-                ProposalStage(
-                    proposer=self.llm_proposer,
-                    existing_classes_resolver=lambda: self._derive_existing_classes(
-                        existing_classes
-                    ),
-                    enabled=run_llm_proposal,
-                    context_text=context,
-                ),
-            ]
+        clustering_cfg = self.detection_config.clustering
+        return self._build_discovery_stages(
+            existing_classes=existing_classes,
+            context=context,
+            run_llm_proposal=run_llm_proposal,
+            clustering_enabled=True,
+            min_cluster_size=(
+                clustering_cfg.min_cluster_size if clustering_cfg else 5
+            ),
+            evidence_enabled=True,
         )
 
     def _coerce_novel_sample_report(self, report: Any) -> NovelSampleReport:
@@ -344,73 +318,6 @@ class NovelEntityMatcher:
             detection_strategies=list(getattr(report, "detection_strategies", [])),
             config=dict(getattr(report, "config", {})),
             signal_counts=dict(getattr(report, "signal_counts", {})),
-        )
-
-    def _build_match_result(
-        self,
-        query: str,
-        match_result: MatchResultWithMetadata,
-        reference_corpus: Dict[str, Any],
-        existing_classes: Optional[List[str]] = None,
-        return_alternatives: bool = False,
-    ) -> NovelEntityMatchResult:
-        record = match_result.records[0]
-        predicted_id = record.predicted_id if record.predicted_id else None
-        score = float(record.confidence)
-        alternatives = list(record.candidates)
-
-        if self.use_novelty_detector:
-            report = self.detector.detect_novel_samples(
-                texts=[query],
-                confidences=np.asarray(match_result.confidences, dtype=float),
-                embeddings=np.asarray(match_result.embeddings),
-                predicted_classes=list(match_result.predictions),
-                candidate_results=match_result.candidate_results,
-                reference_embeddings=reference_corpus["embeddings"],
-                reference_labels=reference_corpus["labels"],
-            )
-            sample = report.novel_samples[0] if report.novel_samples else None
-        else:
-            report = None
-            sample = None
-
-        is_novel = False
-        novel_score = max(0.0, 1.0 - score)
-        signals: dict[str, bool] = {}
-        if sample is not None:
-            is_novel = True
-            novel_score = float(sample.novelty_score or 0.0)
-            signals = dict(sample.signals)
-
-        accepted_known = (
-            predicted_id not in (None, "unknown")
-            and score >= self.acceptance_threshold
-            and not is_novel
-        )
-
-        if accepted_known:
-            match_method = "accepted_known"
-        elif is_novel:
-            match_method = "novelty_detector"
-        elif predicted_id in (None, "unknown"):
-            match_method = "no_match"
-        else:
-            match_method = "below_acceptance_threshold"
-
-        return NovelEntityMatchResult(
-            id=predicted_id if accepted_known else None,
-            score=score,
-            is_match=accepted_known,
-            is_novel=is_novel,
-            novel_score=novel_score,
-            match_method=match_method,
-            alternatives=alternatives if return_alternatives else [],
-            signals=signals,
-            predicted_id=predicted_id,
-            metadata={
-                "query": query,
-                "acceptance_threshold": self.acceptance_threshold,
-            },
         )
 
     def match(
@@ -585,7 +492,7 @@ class NovelEntityMatcher:
 
 def create_novel_entity_matcher(
     entities: list[dict[str, Any]],
-    model: str = "potion-8m",
+    model: str = "potion-32m",
     mode: str = "zero-shot",
     threshold: float = 0.5,
     enable_novelty_detection: bool = True,

@@ -6,10 +6,11 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 import pandas as pd
 
+from .base import EvaluationResult
 from .loader import DatasetLoader
 from .registry import (
     DATASET_REGISTRY,
@@ -183,10 +184,12 @@ class BenchmarkRunner:
     def _create_matcher_wrapper(
         self,
         entities: list[dict],
-        model: str = "potion-8m",
+        model: str = "potion-32m",
         mode: str = "zero-shot",
         threshold: float = 0.7,
         training_data: list[dict[str, str]] | None = None,
+        regularize: bool = True,
+        **fit_kwargs,
     ) -> Callable[[str], tuple[str, float]]:
         from ..core.matcher import Matcher
 
@@ -197,7 +200,16 @@ class BenchmarkRunner:
             threshold=threshold,
         )
         if mode != "zero-shot":
-            matcher.fit(training_data=training_data, mode=mode, show_progress=False)
+            fit_params = {"show_progress": False, **fit_kwargs}
+            if regularize and training_data:
+                n = len(training_data)
+                fit_params.setdefault("skip_body_training", True)
+                fit_params.setdefault(
+                    "head_c", 0.001 if n <= 100 else (0.01 if n <= 200 else 0.1)
+                )
+                pca_dims = 5 if n <= 100 else (10 if n <= 200 else 20)
+                fit_params.setdefault("pca_dims", pca_dims)
+            matcher.fit(training_data=training_data, mode=mode, **fit_params)
 
         def wrapper(text: str) -> tuple[str, float]:
             result = matcher.match(text)
@@ -212,7 +224,7 @@ class BenchmarkRunner:
     def _create_er_matcher_wrapper(
         self,
         entities: list[dict],
-        model: str = "potion-8m",
+        model: str = "potion-32m",
         threshold: float = 0.7,
     ) -> Callable[[str, str], float]:
         from ..core.embedding_matcher import EmbeddingMatcher
@@ -241,17 +253,18 @@ class BenchmarkRunner:
     def _create_er_embedding_similarity_fn(
         self,
         pairs_df: pd.DataFrame,
-        model: str = "potion-8m",
+        model: str = "potion-32m",
         left_col: str = "left",
         right_col: str = "right",
     ) -> Callable[[str, str], float]:
-        from sentence_transformers import SentenceTransformer
         from sklearn.metrics.pairwise import cosine_similarity
+
+        from ..utils.embeddings import get_cached_sentence_transformer
 
         all_texts = list(
             set(pairs_df[left_col].tolist() + pairs_df[right_col].tolist())
         )
-        st_model = SentenceTransformer(model)
+        st_model = get_cached_sentence_transformer(model)
         embeddings = st_model.encode(all_texts, show_progress_bar=False)
         text_to_emb = {t: embeddings[i] for i, t in enumerate(all_texts)}
 
@@ -263,6 +276,118 @@ class BenchmarkRunner:
             return 0.0
 
         return wrapper
+
+    def _evaluate_with_threshold(
+        self,
+        data: pd.DataFrame,
+        matcher_fn: Callable[[str], tuple[str, float]],
+        threshold: float,
+        label_col: str = "label",
+        text_col: str = "text",
+        classes: list[str] | None = None,
+    ) -> EvaluationResult:
+        """Evaluate classification with a fixed threshold."""
+        from sklearn.metrics import accuracy_score, f1_score
+
+        predictions = []
+        confidences = []
+        true_labels_raw = data[label_col].tolist()
+
+        for _, row in data.iterrows():
+            result = matcher_fn(str(row[text_col]))
+            if isinstance(result, tuple):
+                predictions.append(result[0])
+                confidences.append(result[1])
+            else:
+                predictions.append(None)
+                confidences.append(0.0)
+
+        true_labels = [str(label) for label in true_labels_raw]
+        pred_labels = [
+            "__no_match__" if (pred is None or conf < threshold) else str(pred)
+            for pred, conf in zip(predictions, confidences)
+        ]
+
+        macro_f1 = f1_score(true_labels, pred_labels, average="macro", zero_division=0)
+        weighted_f1 = f1_score(
+            true_labels, pred_labels, average="weighted", zero_division=0
+        )
+        accuracy = accuracy_score(true_labels, pred_labels)
+
+        unique_labels = sorted(set(true_labels + pred_labels))
+        class_names = (
+            classes
+            if classes and len(classes) == len(unique_labels)
+            else [str(label) for label in unique_labels]
+        )
+
+        per_sample_results = pd.DataFrame(
+            {
+                "text": data[text_col],
+                "true_label": true_labels,
+                "pred_label": pred_labels,
+                "confidence": confidences,
+            }
+        )
+
+        return EvaluationResult(
+            metrics={
+                "accuracy": accuracy,
+                "macro_f1": macro_f1,
+                "weighted_f1": weighted_f1,
+            },
+            details={
+                "num_samples": len(data),
+                "num_classes": len(unique_labels),
+                "classes": class_names,
+                "threshold": threshold,
+            },
+            dataframe=per_sample_results,
+        )
+
+    def _auto_tune_threshold(
+        self,
+        data: pd.DataFrame,
+        matcher_fn: Callable[[str], tuple[str, float]],
+        label_col: str = "label",
+        text_col: str = "text",
+        classes: list[str] | None = None,
+        threshold_candidates: list[float] | None = None,
+    ) -> EvaluationResult:
+        """Find optimal threshold by sweeping candidates and picking best accuracy."""
+        if threshold_candidates is None:
+            threshold_candidates = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+
+        best_result: EvaluationResult | None = None
+        best_threshold = 0.5
+        best_accuracy = 0.0
+
+        for thresh in threshold_candidates:
+            result = self._evaluate_with_threshold(
+                data,
+                matcher_fn,
+                thresh,
+                label_col=label_col,
+                text_col=text_col,
+                classes=classes,
+            )
+            if result.metrics.get("accuracy", 0.0) > best_accuracy:
+                best_accuracy = result.metrics["accuracy"]
+                best_threshold = thresh
+                best_result = result
+
+        if best_result is None:
+            best_result = self._evaluate_with_threshold(
+                data,
+                matcher_fn,
+                0.5,
+                label_col=label_col,
+                text_col=text_col,
+                classes=classes,
+            )
+
+        best_result.details["optimal_threshold"] = best_threshold
+        return best_result
 
     def _build_entities_from_pairs(
         self,
@@ -290,7 +415,7 @@ class BenchmarkRunner:
     def run_entity_resolution(
         self,
         datasets: list[str] | None = None,
-        model: str = "potion-8m",
+        model: str = "potion-32m",
         threshold: float = 0.7,
         thresholds_to_sweep: list[float] | None = None,
     ) -> pd.DataFrame:
@@ -304,10 +429,15 @@ class BenchmarkRunner:
     def run_classification(
         self,
         datasets: list[str] | None = None,
-        model: str = "potion-8m",
+        model: str = "potion-32m",
         mode: str = "zero-shot",
         threshold: float = 0.7,
         class_counts: list[int] | None = None,
+        max_train_samples: int | None = None,
+        max_test_samples: int | None = None,
+        per_split: bool = True,
+        regularize: bool = True,
+        **fit_kwargs,
     ) -> pd.DataFrame:
         if datasets is None:
             datasets = list(get_datasets_by_task("classification").keys())
@@ -331,6 +461,7 @@ class BenchmarkRunner:
                     logger.warning(f"No {test_key} split for {name}")
                     continue
                 train_key = "train" if "train" in data else None
+                val_key = "validation" if "validation" in data else None
 
                 clf_df = self._prepare_single_label_frame(
                     data[test_key], config.label_column
@@ -339,6 +470,8 @@ class BenchmarkRunner:
                     raise ValueError(
                         "No evaluable rows remain after label normalization"
                     )
+                if max_test_samples and len(clf_df) > max_test_samples:
+                    clf_df = clf_df.sample(n=max_test_samples, random_state=42)
 
                 raw_labels = sorted(clf_df[config.label_column].unique().tolist())
                 class_names = None
@@ -362,6 +495,8 @@ class BenchmarkRunner:
                         data[train_key], config.label_column
                     )
                     train_df = train_df[train_df[config.label_column].isin(raw_labels)]
+                    if max_train_samples and len(train_df) > max_train_samples:
+                        train_df = train_df.sample(n=max_train_samples, random_state=42)
                     training_data = [
                         {
                             "text": str(row[config.text_column]),
@@ -378,48 +513,107 @@ class BenchmarkRunner:
                     entities,
                     model=model,
                     mode=mode,
-                    threshold=threshold,
+                    threshold=0.0 if mode == "zero-shot" else threshold,
                     training_data=training_data,
+                    regularize=regularize,
+                    **fit_kwargs,
                 )
 
-                result = self.clf_evaluator.evaluate(
-                    clf_df,
-                    matcher_fn=matcher_fn,
-                    label_col=config.label_column,
-                    text_col=config.text_column,
-                    classes=class_names,
-                )
+                # Determine splits to evaluate
+                splits_to_eval = {"test": (clf_df, test_key)}
+                if per_split:
+                    if train_key and train_key in data:
+                        train_df_eval = self._prepare_single_label_frame(
+                            data[train_key], config.label_column
+                        )
+                        train_df_eval = train_df_eval[
+                            train_df_eval[config.label_column].isin(raw_labels)
+                        ]
+                        if not train_df_eval.empty:
+                            splits_to_eval["train"] = (train_df_eval, train_key)
+                    if val_key and val_key in data:
+                        val_df_eval = self._prepare_single_label_frame(
+                            data[val_key], config.label_column
+                        )
+                        val_df_eval = val_df_eval[
+                            val_df_eval[config.label_column].isin(raw_labels)
+                        ]
+                        if not val_df_eval.empty:
+                            splits_to_eval["validation"] = (val_df_eval, val_key)
 
-                record = {
-                    "dataset": name,
-                    "model": model,
-                    "mode": mode,
-                    "num_classes": len(raw_labels),
-                    "accuracy": result.metrics.get("accuracy", 0.0),
-                    "macro_f1": result.metrics.get("macro_f1", 0.0),
-                    "weighted_f1": result.metrics.get("weighted_f1", 0.0),
-                }
-                records.append(record)
-
-                if class_counts and len(raw_labels) >= max(class_counts):
-                    from .classification import evaluate_by_class_count
-
-                    subset_classes = raw_labels[: max(class_counts)]
-                    eval_df = clf_df[clf_df[config.label_column].isin(subset_classes)]
-                    count_results = evaluate_by_class_count(
+                # For zero-shot mode, auto-tune threshold once on test split
+                # then apply to all splits for fair comparison
+                zero_shot_threshold = None
+                if mode == "zero-shot":
+                    tuning_df = splits_to_eval.get("test", (clf_df,))[0]
+                    threshold_result = self._auto_tune_threshold(
+                        tuning_df,
                         matcher_fn,
-                        eval_df,
                         label_col=config.label_column,
                         text_col=config.text_column,
-                        class_counts=class_counts,
+                        classes=class_names,
                     )
-                    for count, metrics in count_results.items():
-                        record[f"classes_{count}_accuracy"] = metrics.get(
-                            "accuracy", 0.0
+                    zero_shot_threshold = threshold_result.details.get(
+                        "optimal_threshold", 0.0
+                    )
+
+                for split_name, (split_df, split_key) in splits_to_eval.items():
+                    if mode == "zero-shot" and zero_shot_threshold is not None:
+                        result = self._evaluate_with_threshold(
+                            split_df,
+                            matcher_fn,
+                            zero_shot_threshold,
+                            label_col=config.label_column,
+                            text_col=config.text_column,
+                            classes=class_names,
                         )
-                        record[f"classes_{count}_macro_f1"] = metrics.get(
-                            "macro_f1", 0.0
+                    else:
+                        result = self.clf_evaluator.evaluate(
+                            split_df,
+                            matcher_fn=matcher_fn,
+                            label_col=config.label_column,
+                            text_col=config.text_column,
+                            classes=class_names,
                         )
+
+                    record = {
+                        "dataset": name,
+                        "model": model,
+                        "mode": mode,
+                        "split": split_name,
+                        "num_classes": len(raw_labels),
+                        "num_samples": len(split_df),
+                        "accuracy": result.metrics.get("accuracy", 0.0),
+                        "macro_f1": result.metrics.get("macro_f1", 0.0),
+                        "weighted_f1": result.metrics.get("weighted_f1", 0.0),
+                    }
+                    records.append(record)
+
+                    if (
+                        class_counts
+                        and len(raw_labels) >= max(class_counts)
+                        and split_name == "test"
+                    ):
+                        from .classification import evaluate_by_class_count
+
+                        subset_classes = raw_labels[: max(class_counts)]
+                        eval_df = split_df[
+                            split_df[config.label_column].isin(subset_classes)
+                        ]
+                        count_results = evaluate_by_class_count(
+                            matcher_fn,
+                            eval_df,
+                            label_col=config.label_column,
+                            text_col=config.text_column,
+                            class_counts=class_counts,
+                        )
+                        for count, metrics in count_results.items():
+                            record[f"classes_{count}_accuracy"] = metrics.get(
+                                "accuracy", 0.0
+                            )
+                            record[f"classes_{count}_macro_f1"] = metrics.get(
+                                "macro_f1", 0.0
+                            )
 
             except Exception as e:
                 logger.error(f"Error evaluating {name}: {e}")
@@ -428,6 +622,7 @@ class BenchmarkRunner:
                         "dataset": name,
                         "model": model,
                         "mode": mode,
+                        "split": "test",
                         "error": str(e),
                     }
                 )
@@ -437,7 +632,7 @@ class BenchmarkRunner:
     def run_novelty(
         self,
         datasets: list[str] | None = None,
-        model: str = "potion-8m",
+        model: str = "potion-32m",
         ood_ratio: float = 0.2,
         k_values: list[int] | None = None,
         distance_thresholds: list[float] | None = None,
@@ -605,7 +800,7 @@ class BenchmarkRunner:
     def run_novelty_on_processed(
         self,
         datasets: list[str] | None = None,
-        model: str = "potion-8m",
+        model: str = "potion-32m",
         confidence_thresholds: list[float] | None = None,
         ood_ratio: float = 0.2,
         calibrate_thresholds: bool = True,
@@ -755,10 +950,13 @@ class BenchmarkRunner:
                     "validation_results": selected["validation_results"],
                     "test_results": selected["test_results"],
                 }
+                selected_threshold = cast(float, selected["threshold"])
+                selected_validation = cast(list[Any], selected["validation_results"])
+                selected_test = cast(list[Any], selected["test_results"])
                 artifact_path = self._write_artifact_json(
                     artifact_type="processed_ood_novelty",
                     section_name=section_name,
-                    threshold=selected["threshold"],
+                    threshold=selected_threshold,
                     payload=artifact_payload,
                 )
 
@@ -768,20 +966,20 @@ class BenchmarkRunner:
                         "dataset": section_name,
                         "section": section_name,
                         "model": model,
-                        "selected_threshold": selected["threshold"],
+                        "selected_threshold": selected_threshold,
                         "num_threshold_candidates": len(threshold_summaries),
                         "num_known_classes": len(known_class_ids),
                         "num_heldout_classes": len(section["heldout_class_ids"]),
-                        "num_validation_pairs": len(selected["validation_results"]),
-                        "num_test_pairs": len(selected["test_results"]),
-                        "validation_novel_f1": selected["validation"]["novel_f1"],
+                        "num_validation_pairs": len(selected_validation),
+                        "num_test_pairs": len(selected_test),
+                        "validation_novel_f1": selected["validation"]["novel_f1"],  # type: ignore[index]
                         "validation_known_accuracy": selected["validation"][
                             "known_accuracy"
-                        ],
+                        ],  # type: ignore[index]
                         "validation_false_positive_novel_rate": selected["validation"][
                             "false_positive_novel_rate"
-                        ],
-                        **selected["test"],
+                        ],  # type: ignore[index]
+                        **selected["test"],  # type: ignore[dict-item]
                         "artifact_path": str(artifact_path),
                     }
                 )
@@ -803,13 +1001,13 @@ class BenchmarkRunner:
         ood_ratio: float = 0.2,
     ) -> dict[str, Any]:
         if embedding_models is None:
-            embedding_models = ["potion-8m", "bge-base"]
+            embedding_models = ["potion-32m", "bge-base"]
         if modes is None:
             modes = ["zero-shot", "head-only"]
         if thresholds is None:
             thresholds = [0.5, 0.6, 0.7, 0.8, 0.9]
 
-        results = {
+        results: dict[str, Any] = {
             "metadata": {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "embedding_models": embedding_models,
@@ -877,8 +1075,14 @@ class BenchmarkRunner:
 
         return output_path
 
-    def load_all(self, datasets: list[str] | None = None) -> dict[str, Any]:
-        return self.loader.load_all(datasets=datasets)
+    def load_all(
+        self, datasets: list[str] | None = None, force_redownload: bool = False
+    ) -> dict[str, Any]:
+        return self.loader.load_all(
+            datasets=datasets, force_redownload=force_redownload
+        )
 
-    async def aload_all(self, datasets: list[str] | None = None) -> dict[str, Any]:
-        return await self.loader.aload_all(datasets=datasets)
+    async def aload_all(
+        self, datasets: list[str] | None = None, force_redownload: bool = False
+    ) -> dict[str, Any]:
+        return await self.loader.aload_all(datasets, force_redownload)

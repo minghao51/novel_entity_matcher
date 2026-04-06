@@ -5,6 +5,9 @@ import csv
 import requests
 
 from .base import BaseFetcher, resolve_output_dirs
+from novelentitymatcher.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class OccupationsFetcher(BaseFetcher):
@@ -90,10 +93,15 @@ class OccupationsFetcher(BaseFetcher):
             try:
                 response = requests.get(self.ONET_URL, timeout=60)
                 response.raise_for_status()
+                content_type = response.headers.get("Content-Type", "")
+                if "zip" not in content_type and "octet-stream" not in content_type:
+                    raise ValueError(f"Unexpected Content-Type: {content_type}")
+                if len(response.content) > 100 * 1024 * 1024:
+                    raise ValueError("Response exceeds 100MB size limit")
                 with open(output_path, "wb") as f:
                     f.write(response.content)
-            except Exception as e:
-                print(f"O*NET fetch failed: {e}, using fallback data")
+            except (requests.RequestException, ConnectionError, TimeoutError, ValueError) as e:
+                logger.warning(f"O*NET fetch failed: {e}, using fallback data")
                 fallback_path = self.raw_dir / "occupation_data.txt"
                 with open(fallback_path, "w", encoding="utf-8") as f:
                     writer = csv.DictWriter(
@@ -114,8 +122,8 @@ class OccupationsFetcher(BaseFetcher):
                 data.append(row)
 
             return data if data else self.FALLBACK_OCCUPATIONS
-        except Exception as e:
-            print(f"Failed to parse O*NET data: {e}, using fallback")
+        except (ValueError, OSError, KeyError, zipfile.BadZipFile) as e:
+            logger.warning(f"Failed to parse O*NET data: {e}, using fallback")
             return self.FALLBACK_OCCUPATIONS
 
     def process(self, raw_data: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -172,7 +180,7 @@ class SOCDirectFetcher(BaseFetcher):
 
     def process(self, raw_data: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Process requires HTML parsing - return empty for now."""
-        print("Note: Full SOC processing requires HTML parsing")
+        logger.info("Note: Full SOC processing requires HTML parsing")
         return []
 
 

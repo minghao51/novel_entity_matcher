@@ -3,7 +3,12 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Optional, Union
+import asyncio
 import csv
+
+from novelentitymatcher.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 PathLike = Union[str, Path]
 
@@ -42,16 +47,37 @@ class BaseFetcher(ABC):
 
     def run(self, output_filename: str) -> Path:
         """Execute full ingestion pipeline."""
-        print(f"Fetching {self.__class__.__name__} data...")
+        logger.info(f"Fetching {self.__class__.__name__} data...")
         raw_data = self.fetch()
 
-        print(f"Processing {len(raw_data)} records...")
+        logger.info(f"Processing {len(raw_data)} records...")
         processed_data = self.process(raw_data)
 
-        print(f"Saving to {output_filename}...")
+        logger.info(f"Saving to {output_filename}...")
         output_path = self.save_csv(processed_data, output_filename)
 
-        print(f"Done! Saved {len(processed_data)} records to {output_path}")
+        logger.info(f"Done! Saved {len(processed_data)} records to {output_path}")
+        return output_path
+
+    async def run_async(self, output_filename: str, semaphore: Optional[asyncio.Semaphore] = None) -> Path:
+        """Execute full ingestion pipeline asynchronously with rate limiting."""
+        async def _fetch():
+            if semaphore:
+                async with semaphore:
+                    return self.fetch()
+            return self.fetch()
+
+        logger.info(f"Fetching {self.__class__.__name__} data...")
+        loop = asyncio.get_running_loop()
+        raw_data = await loop.run_in_executor(None, _fetch)
+
+        logger.info(f"Processing {len(raw_data)} records...")
+        processed_data = self.process(raw_data)
+
+        logger.info(f"Saving to {output_filename}...")
+        output_path = self.save_csv(processed_data, output_filename)
+
+        logger.info(f"Done! Saved {len(processed_data)} records to {output_path}")
         return output_path
 
 
@@ -68,3 +94,40 @@ def resolve_output_dirs(
         else Path.cwd() / "data" / "processed"
     )
     return raw_base / dataset, processed_base / dataset
+
+
+async def run_concurrent(
+    fetchers: list[tuple[BaseFetcher, str]],
+    max_concurrent: int = 4,
+) -> list[Path]:
+    """Run multiple fetchers concurrently with rate limiting.
+
+    Args:
+        fetchers: List of (BaseFetcher, output_filename) tuples.
+        max_concurrent: Maximum number of concurrent fetch operations.
+
+    Returns:
+        List of paths to saved CSV files.
+    """
+    semaphore = asyncio.Semaphore(max_concurrent)
+    tasks = [
+        fetcher.run_async(output_filename, semaphore)
+        for fetcher, output_filename in fetchers
+    ]
+    return await asyncio.gather(*tasks)
+
+
+def run_all_concurrent(
+    fetchers: list[tuple[BaseFetcher, str]],
+    max_concurrent: int = 4,
+) -> list[Path]:
+    """Synchronous wrapper for run_concurrent.
+
+    Args:
+        fetchers: List of (BaseFetcher, output_filename) tuples.
+        max_concurrent: Maximum number of concurrent fetch operations.
+
+    Returns:
+        List of paths to saved CSV files.
+    """
+    return asyncio.run(run_concurrent(fetchers, max_concurrent))

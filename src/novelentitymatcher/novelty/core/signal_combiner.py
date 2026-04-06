@@ -5,12 +5,44 @@ This module handles the fusion of signals from multiple strategies
 into final novelty decisions.
 """
 
-from typing import Any, Dict, Set
+import json
+import logging
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import numpy as np
 
 from ..config.base import DetectionConfig
 from ..config.weights import WeightConfig
+
+logger = logging.getLogger(__name__)
+
+# Strategy metrics extracted for each sample during weighted fusion.
+_SCORE_KEYS = [
+    "confidence_score",
+    "uncertainty_score",
+    "knn_novelty_score",
+    "cluster_support_score",
+    "self_knowledge_score",
+    "pattern_score",
+    "oneclass_score",
+    "prototypical_score",
+    "setfit_score",
+    "setfit_centroid_score",
+]
+
+_FLAG_KEYS = [
+    "confidence_is_novel",
+    "uncertainty_is_novel",
+    "knn_is_novel",
+    "cluster_is_novel",
+    "self_knowledge_is_novel",
+    "pattern_is_novel",
+    "oneclass_is_novel",
+    "prototypical_is_novel",
+    "setfit_is_novel",
+    "setfit_centroid_is_novel",
+]
 
 
 class SignalCombiner:
@@ -34,6 +66,8 @@ class SignalCombiner:
         self.config = config
         self.weights: WeightConfig = config.get_weight_config()
         self.combine_method = config.combine_method
+        self._meta_model: Optional[Any] = None
+        self._feature_names: List[str] = _SCORE_KEYS + _FLAG_KEYS
 
     def _weight_for_strategy(self, strategy_id: str) -> float:
         """Resolve the configured weight for a strategy id."""
@@ -47,6 +81,7 @@ class SignalCombiner:
             "oneclass": self.weights.oneclass,
             "prototypical": self.weights.prototypical,
             "setfit": self.weights.setfit,
+            "setfit_centroid": self.weights.setfit_centroid,
         }
         return weight_map.get(strategy_id, 0.0)
 
@@ -75,6 +110,8 @@ class SignalCombiner:
             return self._intersection_combination(strategy_outputs)
         elif self.combine_method == "voting":
             return self._voting_combination(strategy_outputs)
+        elif self.combine_method == "meta_learner":
+            return self._meta_learner_combination(strategy_outputs, all_metrics)
         else:
             raise ValueError(f"Unknown combine_method: {self.combine_method}")
 
@@ -146,6 +183,7 @@ class SignalCombiner:
             1.0 if sample_metrics.get("prototypical_is_novel", False) else 0.0
         )
         setfit = 1.0 if sample_metrics.get("setfit_is_novel", False) else 0.0
+        setfit_centroid = sample_metrics.get("setfit_centroid_novelty_score", 0.0)
         self_knowledge = (
             1.0 if sample_metrics.get("self_knowledge_is_novel", False) else 0.0
         )
@@ -179,6 +217,8 @@ class SignalCombiner:
             weighted_score += self.weights.prototypical * prototypical
         if "setfit" in active_strategies:
             weighted_score += self.weights.setfit * setfit
+        if "setfit_centroid" in active_strategies:
+            weighted_score += self.weights.setfit_centroid * setfit_centroid
 
         return float(np.clip(weighted_score, 0.0, 1.0))
 
@@ -282,3 +322,135 @@ class SignalCombiner:
         }
 
         return novel_indices, novelty_scores
+
+    # ------------------------------------------------------------------
+    # Meta-learner combination
+    # ------------------------------------------------------------------
+
+    def _meta_learner_combination(
+        self,
+        strategy_outputs: Dict[str, tuple[Set[int], Dict]],
+        all_metrics: Dict[int, Dict[str, Any]],
+    ) -> tuple[Set[int], Dict[int, float]]:
+        """
+        Learned fusion of strategy scores via a logistic regression meta-learner.
+
+        Falls back to weighted combination when no trained model is available.
+        """
+        if self._meta_model is None:
+            logger.warning(
+                "meta_learner combine_method selected but no trained model found; "
+                "falling back to weighted combination"
+            )
+            return self._weighted_combination(strategy_outputs, all_metrics)
+
+        novelty_scores: Dict[int, float] = {}
+        novel_indices: Set[int] = set()
+
+        all_indices = set()
+        for flags, _ in strategy_outputs.values():
+            all_indices.update(flags)
+
+        if not all_indices:
+            return novel_indices, novelty_scores
+
+        feature_matrix = np.array(
+            [self._extract_features(idx, all_metrics) for idx in sorted(all_indices)]
+        )
+        predictions = self._meta_model.predict_proba(feature_matrix)[:, 1]
+
+        for pos, idx in enumerate(sorted(all_indices)):
+            score = float(predictions[pos])
+            novelty_scores[idx] = score
+            if score >= self.weights.novelty_threshold:
+                novel_indices.add(idx)
+
+        return novel_indices, novelty_scores
+
+    def _extract_features(self, idx: int, metrics: Dict[int, Dict[str, Any]]) -> List[float]:
+        """Extract a fixed-length feature vector from per-sample metrics."""
+        sample = metrics.get(idx, {})
+        features = []
+
+        # Continuous scores
+        features.append(1.0 if sample.get("confidence_is_novel", False) else 0.0)
+        features.append(sample.get("uncertainty_score", 0.0))
+        features.append(sample.get("knn_novelty_score", 0.0))
+        features.append(sample.get("cluster_support_score", 0.0))
+        features.append(1.0 if sample.get("self_knowledge_is_novel", False) else 0.0)
+        features.append(1.0 if sample.get("pattern_is_novel", False) else 0.0)
+        features.append(1.0 if sample.get("oneclass_is_novel", False) else 0.0)
+        features.append(1.0 if sample.get("prototypical_is_novel", False) else 0.0)
+        features.append(1.0 if sample.get("setfit_is_novel", False) else 0.0)
+        features.append(sample.get("setfit_centroid_novelty_score", 0.0))
+
+        return features
+
+    # ------------------------------------------------------------------
+    # Meta-learner training / persistence
+    # ------------------------------------------------------------------
+
+    def train_meta_learner(
+        self,
+        features: np.ndarray,
+        labels: np.ndarray,
+    ) -> float:
+        """
+        Train the logistic regression meta-learner.
+
+        Args:
+            features: (n_samples, n_features) matrix of strategy scores
+            labels: (n_samples,) binary novelty labels (1=novel, 0=known)
+
+        Returns:
+            Training accuracy
+        """
+        try:
+            from sklearn.linear_model import LogisticRegression
+        except ImportError:
+            raise ImportError(
+                "scikit-learn is required for meta-learner training. "
+                "Install with: pip install scikit-learn"
+            )
+
+        self._meta_model = LogisticRegression(
+            C=1.0,
+            max_iter=1000,
+            solver="lbfgs",
+            class_weight="balanced",
+        )
+        self._meta_model.fit(features, labels)
+        accuracy = float(self._meta_model.score(features, labels))
+        logger.info("Meta-learner trained with accuracy=%.4f", accuracy)
+        return accuracy
+
+    def save_meta_learner(self, path: str) -> None:
+        """Persist the trained meta-learner to disk."""
+        if self._meta_model is None:
+            raise RuntimeError("No trained meta-learner to save")
+
+        import joblib
+
+        p = Path(path)
+        p.mkdir(parents=True, exist_ok=True)
+        joblib.dump(self._meta_model, p / "meta_learner.pkl")
+
+        meta = {
+            "feature_names": _SCORE_KEYS + _FLAG_KEYS,
+            "n_features": len(_SCORE_KEYS) + len(_FLAG_KEYS),
+            "novelty_threshold": self.weights.novelty_threshold,
+        }
+        with open(p / "meta_learner_meta.json", "w") as f:
+            json.dump(meta, f, indent=2)
+
+    def load_meta_learner(self, path: str) -> None:
+        """Load a trained meta-learner from disk."""
+        import joblib
+
+        p = Path(path)
+        self._meta_model = joblib.load(p / "meta_learner.pkl")
+
+        with open(p / "meta_learner_meta.json") as f:
+            meta = json.load(f)
+        self._feature_names = meta.get("feature_names", _SCORE_KEYS + _FLAG_KEYS)
+        logger.info("Meta-learner loaded from %s", path)

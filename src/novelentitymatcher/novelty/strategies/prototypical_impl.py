@@ -10,8 +10,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
-from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_distances, euclidean_distances
+
+from novelentitymatcher.utils.logging_config import get_logger
+from novelentitymatcher.utils.embeddings import get_cached_sentence_transformer
+
+logger = get_logger(__name__)
 
 
 class PrototypicalDetector:
@@ -45,9 +49,9 @@ class PrototypicalDetector:
                 )
 
         if show_progress:
-            print(f"Loading sentence transformer model: {self.model_name}")
+            logger.info(f"Loading sentence transformer model: {self.model_name}")
 
-        self.model = SentenceTransformer(self.model_name)
+        self.model = get_cached_sentence_transformer(self.model_name)
 
         class_texts: Dict[str, List[str]] = {}
         for item in training_data:
@@ -58,11 +62,11 @@ class PrototypicalDetector:
             class_texts[label].append(text)
 
         if show_progress:
-            print(f"Computing prototypes for {len(class_texts)} classes...")
+            logger.info(f"Computing prototypes for {len(class_texts)} classes...")
 
         for label, texts in class_texts.items():
             if show_progress:
-                print(f"  Encoding {len(texts)} examples for class '{label}'...")
+                logger.info(f"  Encoding {len(texts)} examples for class '{label}'...")
 
             embeddings = self.model.encode(
                 texts,
@@ -82,7 +86,7 @@ class PrototypicalDetector:
         self.is_trained = True
 
         if show_progress:
-            print(f"Training complete! Computed {len(self.prototypes)} prototypes.")
+            logger.info(f"Training complete! Computed {len(self.prototypes)} prototypes.")
 
     def is_novel(self, text: str) -> Tuple[bool, float, Optional[str]]:
         if not self.is_trained:
@@ -192,10 +196,20 @@ class PrototypicalDetector:
         p = Path(path)
         p.mkdir(parents=True, exist_ok=True)
 
-        np.save(p / "prototypes.npy", self.prototypes)
+        import json
+
+        prototypes_serializable = {
+            label: arr.tolist() for label, arr in self.prototypes.items()
+        }
+        with open(p / "prototypes.json", "w") as f:
+            json.dump(prototypes_serializable, f)
 
         if self.class_covariances:
-            np.save(p / "covariances.npy", self.class_covariances)
+            cov_serializable = {
+                label: arr.tolist() for label, arr in self.class_covariances.items()
+            }
+            with open(p / "covariances.json", "w") as f:
+                json.dump(cov_serializable, f)
 
         metadata = {
             "model_name": self.model_name,
@@ -205,8 +219,6 @@ class PrototypicalDetector:
             "num_classes": len(self.prototypes),
             "class_names": list(self.prototypes.keys()),
         }
-
-        import json
 
         with open(p / "metadata.json", "w") as f:
             json.dump(metadata, f, indent=2)
@@ -226,13 +238,21 @@ class PrototypicalDetector:
             distance_metric=metadata["distance_metric"],
         )
 
-        detector.prototypes = np.load(p / "prototypes.npy", allow_pickle=True).item()
+        with open(p / "prototypes.json", "r") as f:
+            proto_data = json.load(f)
+        detector.prototypes = {
+            label: np.array(arr) for label, arr in proto_data.items()
+        }
 
-        cov_path = p / "covariances.npy"
+        cov_path = p / "covariances.json"
         if cov_path.exists():
-            detector.class_covariances = np.load(cov_path, allow_pickle=True).item()
+            with open(cov_path, "r") as f:
+                cov_data = json.load(f)
+            detector.class_covariances = {
+                label: np.array(arr) for label, arr in cov_data.items()
+            }
 
         detector.is_trained = metadata["is_trained"]
-        detector.model = SentenceTransformer(metadata["model_name"])
+        detector.model = get_cached_sentence_transformer(metadata["model_name"])
 
         return detector

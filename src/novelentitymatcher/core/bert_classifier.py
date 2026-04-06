@@ -10,7 +10,7 @@ from typing import Any, List, Optional, Union
 
 import numpy as np
 
-from novelentitymatcher.exceptions import TrainingError
+from ..exceptions import TrainingError
 from ..utils.logging_config import get_logger, suppress_third_party_loggers
 
 try:
@@ -126,7 +126,7 @@ class BERTClassifier:
                 id2label=self.id2label,
                 label2id=self.label2id,
             )
-        except Exception as e:
+        except (OSError, ValueError, KeyError, RuntimeError) as e:
             raise TrainingError(
                 f"Failed to load model/tokenizer: {e}",
                 details={"model_name": self.model_name},
@@ -138,6 +138,7 @@ class BERTClassifier:
 
             # Tokenize data
             tokenizer = self.tokenizer
+
             def tokenize_function(examples):
                 return tokenizer(
                     examples["text"],
@@ -162,7 +163,7 @@ class BERTClassifier:
             # Set format for PyTorch
             tokenized_dataset.set_format("torch")
 
-        except Exception as e:
+        except (OSError, ValueError, KeyError, RuntimeError) as e:
             raise TrainingError(
                 f"Failed to prepare training data: {e}",
                 details={"num_examples": len(training_data)},

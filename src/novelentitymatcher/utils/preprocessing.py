@@ -9,8 +9,10 @@ try:
     from nltk.stem import WordNetLemmatizer
 
     NLTK_AVAILABLE = True
+    _lemmatizer = WordNetLemmatizer()
 except ImportError:
     NLTK_AVAILABLE = False
+    _lemmatizer = None
 
 
 def tokenize(text: str, lowercase: bool = True) -> List[str]:
@@ -41,12 +43,11 @@ def remove_stopwords(tokens: List[str], lang: str = "english") -> List[str]:
 
 def lemmatize(word: str) -> str:
     """Lemmatize a word to its base form."""
-    if not NLTK_AVAILABLE:
+    if _lemmatizer is None:
         return word
 
     try:
-        lemmatizer = WordNetLemmatizer()
-        return lemmatizer.lemmatize(word)
+        return _lemmatizer.lemmatize(word)
     except LookupError:
         return word
 

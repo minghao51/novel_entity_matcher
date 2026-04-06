@@ -195,18 +195,6 @@ CLASSIFICATION_DATASETS: dict[str, DatasetConfig] = {
         max_samples=100_000,
         has_pairs=False,
     ),
-    "sentiment140": DatasetConfig(
-        name="sentiment140",
-        hf_path="sentiment140",
-        task_type="classification",
-        num_classes=2,
-        classes=["negative", "positive"],
-        label_column="sentiment",
-        text_column="text",
-        split="test",
-        max_samples=500_000,
-        has_pairs=False,
-    ),
 }
 
 NOVELTY_DATASETS: dict[str, DatasetConfig] = {

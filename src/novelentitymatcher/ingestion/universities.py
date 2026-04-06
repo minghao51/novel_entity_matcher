@@ -5,6 +5,9 @@ import json
 import requests
 
 from .base import BaseFetcher, resolve_output_dirs
+from novelentitymatcher.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class UniversitiesFetcher(BaseFetcher):
@@ -251,14 +254,17 @@ class UniversitiesFetcher(BaseFetcher):
                 response = requests.get(
                     wikidata_url, params={"query": query}, headers=headers, timeout=120
                 )
-                if response.status_code == 200:
-                    results = response.json()
-                    with open(output_path, "w", encoding="utf-8") as f:
-                        json.dump(results, f)
-                else:
-                    raise Exception(f"Status: {response.status_code}")
-            except Exception as e:
-                print(f"Wikidata fetch failed: {e}, using fallback data")
+                response.raise_for_status()
+                content_type = response.headers.get("Content-Type", "")
+                if "json" not in content_type and "sparql" not in content_type:
+                    raise ValueError(f"Unexpected Content-Type: {content_type}")
+                if len(response.content) > 50 * 1024 * 1024:
+                    raise ValueError("Response exceeds 50MB size limit")
+                results = response.json()
+                with open(output_path, "w", encoding="utf-8") as f:
+                    json.dump(results, f)
+            except (requests.RequestException, ConnectionError, TimeoutError, ValueError) as e:
+                logger.warning(f"Wikidata fetch failed: {e}, using fallback data")
                 with open(output_path, "w", encoding="utf-8") as f:
                     json.dump({"fallback": True, "data": self.FALLBACK_UNIVERSITIES}, f)
 
@@ -269,7 +275,7 @@ class UniversitiesFetcher(BaseFetcher):
                     return content.get("data", [])
                 data = content.get("results", {}).get("bindings", [])
                 return data if data else self.FALLBACK_UNIVERSITIES
-        except Exception:
+        except (json.JSONDecodeError, KeyError, ValueError, OSError):
             return self.FALLBACK_UNIVERSITIES
 
     def process(self, raw_data: list[dict[str, Any]]) -> list[dict[str, Any]]:

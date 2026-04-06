@@ -13,6 +13,8 @@ if platform.system() == "Darwin" and platform.machine() == "arm64":
 from sentence_transformers import SentenceTransformer
 from sentence_transformers.models import StaticEmbedding
 
+from ..utils.embeddings import get_cached_sentence_transformer
+
 
 class StaticEmbeddingBackend(EmbeddingBackend):
     """
@@ -47,20 +49,22 @@ class StaticEmbeddingBackend(EmbeddingBackend):
             self.model = StaticModel.from_pretrained(model_name)
             self.backend_type = "model2vec"
             return
-        except Exception:
+        except (ImportError, ValueError, RuntimeError):
             pass
 
         # Fall back to SentenceTransformer (for RikkaBotan MRL and others)
         try:
             # Some models (like RikkaBotan) require trust_remote_code=True
             # to load custom modules like SSE
-            self.model = SentenceTransformer(model_name, trust_remote_code=True)
+            self.model = get_cached_sentence_transformer(
+                model_name, trust_remote_code=True
+            )
             self.backend_type = "sentence_transformers"
             self._is_native_static = any(
                 isinstance(m, StaticEmbedding) for m in self.model.modules()
             )
             return
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as e:
             raise ValueError(
                 f"Failed to load static embedding model {model_name}. "
                 f"Tried both model2vec and SentenceTransformer. Last error: {e}"
@@ -84,7 +88,7 @@ class StaticEmbeddingBackend(EmbeddingBackend):
             embeddings = list(embeddings)
 
         # Apply dimension reduction if requested (for MRL models)
-        if self.embedding_dim is not None and len(embeddings[0]) > self.embedding_dim:
+        if self.embedding_dim is not None and embeddings:
             embeddings = [emb[: self.embedding_dim] for emb in embeddings]
 
         return embeddings

@@ -1,3 +1,15 @@
+"""
+novel_entity_matcher - Entity matching with novelty detection and discovery.
+
+Public API hierarchy:
+- Matcher: Known-entity matching (zero-shot, SetFit, BERT, hybrid modes)
+- NovelEntityMatcher: Novelty-aware matching (matcher-first orchestration)
+- DiscoveryPipeline: Pipeline-first discovery with staged processing
+
+For new projects, prefer DiscoveryPipeline for discovery workflows.
+NovelEntityMatcher remains supported for matcher-first patterns.
+"""
+
 from importlib import import_module
 import os
 
@@ -39,6 +51,13 @@ __all__ = [
     "TrainingError",
     "MatchingError",
     "ModeError",
+    "PipelineConfig",
+    "PipelineStage",
+    "StageContext",
+    "StageResult",
+    "PipelineRunResult",
+    "ClusteringBackend",
+    "ClusteringBackendRegistry",
 ]
 
 _EXPORTS = {
@@ -61,6 +80,16 @@ _EXPORTS = {
     "TrainingError": (".exceptions", "TrainingError"),
     "MatchingError": (".exceptions", "MatchingError"),
     "ModeError": (".exceptions", "ModeError"),
+    "PipelineConfig": (".pipeline.config", "PipelineConfig"),
+    "PipelineStage": (".pipeline.contracts", "PipelineStage"),
+    "StageContext": (".pipeline.contracts", "StageContext"),
+    "StageResult": (".pipeline.contracts", "StageResult"),
+    "PipelineRunResult": (".pipeline.contracts", "PipelineRunResult"),
+    "ClusteringBackend": (".novelty.clustering.base", "ClusteringBackend"),
+    "ClusteringBackendRegistry": (
+        ".novelty.clustering.backends",
+        "ClusteringBackendRegistry",
+    ),
 }
 
 

@@ -63,7 +63,9 @@ class TestNoveltyDetectorStrategyManagement:
         """list_initialized_strategies should return empty list before initialization."""
         assert detector.list_initialized_strategies() == []
 
-    def test_list_initialized_strategies_returns_configured_after_init(self, initialized_detector):
+    def test_list_initialized_strategies_returns_configured_after_init(
+        self, initialized_detector
+    ):
         """list_initialized_strategies should list all configured strategies after init."""
         strategies = initialized_detector.list_initialized_strategies()
         assert "confidence" in strategies
@@ -158,7 +160,9 @@ class TestNoveltyDetectorStrategyManagement:
                     tuple(reference_labels),
                 )
 
-            def detect(self, texts, embeddings, predicted_classes, confidences, **kwargs):
+            def detect(
+                self, texts, embeddings, predicted_classes, confidences, **kwargs
+            ):
                 return set(), {}
 
             @property

@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import heapq
 from typing import Any, Dict, List
 
 
@@ -28,22 +29,12 @@ class RerankerBackend(ABC):
 
         Default implementation using score(). Subclasses can override for optimization.
         """
-        # Extract texts from candidates
         texts = [cand.get(text_field, cand.get("name", "")) for cand in candidates]
-
-        # Score all pairs
         scores = self.score(query, texts)
 
-        # Add scores and sort
-        scored = []
-        for candidate, score in zip(candidates, scores):
-            item = dict(candidate)
-            item["cross_encoder_score"] = float(score)
-            scored.append(item)
-
-        # Return top_k
-        reranked = sorted(scored, key=lambda x: x["cross_encoder_score"], reverse=True)[
-            :top_k
+        scored = [
+            {**candidate, "cross_encoder_score": float(score)}
+            for candidate, score in zip(candidates, scores)
         ]
 
-        return reranked
+        return heapq.nlargest(top_k, scored, key=lambda x: x["cross_encoder_score"])

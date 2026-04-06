@@ -34,5 +34,8 @@ class TextNormalizer:
         text = re.sub(r"\s+", " ", text)
         return text.strip()
 
-    def normalize_entity_name(self, text: str) -> str:
-        return self.normalize(text)
+    # Backwards-compatible alias
+    normalize_entity_name = normalize
+
+    # Backwards-compatible alias
+    normalize_entity_name = normalize

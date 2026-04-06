@@ -25,9 +25,12 @@ from ..utils.validation import (
 
 
 def _sentence_transformer_cls():
-    from . import matcher as matcher_module
+    try:
+        from .matcher import SentenceTransformer
+    except ImportError:
+        from sentence_transformers import SentenceTransformer
 
-    return matcher_module.SentenceTransformer
+    return SentenceTransformer
 
 
 class EmbeddingMatcher:

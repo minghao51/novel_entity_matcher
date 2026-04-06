@@ -38,8 +38,6 @@ Importing Strategies:
 from .base import NoveltyStrategy
 
 # Import low-level strategy helpers that are still useful directly.
-# Note: Wrapper classes (PatternStrategy, OneClassStrategy, etc.) are NOT imported
-# here to avoid circular imports. They are imported lazily in config/base.py.
 from .pattern_impl import PatternScorer, score_batch_novelty
 from .oneclass_impl import OneClassSVMDetector
 from .prototypical_impl import PrototypicalDetector
@@ -59,7 +57,21 @@ __all__ = [
     "SparseAutoencoder",
 ]
 
-# Note: New strategies (ConfidenceStrategy, KNNDistanceStrategy, etc.)
-# are auto-registered via @StrategyRegistry.register decorator.
-# Import them directly from their submodules when needed:
-# from novelentitymatcher.novelty.strategies.confidence import ConfidenceStrategy
+
+def _register_all() -> None:
+    """Import all strategy modules to trigger @StrategyRegistry.register decorators.
+
+    Called once from novelty/__init__.py after core modules are fully initialized.
+    """
+    from . import confidence  # noqa: F401
+    from . import knn_distance  # noqa: F401
+    from . import uncertainty  # noqa: F401
+    from . import clustering  # noqa: F401
+    from . import pattern  # noqa: F401
+    from . import oneclass  # noqa: F401
+    from . import prototypical  # noqa: F401
+    from . import setfit  # noqa: F401
+    from . import self_knowledge  # noqa: F401
+    from . import lof  # noqa: F401
+    from . import mahalanobis  # noqa: F401
+    from . import setfit_centroid  # noqa: F401

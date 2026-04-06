@@ -4,6 +4,8 @@ Strategy-specific configuration classes.
 Each strategy has its own configuration with sensible defaults.
 """
 
+from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -126,6 +128,35 @@ class PrototypicalConfig(BaseModel):
     """Number of support samples per class for prototype computation."""
 
 
+class MahalanobisConfig(BaseModel):
+    """Configuration for Mahalanobis distance-based strategy."""
+
+    threshold: float = Field(default=3.0, gt=0.0)
+    """Mahalanobis distance threshold. Samples above this are flagged as novel."""
+
+    regularization: float = Field(default=1e-4, gt=0.0)
+    """Covariance matrix regularization (ridge) for numerical stability."""
+
+    use_class_conditional: bool = Field(default=True)
+    """Whether to use per-class distributions (True) or a single global distribution (False)."""
+
+
+class LOFConfig(BaseModel):
+    """Configuration for Local Outlier Factor (LOF) strategy."""
+
+    n_neighbors: int = Field(default=20, ge=2)
+    """Number of neighbors to use for LOF."""
+
+    contamination: float = Field(default=0.1, gt=0.0, le=0.5)
+    """Expected proportion of outliers in the reference set."""
+
+    metric: str = Field(default="cosine")
+    """Distance metric to use ('cosine', 'euclidean', 'manhattan', etc.)."""
+
+    score_threshold: float = Field(default=0.0)
+    """LOF score threshold. Samples below this are flagged as novel."""
+
+
 class SetFitConfig(BaseModel):
     """Configuration for SetFit contrastive strategy."""
 
@@ -146,3 +177,14 @@ class SetFitConfig(BaseModel):
 
     threshold: float = Field(default=0.7, ge=0.0, le=1.0)
     """Similarity threshold for novelty detection."""
+
+
+class SetFitCentroidConfig(BaseModel):
+    """Configuration for SetFit centroid distance strategy."""
+
+    threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    """
+    Cosine distance threshold for novelty detection.
+    Samples with min centroid distance above this are flagged as novel.
+    If None, threshold is auto-calibrated from reference set (95th percentile).
+    """

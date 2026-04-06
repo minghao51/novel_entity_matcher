@@ -37,7 +37,7 @@ def add_run_parser(subparsers) -> argparse.ArgumentParser:
     parser.add_argument(
         "--models",
         nargs="+",
-        default=["potion-8m"],
+        default=["potion-32m"],
         help="Embedding models to benchmark",
     )
     parser.add_argument(
@@ -72,6 +72,46 @@ def add_run_parser(subparsers) -> argparse.ArgumentParser:
         type=float,
         default=0.2,
         help="Ratio of classes to hold out as OOD for novelty detection",
+    )
+    parser.add_argument(
+        "--max-train-samples",
+        type=int,
+        default=500,
+        help="Max training samples per dataset for trained modes (default: 500)",
+    )
+    parser.add_argument(
+        "--max-test-samples",
+        type=int,
+        default=None,
+        help="Max test samples per dataset (default: all)",
+    )
+    parser.add_argument(
+        "--weight-decay",
+        type=float,
+        default=None,
+        help="Body L2 regularization (default: auto by sample count)",
+    )
+    parser.add_argument(
+        "--head-c",
+        type=float,
+        default=None,
+        help="Head inverse-L2 strength (default: auto by sample count)",
+    )
+    parser.add_argument(
+        "--num-iterations",
+        type=int,
+        default=None,
+        help="Contrastive training iterations (default: 1)",
+    )
+    parser.add_argument(
+        "--no-regularize",
+        action="store_true",
+        help="Disable auto-regularization (use old defaults)",
+    )
+    parser.add_argument(
+        "--no-regularize",
+        action="store_true",
+        help="Disable auto-regularization (use old defaults)",
     )
     parser.add_argument(
         "--output",
@@ -169,7 +209,7 @@ def create_parser() -> argparse.ArgumentParser:
 def list_datasets(task: str = "all") -> None:
     if task == "all":
         for name, config in DATASET_REGISTRY.items():
-            print(f"{name}: {config.hf_path} ({config.task_type})")
+            logger.info(f"{name}: {config.hf_path} ({config.task_type})")
     else:
         task_map = {
             "entity_resolution": "entity_matching",
@@ -177,9 +217,9 @@ def list_datasets(task: str = "all") -> None:
             "novelty": "novelty",
         }
         task_type = task_map.get(task, task)
-        datasets = get_datasets_by_task(task_type)
+        datasets = get_datasets_by_task(task_type)  # type: ignore[arg-type]
         for name, config in datasets.items():
-            print(f"{name}: {config.hf_path}")
+            logger.info(f"{name}: {config.hf_path}")
 
 
 def load_datasets(
@@ -190,9 +230,9 @@ def load_datasets(
     results = runner.load_all(datasets=datasets, force_redownload=force)
     for name, data in results.items():
         if "error" in data:
-            print(f"Failed to load {name}: {data['error']}")
+            logger.error(f"Failed to load {name}: {data['error']}")
         else:
-            print(
+            logger.info(
                 f"Loaded {name}: {data.get('metadata', {}).get('num_rows', 'unknown')} rows"
             )
 
@@ -207,6 +247,12 @@ def run_benchmarks(
     ood_ratio: float = 0.2,
     output: Path | None = None,
     confidence_thresholds: list[float] | None = None,
+    max_train_samples: int | None = 500,
+    max_test_samples: int | None = None,
+    weight_decay: float | None = None,
+    head_c: float | None = None,
+    num_iterations: int | None = None,
+    no_regularize: bool = False,
 ) -> None:
     runner = BenchmarkRunner()
     results_to_save = None
@@ -220,20 +266,20 @@ def run_benchmarks(
             ood_ratio=ood_ratio,
         )
         results_to_save = results
-        print("\n=== Entity Resolution Results ===")
+        logger.info("\n=== Entity Resolution Results ===")
         for model_results in results["entity_resolution"]:
             for r in model_results:
-                print(f"  {r.get('dataset')}: F1={r.get('f1', 0):.4f}")
+                logger.info(f"  {r.get('dataset')}: F1={r.get('f1', 0):.4f}")
 
-        print("\n=== Classification Results ===")
+        logger.info("\n=== Classification Results ===")
         for model_results in results["classification"]:
             for r in model_results:
-                print(f"  {r.get('dataset')}: Accuracy={r.get('accuracy', 0):.4f}")
+                logger.info(f"  {r.get('dataset')}: Accuracy={r.get('accuracy', 0):.4f}")
 
-        print("\n=== Novelty Detection Results ===")
+        logger.info("\n=== Novelty Detection Results ===")
         for model_results in results["novelty"]:
             for r in model_results:
-                print(f"  {r.get('dataset')}: AUROC={r.get('auroc', 0):.4f}")
+                logger.info(f"  {r.get('dataset')}: AUROC={r.get('auroc', 0):.4f}")
 
     elif task in ("entity_resolution", "er"):
         df = runner.run_entity_resolution_benchmark(
@@ -245,36 +291,56 @@ def run_benchmarks(
             "metadata": {"task": task},
             "entity_resolution": df.to_dict(orient="records"),
         }
-        print(df.to_string(index=False))
+        logger.info(df.to_string(index=False))
 
     elif task == "classification":
-        df = runner.run_classification(
-            datasets=datasets,
-            model=models[0] if models else "potion-8m",
-            class_counts=class_counts,
-        )
+        clf_results = []
+        for mode in modes or ["zero-shot"]:
+            fit_kwargs = {}
+            if weight_decay is not None:
+                fit_kwargs["weight_decay"] = weight_decay
+            if head_c is not None:
+                fit_kwargs["head_c"] = head_c
+            if num_iterations is not None:
+                fit_kwargs["num_iterations"] = num_iterations
+            df = runner.run_classification(
+                datasets=datasets,
+                model=models[0] if models else "potion-32m",
+                mode=mode,
+                class_counts=class_counts,
+                max_train_samples=max_train_samples,
+                max_test_samples=max_test_samples,
+                per_split=True,
+                regularize=not no_regularize,
+                **fit_kwargs,
+            )
+            clf_results.extend(df.to_dict(orient="records"))
+            logger.info(f"\n--- mode={mode} ---")
+            logger.info(df.to_string(index=False))
         results_to_save = {
             "metadata": {"task": task},
-            "classification": df.to_dict(orient="records"),
+            "classification": clf_results,
         }
-        print(df.to_string(index=False))
 
     elif task == "novelty":
+        novelty_results = []
         df = runner.run_novelty(
             datasets=datasets,
-            model=models[0] if models else "potion-8m",
+            model=models[0] if models else "potion-32m",
             ood_ratio=ood_ratio,
         )
+        novelty_results.extend(df.to_dict(orient="records"))
+        logger.info("\n--- Novelty Detection ---")
+        logger.info(df.to_string(index=False))
         results_to_save = {
             "metadata": {"task": task},
-            "novelty": df.to_dict(orient="records"),
+            "novelty": novelty_results,
         }
-        print(df.to_string(index=False))
 
     elif task == "processed":
         df = runner.run_novelty_on_processed(
             datasets=datasets,
-            model=models[0] if models else "potion-8m",
+            model=models[0] if models else "potion-32m",
             confidence_thresholds=confidence_thresholds
             or thresholds
             or [0.2, 0.3, 0.4, 0.5],
@@ -283,19 +349,19 @@ def run_benchmarks(
             "metadata": {"task": task},
             "processed": df.to_dict(orient="records"),
         }
-        print(df.to_string(index=False))
+        logger.info(df.to_string(index=False))
 
     if output:
         runner.save_results(
             results_to_save or {"metadata": {"task": task}}, str(output)
         )
-        print(f"\nResults saved to {output}")
+        logger.info(f"\nResults saved to {output}")
 
 
 def clear_cache(dataset: str | None = None) -> None:
     runner = BenchmarkRunner()
     runner.loader.clear_cache(dataset)
-    print("Cache cleared" if dataset else "All caches cleared")
+    logger.info("Cache cleared" if dataset else "All caches cleared")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -317,6 +383,12 @@ def main(argv: list[str] | None = None) -> int:
                 ood_ratio=args.ood_ratio,
                 output=args.output,
                 confidence_thresholds=getattr(args, "confidence_thresholds", None),
+                max_train_samples=getattr(args, "max_train_samples", 500),
+                max_test_samples=getattr(args, "max_test_samples", None),
+                weight_decay=getattr(args, "weight_decay", None),
+                head_c=getattr(args, "head_c", None),
+                num_iterations=getattr(args, "num_iterations", None),
+                no_regularize=getattr(args, "no_regularize", False),
             )
 
         elif args.command == "load":
@@ -332,8 +404,8 @@ def main(argv: list[str] | None = None) -> int:
             clear_cache(dataset=args.dataset)
 
         elif args.command == "sweep":
-            print(f"Sweep command: {args.task} {args.dataset} {args.param}")
-            print("Note: Detailed sweep functionality coming soon")
+            logger.info(f"Sweep command: {args.task} {args.dataset} {args.param}")
+            logger.info("Note: Detailed sweep functionality coming soon")
 
         return 0
 

@@ -85,7 +85,14 @@ def test_create_records_assigns_unique_review_ids(tmp_path: Path):
         diagnostics = {}
         class_proposals = NovelClassAnalysis(
             proposed_classes=[
-                ClassProposal(name=f"Class{i}", description="desc", confidence=0.9, sample_count=1, example_samples=["a"], justification="j")
+                ClassProposal(
+                    name=f"Class{i}",
+                    description="desc",
+                    confidence=0.9,
+                    sample_count=1,
+                    example_samples=["a"],
+                    justification="j",
+                )
                 for i in range(3)
             ],
             rejected_as_noise=[],
@@ -202,11 +209,12 @@ def test_promote_calls_promoter_callback(tmp_path: Path):
 
     promoter_mock = MagicMock()
 
-    manager.promote(review_id, promoter=promoter_mock)
+    result = manager.promote(review_id, promoter=promoter_mock)
 
     promoter_mock.assert_called_once()
     approved_record = promoter_mock.call_args[0][0]
     assert approved_record.state == "approved"
+    assert result.review_record.state == "promoted"
 
 
 def test_promote_without_callback(tmp_path: Path):
@@ -214,9 +222,13 @@ def test_promote_without_callback(tmp_path: Path):
     manager = ProposalReviewManager(tmp_path / "records.json")
     records = manager.create_records(_make_report())
 
-    promoted = manager.promote(records[0].review_id)
+    result = manager.promote(records[0].review_id)
 
-    assert promoted.state == "promoted"
+    assert result.review_record.state == "promoted"
+    assert len(result.entities_added) == 1
+    assert result.entities_added[0]["name"] == "Quantum Biology"
+    assert result.index_updated is False
+    assert result.retrain_required is False
 
 
 def test_promote_rejected_record_raises_value_error(tmp_path: Path):
@@ -229,6 +241,64 @@ def test_promote_rejected_record_raises_value_error(tmp_path: Path):
 
     with pytest.raises(ValueError, match="rejected -> promoted"):
         manager.promote(review_id)
+
+
+def test_promote_with_index_updater(tmp_path: Path):
+    """promote should call index_updater with new entities."""
+    manager = ProposalReviewManager(tmp_path / "records.json")
+    records = manager.create_records(_make_report())
+
+    updater_mock = MagicMock()
+    result = manager.promote(records[0].review_id, index_updater=updater_mock)
+
+    updater_mock.assert_called_once()
+    assert result.index_updated
+
+
+def test_promote_with_retrain_callback(tmp_path: Path):
+    """promote should call retrain_callback when provided."""
+    manager = ProposalReviewManager(tmp_path / "records.json")
+    records = manager.create_records(_make_report())
+
+    retrain_mock = MagicMock()
+    result = manager.promote(records[0].review_id, retrain_callback=retrain_mock)
+
+    retrain_mock.assert_called_once()
+    assert result.retrain_required
+
+
+def test_promote_with_entities_list(tmp_path: Path):
+    """promote should extend the provided entities list."""
+    manager = ProposalReviewManager(tmp_path / "records.json")
+    records = manager.create_records(_make_report())
+
+    entities: list[dict] = []
+    manager.promote(records[0].review_id, entities=entities)
+
+    assert len(entities) == 1
+    assert entities[0]["name"] == "Quantum Biology"
+
+
+def test_promote_with_index_update(tmp_path: Path):
+    """promote_with_index_update should update matcher entities."""
+    manager = ProposalReviewManager(tmp_path / "records.json")
+    records = manager.create_records(_make_report())
+
+    class FakeMatcher:
+        def __init__(self):
+            self.entities: list[dict] = []
+            self.reindex_called = False
+
+        def reindex(self):
+            self.reindex_called = True
+
+    matcher = FakeMatcher()
+    result = manager.promote_with_index_update(records[0].review_id, matcher)
+
+    assert result.review_record.state == "promoted"
+    assert len(matcher.entities) == 1
+    assert matcher.entities[0]["name"] == "Quantum Biology"
+    assert matcher.reindex_called
 
 
 def test_update_state_pending_to_promoted_raises_value_error(tmp_path: Path):
@@ -261,14 +331,28 @@ def test_save_records_merges_with_existing(tmp_path: Path):
         discovery_id="disc1",
         proposal_index=0,
         proposal_name="Class1",
-        proposal=ClassProposal(name="Class1", description="d", confidence=0.9, sample_count=1, example_samples=["a"], justification="j"),
+        proposal=ClassProposal(
+            name="Class1",
+            description="d",
+            confidence=0.9,
+            sample_count=1,
+            example_samples=["a"],
+            justification="j",
+        ),
     )
     record2 = ProposalReviewRecord(
         review_id="def456",
         discovery_id="disc2",
         proposal_index=0,
         proposal_name="Class2",
-        proposal=ClassProposal(name="Class2", description="d", confidence=0.9, sample_count=1, example_samples=["a"], justification="j"),
+        proposal=ClassProposal(
+            name="Class2",
+            description="d",
+            confidence=0.9,
+            sample_count=1,
+            example_samples=["a"],
+            justification="j",
+        ),
     )
 
     manager.save_records([record1])
@@ -287,7 +371,14 @@ def test_save_records_overwrites_existing_by_review_id(tmp_path: Path):
         discovery_id="disc1",
         proposal_index=0,
         proposal_name="Original",
-        proposal=ClassProposal(name="Original", description="d", confidence=0.9, sample_count=1, example_samples=["a"], justification="j"),
+        proposal=ClassProposal(
+            name="Original",
+            description="d",
+            confidence=0.9,
+            sample_count=1,
+            example_samples=["a"],
+            justification="j",
+        ),
     )
     record1_updated = ProposalReviewRecord(
         review_id="abc123",
@@ -295,7 +386,14 @@ def test_save_records_overwrites_existing_by_review_id(tmp_path: Path):
         proposal_index=0,
         proposal_name="Updated",
         state="approved",
-        proposal=ClassProposal(name="Updated", description="d", confidence=0.9, sample_count=1, example_samples=["a"], justification="j"),
+        proposal=ClassProposal(
+            name="Updated",
+            description="d",
+            confidence=0.9,
+            sample_count=1,
+            example_samples=["a"],
+            justification="j",
+        ),
     )
 
     manager.save_records([record1])

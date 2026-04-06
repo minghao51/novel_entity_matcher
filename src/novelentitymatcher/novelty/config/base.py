@@ -19,6 +19,7 @@ from .strategies import (
     OneClassConfig,
     PrototypicalConfig,
     SetFitConfig,
+    SetFitCentroidConfig,
 )
 from .weights import WeightConfig
 
@@ -62,6 +63,7 @@ class DetectionConfig(BaseModel):
     - union: Flag if any strategy flags
     - intersection: Flag if all strategies flag
     - voting: Flag if majority of strategies flag
+    - meta_learner: Logistic regression meta-learner (requires training)
     """
 
     # Strategy-specific configurations
@@ -91,6 +93,9 @@ class DetectionConfig(BaseModel):
 
     setfit: Optional[SetFitConfig] = None
     """Configuration for SetFit strategy."""
+
+    setfit_centroid: Optional[SetFitCentroidConfig] = None
+    """Configuration for SetFit centroid distance strategy."""
 
     # Signal combination weights
     weights: Optional[WeightConfig] = None
@@ -148,22 +153,13 @@ class DetectionConfig(BaseModel):
         """
         Validate that all configured strategies are available.
 
+        Strategies are registered at module load time via decorators.
+        This method only validates — it does not trigger imports.
+
         Raises:
             ValueError: If an unknown strategy is configured
         """
-        # Import all strategies to ensure they're registered
         from ..core.strategies import StrategyRegistry
-
-        # Import all strategy modules to trigger registration
-        from ..strategies.confidence import ConfidenceStrategy  # noqa: F401
-        from ..strategies.knn_distance import KNNDistanceStrategy  # noqa: F401
-        from ..strategies.uncertainty import UncertaintyStrategy  # noqa: F401
-        from ..strategies.clustering import ClusteringStrategy  # noqa: F401
-        from ..strategies.pattern import PatternStrategy  # noqa: F401
-        from ..strategies.oneclass import OneClassStrategy  # noqa: F401
-        from ..strategies.prototypical import PrototypicalStrategy  # noqa: F401
-        from ..strategies.setfit import SetFitStrategy  # noqa: F401
-        from ..strategies.self_knowledge import SelfKnowledgeStrategy  # noqa: F401
 
         for strategy_id in self.strategies:
             if not StrategyRegistry.is_registered(strategy_id):

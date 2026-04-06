@@ -9,12 +9,6 @@ import os
 import warnings
 from typing import Optional
 
-# Log level constants
-DEBUG = logging.DEBUG
-INFO = logging.INFO
-WARNING = logging.WARNING
-ERROR = logging.ERROR
-
 # Global state to track if logging has been configured
 _logging_configured = False
 
@@ -46,7 +40,7 @@ def configure_logging(
 
     # Determine log level
     if log_level is None:
-        log_level = DEBUG if verbose else WARNING
+        log_level = logging.DEBUG if verbose else logging.WARNING
 
     # Get the novel_entity_matcher root logger
     logger = logging.getLogger("novelentitymatcher")

@@ -6,6 +6,9 @@ import json
 import requests
 
 from .base import BaseFetcher, resolve_output_dirs
+from novelentitymatcher.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class IndustriesFetcher(BaseFetcher):
@@ -46,149 +49,17 @@ class IndustriesFetcher(BaseFetcher):
             try:
                 if not output_path.exists():
                     response = requests.get(url, timeout=30)
-                    if response.status_code == 200:
-                        with open(output_path, "w", encoding="utf-8") as f:
-                            f.write(response.text)
-                        break
-            except Exception as e:
-                print(f"Failed to fetch from {url}: {e}")
-                continue
-        else:
-            print("Using fallback NAICS data")
-            with open(output_path, "w", encoding="utf-8") as f:
-                json.dump(self.FALLBACK_NAICS, f)
-
-        with open(output_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            if isinstance(data, list) and data:
-                return data
-            return self.FALLBACK_NAICS
-
-    def process(self, raw_data: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Convert to standardized format with aliases."""
-        entities = []
-
-        for item in raw_data:
-            code = str(item.get("Code", "")).strip()
-            title = item.get("Title", "").strip()
-
-            if not code or not title:
-                continue
-
-            aliases = []
-            sector = ""
-            if len(code) >= 2:
-                sector = code[:2]
-                aliases.append(sector)
-            if len(code) >= 3:
-                subsector = code[:3]
-                if subsector != sector:
-                    aliases.append(subsector)
-
-            entities.append(
-                {
-                    "id": code,
-                    "name": title,
-                    "aliases": "|".join(aliases) if aliases else "",
-                    "type": "industry",
-                    "system": "NAICS",
-                }
-            )
-
-        return entities
-
-
-class SICFetcher(BaseFetcher):
-    """Fetch SIC industry codes from BLS."""
-
-    SIC_URL = "https://www.bls.gov/cew/classifications/industry/sic-industry-titles.csv"
-
-    FALLBACK_SIC = [
-        {"SIC Code": "01", "SIC Industry Title": "Agricultural Production - Crops"},
-        {"SIC Code": "10", "SIC Industry Title": "Metal Mining"},
-        {
-            "SIC Code": "15",
-            "SIC Industry Title": "Building Construction - General Contractors",
-        },
-        {
-            "SIC Code": "17",
-            "SIC Industry Title": "Construction - Special Trade Contractors",
-        },
-        {"SIC Code": "20", "SIC Industry Title": "Food and Kindred Products"},
-        {"SIC Code": "25", "SIC Industry Title": "Furniture and Fixtures"},
-        {
-            "SIC Code": "27",
-            "SIC Industry Title": "Printing, Publishing and Allied Industries",
-        },
-        {"SIC Code": "28", "SIC Industry Title": "Chemicals and Allied Products"},
-        {
-            "SIC Code": "30",
-            "SIC Industry Title": "Rubber and Miscellaneous Plastics Products",
-        },
-        {"SIC Code": "33", "SIC Industry Title": "Primary Metal Industries"},
-        {"SIC Code": "35", "SIC Industry Title": "Industrial and Commercial Machinery"},
-        {
-            "SIC Code": "36",
-            "SIC Industry Title": "Electronic and Other Electrical Equipment",
-        },
-        {"SIC Code": "37", "SIC Industry Title": "Transportation Equipment"},
-        {"SIC Code": "38", "SIC Industry Title": "Instruments and Related Products"},
-        {"SIC Code": "40", "SIC Industry Title": "Railroad Transportation"},
-        {"SIC Code": "42", "SIC Industry Title": "Trucking and Warehousing"},
-        {"SIC Code": "45", "SIC Industry Title": "Transportation by Air"},
-        {"SIC Code": "48", "SIC Industry Title": "Communications"},
-        {
-            "SIC Code": "49",
-            "SIC Industry Title": "Electric, Gas, and Sanitary Services",
-        },
-        {"SIC Code": "50", "SIC Industry Title": "Wholesale Trade - Durable Goods"},
-        {"SIC Code": "51", "SIC Industry Title": "Wholesale Trade - Non-Durable Goods"},
-        {
-            "SIC Code": "52",
-            "SIC Industry Title": "Building Materials and Garden Supplies",
-        },
-        {"SIC Code": "53", "SIC Industry Title": "General Merchandise Stores"},
-        {"SIC Code": "54", "SIC Industry Title": "Food Stores"},
-        {
-            "SIC Code": "55",
-            "SIC Industry Title": "Automotive Dealers and Gasoline Stations",
-        },
-        {"SIC Code": "56", "SIC Industry Title": "Apparel and Accessory Stores"},
-        {
-            "SIC Code": "57",
-            "SIC Industry Title": "Furniture and Home Furnishings Stores",
-        },
-        {"SIC Code": "58", "SIC Industry Title": "Eating and Drinking Places"},
-        {"SIC Code": "60", "SIC Industry Title": "Depository Institutions"},
-        {"SIC Code": "61", "SIC Industry Title": "Non-Depository Credit Institutions"},
-        {"SIC Code": "62", "SIC Industry Title": "Security and Commodity Brokers"},
-        {"SIC Code": "63", "SIC Industry Title": "Insurance Carriers"},
-        {"SIC Code": "65", "SIC Industry Title": "Real Estate"},
-        {"SIC Code": "70", "SIC Industry Title": "Hotels, Rooming Houses, Camps"},
-        {"SIC Code": "72", "SIC Industry Title": "Personal Services"},
-        {"SIC Code": "73", "SIC Industry Title": "Business Services"},
-        {"SIC Code": "75", "SIC Industry Title": "Automotive Repair and Services"},
-        {"SIC Code": "78", "SIC Industry Title": "Motion Pictures"},
-        {"SIC Code": "79", "SIC Industry Title": "Amusement and Recreation Services"},
-        {"SIC Code": "80", "SIC Industry Title": "Health Services"},
-        {"SIC Code": "82", "SIC Industry Title": "Educational Services"},
-        {"SIC Code": "83", "SIC Industry Title": "Social Services"},
-        {"SIC Code": "86", "SIC Industry Title": "Membership Organizations"},
-        {"SIC Code": "87", "SIC Industry Title": "Engineering and Management Services"},
-    ]
-
-    def fetch(self) -> list[dict[str, Any]]:
-        """Download SIC codes."""
-        output_path = self.raw_dir / "sic_titles.csv"
-
-        if not output_path.exists():
-            try:
-                response = requests.get(self.SIC_URL, timeout=30)
-                response.raise_for_status()
-                with open(output_path, "w", encoding="utf-8") as f:
-                    f.write(response.text)
-            except Exception as e:
-                print(f"BLS fetch failed: {e}, using fallback data")
+                    response.raise_for_status()
+                    content_type = response.headers.get("Content-Type", "")
+                    if "json" not in content_type and "text" not in content_type:
+                        raise ValueError(f"Unexpected Content-Type: {content_type}")
+                    if len(response.content) > 10 * 1024 * 1024:
+                        raise ValueError("Response exceeds 10MB size limit")
+                    with open(output_path, "w", encoding="utf-8") as f:
+                        f.write(response.text)
+                    break
+            except (requests.RequestException, ConnectionError, TimeoutError, ValueError) as e:
+                logger.warning(f"BLS fetch failed: {e}, using fallback data")
                 with open(output_path, "w", encoding="utf-8") as f:
                     writer = csv.DictWriter(
                         f, fieldnames=["SIC Code", "SIC Industry Title"]

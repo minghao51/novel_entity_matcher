@@ -78,7 +78,10 @@ def _make_discovery_report(with_proposals: bool = True) -> NovelClassDiscoveryRe
                     description="Quantum effects in biological systems",
                     confidence=0.91,
                     sample_count=2,
-                    example_samples=["quantum biology pathway", "quantum biology proteins"],
+                    example_samples=[
+                        "quantum biology pathway",
+                        "quantum biology proteins",
+                    ],
                     justification="Both samples describe the same emerging concept",
                     source_cluster_ids=[0],
                 )
@@ -112,7 +115,9 @@ def test_save_proposals_yaml_format(tmp_path: Path):
     report = _make_discovery_report()
     output_path = tmp_path / "proposals"
 
-    saved_path = persistence.save_proposals(report, output_dir=output_path, format="yaml")
+    saved_path = persistence.save_proposals(
+        report, output_dir=output_path, format="yaml"
+    )
 
     assert Path(saved_path).exists()
     assert Path(saved_path).suffix == ".yaml"
@@ -130,7 +135,9 @@ def test_save_proposals_json_format(tmp_path: Path):
     report = _make_discovery_report()
     output_path = tmp_path / "proposals"
 
-    saved_path = persistence.save_proposals(report, output_dir=output_path, format="json")
+    saved_path = persistence.save_proposals(
+        report, output_dir=output_path, format="json"
+    )
 
     assert Path(saved_path).exists()
     assert Path(saved_path).suffix == ".json"
@@ -165,7 +172,9 @@ def test_save_proposals_without_class_proposals(tmp_path: Path):
     report = _make_discovery_report(with_proposals=False)
     output_path = tmp_path / "proposals"
 
-    saved_path = persistence.save_proposals(report, output_dir=output_path, format="yaml")
+    saved_path = persistence.save_proposals(
+        report, output_dir=output_path, format="yaml"
+    )
 
     with open(saved_path, encoding="utf-8") as f:
         data = yaml.safe_load(f)
@@ -178,7 +187,9 @@ def test_load_proposals_yaml(tmp_path: Path):
     """load_proposals should correctly load YAML files."""
     report = _make_discovery_report()
     output_path = tmp_path / "proposals"
-    saved_path = persistence.save_proposals(report, output_dir=output_path, format="yaml")
+    saved_path = persistence.save_proposals(
+        report, output_dir=output_path, format="yaml"
+    )
 
     loaded = persistence.load_proposals(saved_path)
 
@@ -191,7 +202,9 @@ def test_load_proposals_json(tmp_path: Path):
     """load_proposals should correctly load JSON files."""
     report = _make_discovery_report()
     output_path = tmp_path / "proposals"
-    saved_path = persistence.save_proposals(report, output_dir=output_path, format="json")
+    saved_path = persistence.save_proposals(
+        report, output_dir=output_path, format="json"
+    )
 
     loaded = persistence.load_proposals(saved_path)
 

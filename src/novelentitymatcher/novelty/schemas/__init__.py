@@ -11,6 +11,7 @@ from .models import (
     ProposalReviewRecord,
 )
 from .results import EvaluationReport
+from ..storage.review import PromotionResult
 
 __all__ = [
     "ClusterEvidence",
@@ -22,4 +23,5 @@ __all__ = [
     "NovelClassDiscoveryReport",
     "ProposalReviewRecord",
     "EvaluationReport",
+    "PromotionResult",
 ]

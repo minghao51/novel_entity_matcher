@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Union
 import numpy as np
 import yaml
 
-from novelentitymatcher.novelty.schemas import (
+from ..schemas import (
     DiscoveryCluster,
     ClassProposal,
     NovelClassAnalysis,
@@ -21,7 +21,7 @@ from novelentitymatcher.novelty.schemas import (
     NovelSampleReport,
     ProposalReviewRecord,
 )
-from novelentitymatcher.utils.logging_config import get_logger
+from ...utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -207,7 +207,8 @@ def _report_to_dict(report: NovelClassDiscoveryReport) -> Dict[str, Any]:
             _to_builtin(cluster.model_dump()) for cluster in report.discovery_clusters
         ],
         "review_records": [
-            _to_builtin(record.model_dump(mode="json")) for record in report.review_records
+            _to_builtin(record.model_dump(mode="json"))
+            for record in report.review_records
         ],
         "diagnostics": _to_builtin(report.diagnostics),
     }

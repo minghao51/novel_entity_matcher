@@ -2,7 +2,16 @@
 
 import functools
 import time
+from contextlib import contextmanager
 from typing import Callable, Dict, List, Optional
+
+from novelentitymatcher.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
+from novelentitymatcher.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 def track_performance(func: Callable) -> Callable:
@@ -60,7 +69,7 @@ class PerformanceMonitor:
         with monitor.track("match_operation"):
             result = matcher.match(query)
 
-        print(monitor.summary())
+        logger.info(monitor.summary())
     """
 
     def __init__(self):
@@ -72,25 +81,24 @@ class PerformanceMonitor:
             self.metrics[operation] = []
         self.metrics[operation].append(duration)
 
+    @contextmanager
     def track(self, operation: str):
         """Context manager for tracking operation timing."""
+        start = time.time()
+        try:
+            yield
+        finally:
+            self.record(operation, time.time() - start)
 
-        class _Timer:
-            def __init__(self, monitor: PerformanceMonitor, op: str):
-                self.monitor = monitor
-                self.op = op
-                self.start: Optional[float] = None
-
-            def __enter__(self):
-                self.start = time.time()
-                return self
-
-            def __exit__(self, *args):
-                assert self.start is not None
-                duration = time.time() - self.start
-                self.monitor.record(self.op, duration)
-
-        return _Timer(self, operation)
+    @staticmethod
+    def _stats(timings: List[float]) -> Dict[str, float]:
+        return {
+            "count": len(timings),
+            "total": sum(timings),
+            "mean": sum(timings) / len(timings),
+            "min": min(timings),
+            "max": max(timings),
+        }
 
     def summary(self) -> Dict[str, Dict[str, float]]:
         """
@@ -104,17 +112,9 @@ class PerformanceMonitor:
                 - min: Minimum time
                 - max: Maximum time
         """
-        summary = {}
-        for op, timings in self.metrics.items():
-            if timings:
-                summary[op] = {
-                    "count": len(timings),
-                    "total": sum(timings),
-                    "mean": sum(timings) / len(timings),
-                    "min": min(timings),
-                    "max": max(timings),
-                }
-        return summary
+        return {
+            op: self._stats(timings) for op, timings in self.metrics.items() if timings
+        }
 
     def reset(self):
         """Clear all recorded metrics."""
@@ -122,16 +122,8 @@ class PerformanceMonitor:
 
     def get_operation_metrics(self, operation: str) -> Optional[Dict[str, float]]:
         """Get metrics for a specific operation."""
-        if operation not in self.metrics or not self.metrics[operation]:
-            return None
-        timings = self.metrics[operation]
-        return {
-            "count": len(timings),
-            "total": sum(timings),
-            "mean": sum(timings) / len(timings),
-            "min": min(timings),
-            "max": max(timings),
-        }
+        timings = self.metrics.get(operation, [])
+        return self._stats(timings) if timings else None
 
     def to_dict(self) -> Dict[str, List[float]]:
         """Return raw metrics as dictionary."""

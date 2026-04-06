@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import logging
 import math
 import re
 from collections import Counter, defaultdict
 from typing import Any, Callable, Iterable, List, Optional
 
 import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 from ..novelty.schemas import ClusterEvidence, DiscoveryCluster, NovelSampleReport
 from .contracts import PipelineStage, StageContext, StageResult
+
+logger = logging.getLogger(__name__)
 
 _STOPWORDS = {
     "a",
@@ -127,11 +131,13 @@ class CommunityDetectionStage(PipelineStage):
         enabled: bool = True,
         similarity_threshold: float = 0.75,
         min_cluster_size: int = 2,
+        backend_name: str = "auto",
     ):
         self.clusterer = clusterer
         self.enabled = enabled
         self.similarity_threshold = similarity_threshold
         self.min_cluster_size = min_cluster_size
+        self.backend_name = backend_name
 
     def run(self, context: StageContext) -> StageResult:
         report = context.artifacts["novel_sample_report"]
@@ -193,8 +199,23 @@ class CommunityDetectionStage(PipelineStage):
                 return [int(label) for label in labels], str(
                     info.get("backend", "custom")
                 )
-            except Exception:
-                pass
+            except (ValueError, TypeError, RuntimeError):
+                logger.warning("Clustering with pre-built clusterer failed, falling back to registry")
+
+        try:
+            from ..novelty.clustering.backends import (
+                ClusteringBackendRegistry,
+            )
+
+            backend = ClusteringBackendRegistry.create(self.backend_name)
+            labels, _, info = backend.fit_predict(
+                embeddings, min_cluster_size=self.min_cluster_size
+            )
+            return [int(label) for label in labels], str(
+                info.get("backend", self.backend_name)
+            )
+        except (ValueError, TypeError, RuntimeError):
+            logger.warning("Registry clustering failed, falling back to connected components")
 
         labels = self._fallback_connected_components(embeddings)
         return labels, "fallback_connected_components"
@@ -273,11 +294,17 @@ class ClusterEvidenceStage(PipelineStage):
         max_keywords: int = 8,
         max_examples: int = 4,
         token_budget: int = 256,
+        use_tfidf: bool = True,
+        use_centroid: bool = True,
+        use_rake: bool = True,
     ):
         self.enabled = enabled
         self.max_keywords = max_keywords
         self.max_examples = max_examples
         self.token_budget = token_budget
+        self.use_tfidf = use_tfidf
+        self.use_centroid = use_centroid
+        self.use_rake = use_rake
 
     def run(self, context: StageContext) -> StageResult:
         clusters: list[DiscoveryCluster] = list(
@@ -314,12 +341,10 @@ class ClusterEvidenceStage(PipelineStage):
             },
         )
 
-    def _build_evidence(self, samples: list[Any]) -> ClusterEvidence:
+    def _build_evidence(
+        self, samples: list[Any], context: StageContext | None = None
+    ) -> ClusterEvidence:
         texts = [sample.text for sample in samples]
-        keyword_counts: Counter[str] = Counter()
-        for text in texts:
-            keyword_counts.update(self._tokenize(text))
-
         predicted_classes = [str(sample.predicted_class) for sample in samples]
         confidences = [float(sample.confidence) for sample in samples]
         novelty_scores = [
@@ -328,12 +353,33 @@ class ClusterEvidenceStage(PipelineStage):
             if sample.novelty_score is not None
         ]
 
-        return ClusterEvidence(
-            keywords=[
+        if self.use_tfidf and len(texts) > 1:
+            keywords = self._compute_tfidf_keywords(texts)
+        else:
+            keyword_counts: Counter[str] = Counter()
+            for text in texts:
+                keyword_counts.update(self._tokenize(text))
+            keywords = [
                 token for token, _ in keyword_counts.most_common(self.max_keywords)
-            ],
-            representative_examples=self._truncate_examples(texts),
-            sample_indices=[sample.index for sample in samples],
+            ]
+
+        rake_keywords: list[str] = []
+        if self.use_rake:
+            rake_keywords = self._extract_rake_keywords(texts)
+
+        sample_indices = [sample.index for sample in samples]
+        if self.use_centroid and context is not None:
+            representatives = self._compute_centroid_representatives(
+                context, sample_indices, texts
+            )
+        else:
+            representatives = self._truncate_examples(texts)
+
+        return ClusterEvidence(
+            keywords=keywords,
+            rake_keywords=rake_keywords,
+            representative_examples=representatives,
+            sample_indices=sample_indices,
             predicted_classes=sorted(set(predicted_classes)),
             confidence_summary={
                 "mean_confidence": sum(confidences) / len(confidences)
@@ -346,6 +392,120 @@ class ClusterEvidenceStage(PipelineStage):
             token_budget=self.token_budget,
             metadata={"sample_count": len(samples)},
         )
+
+    def _compute_tfidf_keywords(self, texts: list[str]) -> list[str]:
+        if not texts:
+            return []
+
+        joined_texts = [" ".join(self._tokenize(text)) for text in texts]
+        if not any(joined_texts):
+            return []
+
+        vectorizer = TfidfVectorizer(
+            stop_words=list(_STOPWORDS),
+            token_pattern=r"[a-zA-Z0-9]+",
+            max_features=1000,
+        )
+        try:
+            tfidf_matrix = vectorizer.fit_transform(joined_texts)
+        except ValueError:
+            return []
+
+        feature_names = vectorizer.get_feature_names_out()
+        avg_scores = np.asarray(tfidf_matrix.mean(axis=0)).flatten()
+        ranked_indices = avg_scores.argsort()[::-1]
+        return [feature_names[i] for i in ranked_indices[: self.max_keywords]]
+
+    def _compute_centroid_representatives(
+        self,
+        context: StageContext,
+        sample_indices: list[int],
+        texts: list[str],
+    ) -> list[str]:
+        match_result = context.artifacts.get("match_result")
+        if match_result is None or not hasattr(match_result, "embeddings"):
+            return self._truncate_examples(texts)
+
+        embeddings = match_result.embeddings
+        try:
+            cluster_embeddings = np.asarray(
+                [embeddings[idx] for idx in sample_indices if idx < len(embeddings)]
+            )
+        except (IndexError, TypeError):
+            return self._truncate_examples(texts)
+
+        if len(cluster_embeddings) == 0:
+            return self._truncate_examples(texts)
+
+        centroid = cluster_embeddings.mean(axis=0)
+        centroid_norm = np.linalg.norm(centroid)
+        if centroid_norm < 1e-12:
+            return self._truncate_examples(texts)
+
+        embeddings_norm = np.linalg.norm(cluster_embeddings, axis=1, keepdims=True)
+        embeddings_norm = np.clip(embeddings_norm, a_min=1e-12, a_max=None)
+        similarities = (cluster_embeddings @ centroid) / (
+            embeddings_norm.squeeze() * centroid_norm
+        )
+        top_indices = np.argsort(-similarities)[: self.max_examples]
+
+        representatives: list[str] = []
+        tokens_used = 0
+        for idx in top_indices:
+            text = texts[int(idx)]
+            token_estimate = max(1, math.ceil(len(text.split()) * 1.2))
+            if tokens_used + token_estimate > self.token_budget and representatives:
+                break
+            representatives.append(text)
+            tokens_used += token_estimate
+        return representatives
+
+    def _extract_rake_keywords(self, texts: list[str]) -> list[str]:
+        joined_text = " ".join(texts)
+        sentences = re.split(r"[.!?;]+", joined_text)
+
+        word_freq: Counter[str] = Counter()
+        word_degree: dict[str, float] = defaultdict(float)
+
+        for sentence in sentences:
+            words = self._tokenize(sentence)
+            if not words:
+                continue
+            for word in words:
+                word_freq[word] += 1
+            degree = len(words) - 1
+            for word in words:
+                word_degree[word] += degree
+
+        candidates: list[str] = []
+        for sentence in sentences:
+            words = self._tokenize(sentence)
+            if len(words) < 2:
+                continue
+            for size in range(2, 4):
+                for i in range(len(words) - size + 1):
+                    phrase = " ".join(words[i : i + size])
+                    candidates.append(phrase)
+
+        phrase_scores: dict[str, float] = {}
+        for phrase in candidates:
+            words = phrase.split()
+            score = sum(word_degree.get(w, 0) for w in words) / max(
+                sum(word_freq.get(w, 1) for w in words), 1
+            )
+            phrase_scores[phrase] = phrase_scores.get(phrase, 0) + score
+
+        ranked = sorted(phrase_scores.items(), key=lambda x: x[1], reverse=True)
+        seen: set[str] = set()
+        results: list[str] = []
+        for phrase, _ in ranked:
+            normalized = phrase.lower().strip()
+            if normalized not in seen:
+                seen.add(normalized)
+                results.append(phrase)
+                if len(results) >= self.max_keywords:
+                    break
+        return results
 
     def _truncate_examples(self, texts: list[str]) -> list[str]:
         examples: list[str] = []
@@ -378,12 +538,14 @@ class ProposalStage(PipelineStage):
         enabled: bool = True,
         context_text: Optional[str] = None,
         max_retries: int = 2,
+        force_cluster_level: bool = True,
     ):
         self.proposer = proposer
         self._existing_classes_resolver = existing_classes_resolver
         self.enabled = enabled
         self.context_text = context_text
         self.max_retries = max_retries
+        self.force_cluster_level = force_cluster_level
 
     def run(self, context: StageContext) -> StageResult:
         report = context.artifacts["novel_sample_report"]
@@ -394,7 +556,22 @@ class ProposalStage(PipelineStage):
 
         if self.enabled and report.novel_samples:
             try:
-                if discovery_clusters and hasattr(
+                if discovery_clusters and self.force_cluster_level:
+                    if hasattr(self.proposer, "propose_from_clusters"):
+                        class_proposals = self.proposer.propose_from_clusters(
+                            discovery_clusters=discovery_clusters,
+                            existing_classes=existing_classes,
+                            context=self.context_text,
+                            max_retries=self.max_retries,
+                        )
+                    else:
+                        cluster_samples = self._flatten_clusters(discovery_clusters)
+                        class_proposals = self.proposer.propose_classes(
+                            novel_samples=cluster_samples,
+                            existing_classes=existing_classes,
+                            context=self.context_text,
+                        )
+                elif discovery_clusters and hasattr(
                     self.proposer, "propose_from_clusters"
                 ):
                     class_proposals = self.proposer.propose_from_clusters(
@@ -409,7 +586,7 @@ class ProposalStage(PipelineStage):
                         existing_classes=existing_classes,
                         context=self.context_text,
                     )
-            except Exception as exc:  # pragma: no cover - defensive wrapper
+            except (ValueError, TypeError, RuntimeError, ConnectionError) as exc:  # pragma: no cover - defensive wrapper
                 error = str(exc)
 
         return StageResult(
@@ -420,6 +597,42 @@ class ProposalStage(PipelineStage):
                 "num_existing_classes": len(existing_classes),
                 "generated": class_proposals is not None,
                 "num_clusters": len(discovery_clusters),
+                "force_cluster_level": self.force_cluster_level,
                 "error": error,
             },
         )
+
+    def _flatten_clusters(self, discovery_clusters: list[Any]) -> list[Any]:
+        """Convert DiscoveryCluster list into NovelSampleMetadata list."""
+        from ..novelty.schemas import NovelSampleMetadata
+
+        flat: list[NovelSampleMetadata] = []
+        for cluster in discovery_clusters:
+            for i, text in enumerate(cluster.example_texts or []):
+                flat.append(
+                    NovelSampleMetadata(
+                        text=text,
+                        index=cluster.sample_indices[i]
+                        if i < len(cluster.sample_indices)
+                        else len(flat),
+                        confidence=cluster.mean_confidence or 0.5,
+                        predicted_class=cluster.metadata.get(
+                            "predicted_classes", ["unknown"]
+                        )[0]
+                        if cluster.metadata.get("predicted_classes")
+                        else "unknown",
+                        cluster_id=cluster.cluster_id,
+                    )
+                )
+            if not cluster.example_texts and cluster.sample_indices:
+                for idx in cluster.sample_indices:
+                    flat.append(
+                        NovelSampleMetadata(
+                            text=f"cluster_{cluster.cluster_id}_sample_{idx}",
+                            index=idx,
+                            confidence=cluster.mean_confidence or 0.5,
+                            predicted_class="unknown",
+                            cluster_id=cluster.cluster_id,
+                        )
+                    )
+        return flat

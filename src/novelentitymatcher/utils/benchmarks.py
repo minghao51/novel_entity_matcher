@@ -8,6 +8,10 @@ from typing import Any, Dict, Iterable, List, Optional
 
 import pandas as pd
 
+from novelentitymatcher.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 from ..config import (
     get_embedding_model_aliases,
     get_model_spec,
@@ -249,13 +253,16 @@ def benchmark_embedding_models(
                     }
                 )
             except Exception as exc:  # pragma: no cover - exercised via monkeypatch
+                logger.warning("Trained benchmark skipped for %s: %s", alias, exc)
+                spec = get_model_spec(alias)
                 records.append(
                     {
-                        "track": "embedding",
+                        "track": "trained",
                         "section": section_name,
                         "model": alias,
-                        "resolved_model": spec.get("name", alias),
-                        "backend": backend,
+                        "resolved_model": spec.get("name", alias)
+                        if spec
+                        else alias,
                         "status": "skipped",
                         "build_time": None,
                         "cold_query_time": None,
@@ -427,6 +434,7 @@ def benchmark_trained_modes(
                         }
                     )
                 except Exception as exc:  # pragma: no cover - exercised via monkeypatch
+                    logger.warning("Trained benchmark skipped for %s: %s", alias, exc)
                     spec = get_model_spec(alias)
                     records.append(
                         {
@@ -531,7 +539,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.track in ("embeddings", "all") and "embeddings" in suite:
         print_benchmark_report(suite["embeddings"])
     if args.track in ("trained", "all") and "trained" in suite:
-        print("")
+        logger.info("")
         print_benchmark_report(suite["trained"])
 
     return 0
