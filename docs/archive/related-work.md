@@ -1,5 +1,7 @@
 # Semantic Matching Research Landscape 2026
 
+Archived note: this research scan is retained for historical context. For the active implementation direction, use [`../technical-roadmap.md`](../technical-roadmap.md) and [`../novel-class-detection.md`](../novel-class-detection.md).
+
 **Date:** 2026-03-18
 **Research Method:** Google AI Mode Search with semantic queries
 **Focus:** Open source projects and research in semantic matching, entity resolution, and novelty detection

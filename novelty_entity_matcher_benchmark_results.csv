@@ -1,0 +1,24 @@
+phase,strategy,params,train_samples,val_metric,test_metric,metric_name
+classification,zero-shot,{},0,0.72,0.733,accuracy
+classification,head-only,{},500,0.531,0.547,accuracy
+classification,full,{},500,0.898,0.912,accuracy
+novelty_detection,knn_distance,{'k': 5},0,0.6617924324324325,0.6346529729729731,auroc
+novelty_detection,knn_distance,{'k': 10},0,0.6878886486486486,0.6633264864864865,auroc
+novelty_detection,knn_distance,{'k': 20},0,0.7210443243243244,0.698,auroc
+novelty_detection,mahalanobis,{},0,0.42990270270270264,0.47375567567567567,auroc
+novelty_detection,lof,{'n_neighbors': 10},0,0.6381778378378378,0.6099508108108108,auroc
+novelty_detection,lof,{'n_neighbors': 20},0,0.6765529729729729,0.6476572972972973,auroc
+novelty_detection,isolation_forest,{'n_estimators': 50},0,0.5717610810810811,0.5722032432432432,auroc
+novelty_detection,isolation_forest,{'n_estimators': 100},0,0.5608886486486486,0.5854886486486487,auroc
+novelty_detection,oneclass_svm,{'nu': 0.1},0,0.7091643243243243,0.6820551351351352,auroc
+novelty_detection,oneclass_svm,{'nu': 0.2},0,0.7089318918918919,0.6814994594594593,auroc
+novelty_detection,setfit_emb_knn,{'k': 5},0,0.8442508108108109,0.8435394594594593,auroc
+novelty_detection,setfit_emb_knn,{'k': 10},0,0.8546875675675676,0.8541059459459461,auroc
+novelty_detection,setfit_emb_knn,{'k': 20},0,0.8683902702702703,0.8660281081081082,auroc
+novelty_detection,setfit_prob_boundary,{'threshold_multiplier': 0.5},0,0.8537654054054054,0.8595459459459459,auroc
+novelty_detection,setfit_prob_boundary,{'threshold_multiplier': 0.7},0,0.8537654054054054,0.8595459459459459,auroc
+novelty_detection,setfit_prob_boundary,{'threshold_multiplier': 0.9},0,0.8537654054054054,0.8595459459459459,auroc
+novelty_detection,setfit_centroid_dist,{},0,0.8853762162162161,0.8860529729729729,auroc
+novelty_detection,setfit_mahalanobis,{},0,0.20942702702702704,0.2171372972972973,auroc
+novelty_detection,hybrid_ensemble,"{'weights': {'knn_tuned': 0.4, 'mahal_tuned': 0.3, 'prob': 0.3}}",0,0.8374497297297296,0.8427459459459459,auroc
+novelty_detection,ensemble,"{'weights': {'knn': 0.4, 'mahalanobis': 0.3, 'lof': 0.3}}",0,0.5814421621621622,0.6355805405405405,auroc

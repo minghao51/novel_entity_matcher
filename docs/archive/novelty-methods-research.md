@@ -1,5 +1,7 @@
 # Novel Entity Discovery Methods: Research & Implementation Guide
 
+Archived note: this document is retained for historical research context. For the current supported novelty workflow, use [`../novel-class-detection.md`](../novel-class-detection.md).
+
 ## Overview
 
 This document provides a comprehensive overview of novel entity discovery methods researched for integration into novel_entity_matcher's existing `NovelEntityMatcher` and `NoveltyDetector` system.

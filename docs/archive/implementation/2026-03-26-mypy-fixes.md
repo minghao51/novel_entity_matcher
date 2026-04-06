@@ -1,5 +1,7 @@
 # Implementation Notes
 
+Archived note: this page captures a point-in-time maintenance pass and is kept only for historical reference.
+
 **Date:** 2026-03-26
 
 ## Recent Changes

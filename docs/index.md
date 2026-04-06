@@ -1,6 +1,6 @@
 # Documentation Index
 
-This folder is split into stable user guides, experiment docs, and archived project history.
+This folder is split into active guides, experiment docs, architecture notes, and archived project history.
 
 ## Guides
 
@@ -12,6 +12,7 @@ This folder is split into stable user guides, experiment docs, and archived proj
 - [`matcher-modes.md`](./matcher-modes.md): matcher mode system (zero-shot, head-only, full, hybrid)
 - [`static-embeddings.md`](./static-embeddings.md): static embedding backend notes
 - [`configuration.md`](./configuration.md): configuration system and model registries
+- [`novel-class-detection.md`](./novel-class-detection.md): current novelty-aware matching and class discovery workflow
 
 ## Experiments
 
@@ -31,10 +32,15 @@ This folder is split into stable user guides, experiment docs, and archived proj
 ## Planning
 
 - [`technical-roadmap.md`](./technical-roadmap.md): active technical roadmap grounded in the current repo and target discovery-pipeline architecture
-- [`related-work.md`](./related-work.md): research landscape and comparative analysis of semantic matching systems
-- [`novelty-methods-research.md`](./novelty-methods-research.md): forward-looking research notes and implementation proposals for additional novelty detection methods
+- [`phase2-roadmap.md`](./phase2-roadmap.md): next phase implementation plan (signal fusion, pipeline contracts, discovery quality)
 
 ## Archive
+
+- [`archive/index.md`](./archive/index.md): archived research notes, implementation snapshots, and operational docs
+- [`archive/related-work.md`](./archive/related-work.md): archived research landscape
+- [`archive/novelty-methods-research.md`](./archive/novelty-methods-research.md): archived novelty-method proposals
+- [`archive/implementation/2026-03-26-mypy-fixes.md`](./archive/implementation/2026-03-26-mypy-fixes.md): archived maintenance note
+- [`archive/pypi-trusted-publishing.md`](./archive/pypi-trusted-publishing.md): archived release setup note
 
 ### I want to use the library
 
@@ -59,9 +65,9 @@ This folder is split into stable user guides, experiment docs, and archived proj
 ### I want to contribute or plan features
 
 1. Read [`technical-roadmap.md`](./technical-roadmap.md) for the active implementation plan
-2. Review [`related-work.md`](./related-work.md) for context on similar systems
-3. Review [`novelty-methods-research.md`](./novelty-methods-research.md) for proposed novelty-detection extensions
-4. Check [`architecture.md`](./architecture.md) for implementation details
+2. Read [`novel-class-detection.md`](./novel-class-detection.md) for the current novelty workflow
+3. Check [`architecture.md`](./architecture.md) for implementation details
+4. Use [`archive/index.md`](./archive/index.md) only when you need historical context or older proposals
 5. See GitHub issues for specific tasks and discussions
 
 ## Notes

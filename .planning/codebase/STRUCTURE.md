@@ -1,228 +1,203 @@
-# Structure
+# Codebase Structure
+
+**Analysis Date:** 2026-04-06
 
 ## Directory Layout
 
 ```
-semantic_matcher/
-├── src/
-│   └── semanticmatcher/
-│       ├── __init__.py              # Package entry with unified API
-│       ├── config.py                # Model registry and configuration
-│       ├── cli.py                   # Command-line interface (if exists)
-│       │
-│       ├── core/                    # Core matching logic
-│       │   ├── matcher.py           # Main Matcher class (1,869 lines)
-│       │   ├── classifier.py        # Entity classification
-│       │   ├── normalizer.py        # Text preprocessing
-│       │   └── blocking.py          # Candidate selection strategies
-│       │
-│       ├── backends/                # Backend implementations
-│       │   ├── __init__.py          # Backend factory
-│       │   ├── sentence_transformers.py  # Dynamic embeddings
-│       │   ├── static_embeddings.py      # Model2Vec integration
-│       │   ├── litellm.py              # LLM/embedding API
-│       │   └── reranking.py            # Cross-encoder reranking
-│       │
-│       ├── ingestion/               # Data ingestion modules
-│       │   ├── cli.py               # Ingestion CLI tool
-│       │   ├── industries.py        # Industry data
-│       │   ├── languages.py         # Language codes
-│       │   ├── currencies.py        # Currency data
-│       │   └── timezones.py         # Timezone database
-│       │
-│       ├── novelty/                 # Novelty detection system
-│       │   ├── __init__.py          # Package exports
-│       │   ├── detector_api.py      # NovelClassDetector API
-│       │   ├── detector.py          # Detection strategies
-│       │   ├── llm_proposer.py      # LLM-based class naming
-│       │   └── schemas.py           # Pydantic configuration schemas
-│       │
-│       ├── utils/                   # Utilities
-│       │   ├── __init__.py          # Utility exports
-│       │   ├── validation.py        # Input validation
-│       │   ├── embeddings.py        # Embedding utilities
-│       │   ├── preprocessing.py     # Text preprocessing
-│       │   ├── caching.py           # Caching utilities
-│       │   └── benchmarks.py        # Performance benchmarks (1,000 lines)
-│       │
-│       └── data/                    # Static assets
-│           ├── country_codes.py     # Country code mappings
-│           └── default_config.yml   # Default configuration
-│
-├── tests/                           # Test suite
-│   ├── __init__.py
-│   ├── test_matcher.py              # Matcher tests
-│   ├── test_classifier.py           # Classifier tests
-│   ├── test_normalizer.py           # Normalizer tests
-│   ├── test_backends/               # Backend tests
-│   ├── test_novelty/                # Novelty detection tests
-│   ├── test_integration.py          # Integration tests
-│   └── conftest.py                  # Test fixtures
-│
-├── examples/                        # Usage examples
-│   ├── basic_matching.py
-│   ├── novelty_detection.py
-│   └── async_api.py
-│
-├── docs/                            # Documentation
-│   ├── architecture.md
-│   ├── api_reference.md
-│   └── CHANGELOG.md
-│
-├── scripts/                         # Utility scripts
-│   ├── setup_llm.sh
-│   └── benchmark.py
-│
-├── pyproject.toml                   # Project configuration
-├── ruff.toml                        # Linting rules
-├── README.md                        # Project documentation
-├── CHANGELOG.md                     # Version history
-└── CLAUDE.md                        # Claude Code instructions
+novel_entity_matcher/
+├── src/novelentitymatcher/       # Main package source
+│   ├── __init__.py               # Public API (lazy exports)
+│   ├── api.py                    # Single import surface (from . import *)
+│   ├── config.py                 # Config loader with YAML/JSON support
+│   ├── config_registry.py        # Model registries and resolution
+│   ├── exceptions.py             # Custom exception hierarchy
+│   ├── core/                     # Core matching engine
+│   ├── novelty/                  # Novelty detection & discovery
+│   ├── pipeline/                 # Pipeline orchestration
+│   ├── backends/                 # Embedding/model provider backends
+│   ├── ingestion/                # Reference data ingestion CLIs
+│   ├── benchmarks/               # Benchmark framework
+│   ├── utils/                    # Shared utilities
+│   └── data/                     # Static data files
+├── tests/                        # Test suite
+├── scripts/                      # Utility scripts
+├── examples/                     # Usage examples
+├── experiments/                  # Experimental code
+├── proposals/                    # Novelty proposal storage
+├── checkpoints/                  # Model checkpoints
+├── artifacts/                    # Build/output artifacts
+├── dist/                         # Distribution packages
+├── docs/                         # Documentation
+├── config.yaml                   # Default configuration
+├── pyproject.toml                # Project metadata, deps, tool config
+└── uv.lock                       # Locked dependencies (uv)
 ```
 
-## Key Locations
+## Directory Purposes
 
-### Entry Points
-- **Main API**: `src/semanticmatcher/__init__.py` - Exports `Matcher` class
-- **Core Logic**: `src/semanticmatcher/core/matcher.py` - Main implementation
-- **CLI**: `src/semanticmatcher/ingestion/cli.py` - Ingestion commands
-- **Novelty Detection**: `src/semanticmatcher/novelty/detector_api.py` - NovelClassDetector
+**src/novelentitymatcher/core/:**
+- Purpose: Core entity matching algorithms and components
+- Contains: Matcher, classifiers (SetFit, BERT), embedding matcher, reranker, normalizer, blocking strategies, hierarchical matching, async utilities, monitoring
+- Key files: `matcher.py` (main matcher), `classifier.py` (SetFit classifier), `embedding_matcher.py`, `reranker.py`, `blocking.py`, `hierarchy.py`
 
-### Configuration
-- **Model Registry**: `src/semanticmatcher/config.py` - 13+ pre-configured models
-- **Default Config**: `src/semanticmatcher/data/default_config.yml`
-- **Project Config**: `pyproject.toml` - Dependencies and project metadata
-- **Linting**: `ruff.toml` - Code style rules
+**src/novelentitymatcher/novelty/:**
+- Purpose: Novelty detection, class proposal, and discovery workflows
+- Contains: Detector, strategies, clustering, LLM proposer, schemas, configs, storage, evaluation, CLI
+- Key files: `entity_matcher.py` (NovelEntityMatcher), `core/detector.py` (NoveltyDetector), `cli.py`
+- Subdirectories:
+  - `core/`: Detector, strategy registry, signal combiner, metadata builder, adaptive weights
+  - `strategies/`: 10+ novelty detection strategy implementations
+  - `clustering/`: Clustering backends (HDBSCAN, SOPTICS, UMAP+HDBSCAN), scalable clustering, validation
+  - `config/`: Detection config, strategy configs, weight configs
+  - `schemas/`: Pydantic data models, reports, results
+  - `storage/`: Persistence, review management, ANN index
+  - `proposal/`: LLM class proposer, retrieval-augmented proposer
+  - `evaluation/`: Data splitters (OOD, gradual novelty), evaluator
 
-### Data Storage
-- **Static Data**: `src/semanticmatcher/data/` - Country codes, defaults
-- **Ingestion Data**: JSON files in project root (industries, languages, etc.)
-- **Model Cache**: `~/.cache/huggingface/` - Downloaded models
-- **Embedding Cache**: `.parquet` files for pre-computed embeddings
+**src/novelentitymatcher/pipeline/:**
+- Purpose: Pipeline-first discovery orchestration
+- Contains: DiscoveryPipeline, orchestrator, stage adapters, contracts, config, match result types
+- Key files: `discovery.py` (DiscoveryPipeline), `orchestrator.py`, `adapters.py`, `contracts.py`
 
-### Testing
-- **Test Suite**: `tests/` - Comprehensive test coverage
-- **Fixtures**: `tests/conftest.py` - Shared test data and configurations
-- **Integration Tests**: `tests/test_integration.py` - End-to-end tests
+**src/novelentitymatcher/backends/:**
+- Purpose: Abstract embedding and model provider backends
+- Contains: Base backend, SentenceTransformer, LiteLLM, reranker, static embedding backends
+- Key files: `base.py`, `sentencetransformer.py`, `litellm.py`
+
+**src/novelentitymatcher/ingestion/:**
+- Purpose: CLI tools for ingesting reference entity datasets
+- Contains: Base ingestion class, domain-specific ingestors (currencies, industries, languages, occupations, products, timezones, universities)
+- Key files: `base.py`, `cli.py`
+
+**src/novelentitymatcher/benchmarks/:**
+- Purpose: Benchmarking framework for matching and novelty detection
+- Contains: Base benchmark, runner, registry, loader, domain-specific benchmarks (classification, entity_resolution, novelty)
+- Key files: `runner.py`, `registry.py`, `cli.py`
+
+**src/novelentitymatcher/utils/:**
+- Purpose: Shared utilities across the package
+- Contains: Logging config, validation, preprocessing, embedding helpers, benchmark dataset/reporting helpers, learning curve analysis
+- Key files: `logging_config.py`, `validation.py`, `preprocessing.py`
+
+**src/novelentitymatcher/data/:**
+- Purpose: Static data files shipped with the package
+- Contains: Country codes JSON, default config JSON
+
+## Key File Locations
+
+**Entry Points:**
+- `src/novelentitymatcher/__init__.py`: Package initialization, lazy API exports, logging setup
+- `src/novelentitymatcher/api.py`: Single import surface (`from novelentitymatcher.api import *`)
+- `src/novelentitymatcher/ingestion/cli.py`: CLI entry point (`novelentitymatcher-ingest`)
+- `src/novelentitymatcher/benchmarks/cli.py`: CLI entry point (`novelentitymatcher-bench`)
+- `src/novelentitymatcher/novelty/cli.py`: CLI entry point (`novelentitymatcher-review`)
+
+**Configuration:**
+- `config.yaml`: Default project configuration (model, training, embedding thresholds)
+- `src/novelentitymatcher/config.py`: Config loader with YAML/JSON support and deep merge
+- `src/novelentitymatcher/config_registry.py`: Model registries, alias resolution, mode resolution
+- `src/novelentitymatcher/novelty/config/base.py`: DetectionConfig base class
+- `src/novelentitymatcher/novelty/config/strategies.py`: Per-strategy config dataclasses
+- `src/novelentitymatcher/novelty/config/weights.py`: WeightConfig for signal combination
+- `src/novelentitymatcher/data/default_config.json`: Package-shipped default config
+
+**Core Logic:**
+- `src/novelentitymatcher/core/matcher.py`: Main Matcher class (1200+ lines)
+- `src/novelentitymatcher/novelty/entity_matcher.py`: NovelEntityMatcher orchestration
+- `src/novelentitymatcher/novelty/core/detector.py`: NoveltyDetector with strategy orchestration
+- `src/novelentitymatcher/pipeline/discovery.py`: DiscoveryPipeline public API
+- `src/novelentitymatcher/pipeline/orchestrator.py`: PipelineOrchestrator (sequential stage execution)
+
+**Testing:**
+- `tests/`: All test files, organized by component
+- `tests/conftest.py`: Pytest fixtures and configuration
+- `tests/fixtures/`: Test fixture data
+- `tests/core/`: Core matcher tests
+- `tests/test_novelty/`: Novelty detection tests
+- `tests/test_ingestion/`: Ingestion tests
+- `tests/test_backends/`: Backend tests
+- `tests/test_utils/`: Utility tests
 
 ## Naming Conventions
 
-### Files and Directories
-- **Snake case** for all files and directories
-- **Descriptive names** - `sentence_transformers.py`, `novel_class_detector.py`
-- **Module grouping** - Related files in subdirectories
-- **Test files** - `test_<module>.py` pattern
+**Files:**
+- Snake case for all Python files: `matcher.py`, `signal_combiner.py`, `detection_config.py`
+- Test files prefixed with `test_`: `test_novel_entity_matcher.py`, `test_pipeline_orchestrator.py`
+- Implementation files suffixed with `_impl`: `setfit_impl.py`, `prototypical_impl.py` (legacy complex implementations)
+- Base/abstract classes in `base.py` files
 
-### Classes
-- **PascalCase** for all classes
-- **Descriptive names** - `TextNormalizer`, `BM25Blocking`, `NovelClassDetector`
-- **Base classes** - Prefixed with `Base` (e.g., `BaseMatcher`, `BaseBackend`)
+**Directories:**
+- Lowercase, no separators: `core/`, `novelty/`, `pipeline/`, `backends/`, `utils/`
+- Plural for collections of similar items: `strategies/`, `schemas/`, `benchmarks/`
 
-### Functions and Methods
-- **snake_case** for all functions and methods
-- **Verb-based** - `compute_similarity`, `normalize_text`, `detect_novelty`
-- **Async variants** - `async_match`, `async_fit`, `async_batch_match`
+**Classes:**
+- PascalCase: `Matcher`, `NovelEntityMatcher`, `DiscoveryPipeline`, `NoveltyDetector`
+- Abstract bases prefixed or suffixed with context: `BlockingStrategy`, `NoveltyStrategy`, `ClusteringBackend`
 
-### Variables
-- **snake_case** for all variables
-- **Descriptive names** - `embedding_matrix`, `candidate_entities`, `similarity_scores`
-- **Constants** - `UPPER_SNAKE_CASE` (e.g., `MODEL_SPECS`, `DEFAULT_THRESHOLD`)
+**Modules:**
+- Public API classes exported via `__all__` in `__init__.py`
+- Lazy loading via `__getattr__` for import performance
 
-### Type Variables
-- **PascalCase** with `_T` suffix for type variables
-- **Generic types** - `Entity_T`, `Embedding_T`, `Model_T`
+## Where to Add New Code
 
-## Import Organization
+**New Feature:**
+- Primary code: `src/novelentitymatcher/core/` (matching features) or `src/novelentitymatcher/novelty/` (novelty features)
+- Tests: `tests/` with matching structure (e.g., `tests/core/`, `tests/test_novelty/`)
+- Export: Add to `_EXPORTS` dict in `src/novelentitymatcher/__init__.py` and `__all__` in `api.py`
 
-### Import Order
-1. Standard library imports
-2. Third-party imports
-3. Local imports (relative imports within package)
+**New Matching Mode/Classifier:**
+- Implementation: `src/novelentitymatcher/core/` (e.g., new `*.py` file)
+- Register model: `src/novelentitymatcher/config_registry.py`
+- Tests: `tests/core/`
 
-### Example
-```python
-# Standard library
-import os
-from typing import Optional, List
+**New Novelty Strategy:**
+- Implementation: `src/novelentitymatcher/novelty/strategies/` (new `*.py` file)
+- Config: `src/novelentitymatcher/novelty/config/strategies.py` (add config dataclass)
+- Register: `src/novelentitymatcher/novelty/core/strategies.py` (StrategyRegistry)
+- Tests: `tests/test_novelty/` or `tests/test_*_strategy.py`
 
-# Third-party
-import numpy as np
-from sentence_transformers import SentenceTransformer
+**New Clustering Backend:**
+- Implementation: `src/novelentitymatcher/novelty/clustering/backends.py`
+- Tests: `tests/test_novelty/`
 
-# Local
-from .classifier import EntityClassifier
-from .utils import validate_entities
-```
+**New Benchmark:**
+- Implementation: `src/novelentitymatcher/benchmarks/` (new module under domain directory)
+- Register: `src/novelentitymatcher/benchmarks/registry.py`
+- Tests: `tests/`
 
-### Public API
-- **`__all__` exports** defined in `__init__.py` files
-- **Explicit exports** for public interfaces
-- **Internal modules** prefixed with underscore (`_internal.py`)
+**Utilities:**
+- Shared helpers: `src/novelentitymatcher/utils/`
+- Logging config: `src/novelentitymatcher/utils/logging_config.py`
+- Validation: `src/novelentitymatcher/utils/validation.py`
 
-## Module Dependencies
+## Special Directories
 
-### Core Dependencies
-- `matcher.py` depends on: classifier, normalizer, blocking, backends
-- `classifier.py` depends on: backends, utils
-- `normalizer.py` depends on: utils
-- `blocking.py` depends on: backends, utils
+**proposals/:**
+- Purpose: Storage for novelty class proposal review records
+- Generated: Yes (by NovelEntityMatcher/DiscoveryPipeline)
+- Committed: No (user data)
 
-### Backend Dependencies
-- `sentence_transformers.py` depends on: utils, caching
-- `static_embeddings.py` depends on: utils, caching
-- `litellm.py` depends on: utils, caching
+**checkpoints/:**
+- Purpose: Saved model checkpoints (SetFit, BERT, etc.)
+- Generated: Yes (by Matcher training)
+- Committed: No (binary artifacts)
 
-### Novelty Detection Dependencies
-- `detector_api.py` depends on: detector, llm_proposer, schemas
-- `detector.py` depends on: backends, utils
-- `llm_proposer.py` depends on: litellm backend, schemas
+**artifacts/:**
+- Purpose: Build and output artifacts
+- Generated: Yes
+- Committed: No
 
-### Utils Dependencies
-- `validation.py` - Minimal dependencies (pydantic)
-- `embeddings.py` - Minimal dependencies (numpy)
-- `preprocessing.py` - Minimal dependencies (nltk)
-- `benchmarks.py` - Depends on: core, backends
+**dist/:**
+- Purpose: Distribution packages (wheels, source distributions)
+- Generated: Yes (by `python -m build`)
+- Committed: No
 
-## File Size Indicators
+**.tmp/:**
+- Purpose: Temporary files during processing
+- Generated: Yes
+- Committed: No
 
-### Large Files (>500 lines)
-- `core/matcher.py` - 1,869 lines (main implementation)
-- `utils/benchmarks.py` - 1,000 lines (performance testing)
-- `config.py` - 502 lines (model registry)
+---
 
-### Medium Files (100-500 lines)
-- Most backend implementations
-- Core service modules
-- Test files
-
-### Small Files (<100 lines)
-- Utility modules
-- Schema definitions
-- CLI entry points
-
-## Test Structure
-
-### Test Organization
-- Mirrors source directory structure
-- `test_<module>.py` for each source module
-- `conftest.py` for shared fixtures
-- Integration tests in `test_integration.py`
-
-### Test Categories
-- **Unit tests** - Individual component testing
-- **Integration tests** - End-to-end pipeline testing
-- **Performance tests** - Benchmark and timing tests
-- **Markers** - `@pytest.mark.integration`, `@pytest.mark.slow`, `@pytest.mark.hf`
-
-## Documentation Locations
-
-### Code Documentation
-- **Docstrings** - All public classes and methods
-- **Type hints** - Comprehensive type annotations
-- **Comments** - Complex logic explanation
-
-### External Documentation
-- **README.md** - Project overview and quick start
-- **docs/** - Detailed documentation
-- **CHANGELOG.md** - Version history and changes
-- **CLAUDE.md** - Claude Code specific instructions
+*Structure analysis: 2026-04-06*

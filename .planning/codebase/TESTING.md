@@ -1,398 +1,275 @@
-# Testing
+# Testing Patterns
+
+**Analysis Date:** 2026-04-06
 
 ## Test Framework
 
-### Core Framework
-- **pytest** 8.4.2+ - Primary testing framework
-- **pytest-asyncio** - Async test support with `asyncio_mode = "auto"`
-- **pytest-cov** - Coverage reporting
+**Runner:**
+- pytest >= 8.4.2
+- Config: `pyproject.toml` → `[tool.pytest.ini_options]`
 
-### Test Configuration
-```python
-# tests/conftest.py
-import pytest
+**Assertion Library:**
+- Built-in pytest assertions (`assert`, `pytest.raises`, `pytest.fixture`)
 
-@pytest.fixture(scope="session", autouse=True)
-def clear_model_cache():
-    """Clear model cache before all tests."""
-    # Ensure clean state for tests
-    pass
-
-@pytest.fixture
-def sample_entities():
-    """Provide sample test data."""
-    return [
-        {"name": "Python Developer", "category": "engineering"},
-        {"name": "Data Scientist", "category": "data"},
-    ]
+**Run Commands:**
+```bash
+pytest                     # Run all tests
+pytest -xvs                # Verbose, stop on first failure
+pytest -m "not slow"       # Skip slow tests
+pytest tests/test_core/    # Run specific directory
+pytest -k "matcher"        # Run tests matching "matcher"
 ```
 
-### Async Test Configuration
-```python
-# pytest.ini or pyproject.toml
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["tests"]
-python_files = ["test_*.py"]
+**Test Markers:**
+- `integration` — tests that depend on external services or network access
+- `slow` — tests that are expensive to run in default CI
+- `hf` — Hugging Face model-backed tests
+- `llm` — tests that make actual LLM API calls (require API key, slow)
+- `llm_mocked` — tests that involve LLM logic but use mocks instead of real API calls
+- `e2e` — end-to-end / feature tests that exercise multiple components
+
+**Async Support:**
+- pytest-asyncio >= 1.2.0
+- `asyncio_mode = "auto"` in pytest config
+
+## Test File Organization
+
+**Location:**
+- Separate `tests/` directory at project root, mirroring `src/` structure
+
+**Naming:**
+- `test_*.py` prefix for all test files
+- Test subdirectories match source modules: `tests/test_core/`, `tests/test_utils/`, `tests/test_backends/`, `tests/test_ingestion/`
+
+**Structure:**
+```
+tests/
+├── conftest.py                          # Shared fixtures
+├── __init__.py
+├── test_core/
+│   ├── test_matcher.py
+│   ├── test_classifier.py
+│   ├── test_async_matcher.py
+│   ├── test_bert_classifier.py
+│   ├── test_normalizer.py
+│   ├── test_async_utils.py
+│   └── ...
+├── test_utils/
+│   ├── test_logging_config.py
+│   ├── test_preprocessing.py
+│   ├── test_embeddings.py
+│   ├── test_benchmarks.py
+│   └── test_validation.py
+├── test_backends/
+│   ├── test_huggingface.py
+│   ├── test_litellm.py
+│   ├── test_reranker_contracts.py
+│   └── ...
+├── test_ingestion/
+│   ├── test_cli.py
+│   └── test_timezones.py
+├── test_integration.py
+├── test_novelty_detector.py
+├── test_llm_proposer.py
+└── ...
 ```
 
 ## Test Structure
 
-### Directory Organization
-```
-tests/
-├── __init__.py
-├── conftest.py                  # Shared fixtures
-├── test_matcher.py              # Matcher tests
-├── test_classifier.py           # Classifier tests
-├── test_normalizer.py           # Normalizer tests
-├── test_backends/               # Backend tests
-│   ├── __init__.py
-│   ├── test_sentence_transformers.py
-│   ├── test_static_embeddings.py
-│   └── test_litellm.py
-├── test_novelty/                # Novelty detection tests
-│   ├── __init__.py
-│   ├── test_detector.py
-│   └── test_llm_proposer.py
-└── test_integration.py          # Integration tests
-```
-
-### Test Class Organization
+**Suite Organization:**
 ```python
-class TestEntityMatcher:
-    """Test suite for EntityMatcher."""
+class TestEmbeddingMatcher:
+    """Tests for EmbeddingMatcher - similarity-based matching."""
 
-    def test_fit_basic(self):
-        """Test basic fitting functionality."""
-        pass
+    @pytest.fixture
+    def sample_entities(self):
+        return [
+            {"id": "DE", "name": "Germany", "aliases": ["Deutschland"]},
+            {"id": "FR", "name": "France", "aliases": ["Frankreich"]},
+        ]
 
-    def test_match_single_query(self):
-        """Test matching a single query."""
-        pass
+    def test_embedding_matcher_init(self, sample_entities):
+        matcher = EmbeddingMatcher(entities=sample_entities)
+        assert matcher.entities == sample_entities
 
-    def test_batch_match(self):
-        """Test batch matching."""
-        pass
-
-    @pytest.mark.asyncio
-    async def test_async_fit(self):
-        """Test async fitting."""
-        pass
-
-    @pytest.mark.asyncio
-    async def test_async_match(self):
-        """Test async matching."""
-        pass
+    def test_embedding_matcher_match(self, sample_entities):
+        matcher = EmbeddingMatcher(entities=sample_entities)
+        matcher.build_index()
+        result = matcher.match("Deutschland")
+        assert result is not None
+        assert result["id"] == "DE"
 ```
 
-## Test Markers
+**Patterns:**
+- Class-based test suites: `Test*` classes grouping related tests
+- Method-based tests: `test_*` methods with descriptive names
+- Fixtures for setup: `@pytest.fixture` for reusable test data
+- Docstrings on classes and sometimes methods describing test purpose
+- Arrange-Act-Assert pattern within test methods
 
-### Custom Markers
+**Global Fixtures (conftest.py):**
 ```python
-# Integration tests (require network/external services)
-@pytest.mark.integration
-def test_external_api():
-    """Test integration with external API."""
-    pass
-
-# Slow tests (long execution time)
-@pytest.mark.slow
-def test_large_dataset():
-    """Test with large dataset."""
-    pass
-
-# Hugging Face model tests
-@pytest.mark.hf
-def test_sentence_transformer():
-    """Test sentence transformer models."""
-    pass
+@pytest.fixture(autouse=True)
+def clear_model_cache():
+    """Clear the global model cache before each test."""
+    cache = get_default_cache()
+    cache.clear()
+    yield
+    cache.clear()
 ```
 
-### Running Marked Tests
-```bash
-# Run only integration tests
-pytest -m integration
+## Mocking
 
-# Skip slow tests
-pytest -m "not slow"
+**Framework:** `unittest.mock` (Mock, patch, monkeypatch)
 
-# Run only Hugging Face tests
-pytest -m hf
+**Patterns:**
+```python
+# Monkeypatch for class replacement
+def test_embedding_matcher_resolves_dynamic_alias(self, sample_entities, monkeypatch):
+    loaded_models = []
 
-# Combine markers
-pytest -m "integration and not slow"
+    class FakeModel:
+        def __init__(self, model_name):
+            loaded_models.append(model_name)
+        def get_sentence_embedding_dimension(self):
+            return 2
+        def encode(self, texts, batch_size=None):
+            if isinstance(texts, str):
+                texts = [texts]
+            return np.ones((len(texts), 2), dtype=float)
+
+    monkeypatch.setattr(
+        "novelentitymatcher.core.matcher.SentenceTransformer", FakeModel
+    )
+    # ... test logic ...
+    assert loaded_models == ["sentence-transformers/all-mpnet-base-v2"]
 ```
 
-## Fixtures
+```python
+# Patch for function mocking (LLM tests)
+from unittest.mock import Mock, patch
 
-### Common Fixtures
+@patch("novelentitymatcher.novelty.proposal.llm.litellm")
+def test_propose_classes(mock_litellm, proposer, sample_novel_samples, mock_llm_response):
+    mock_litellm.completion.return_value = Mock(
+        choices=[Mock(message=Mock(content=mock_llm_response))]
+    )
+    # ... test logic ...
+```
+
+**What to Mock:**
+- External model loading (SentenceTransformer) with fake encode methods
+- LLM API calls (litellm.completion)
+- Network/external service calls
+- Global caches (autouse fixture clears model cache)
+
+**What NOT to Mock:**
+- Core business logic — test actual behavior
+- Numpy operations — use real arrays with synthetic data
+- Config/dataclass creation — use real instances
+
+## Fixtures and Factories
+
+**Test Data:**
 ```python
 @pytest.fixture
-def sample_entities():
-    """Provide sample entities for testing."""
+def sample_entities(self):
     return [
-        {"name": "Python Developer", "category": "engineering"},
-        {"name": "Data Scientist", "category": "data"},
-        {"name": "ML Engineer", "category": "engineering"},
+        {"id": "DE", "name": "Germany", "aliases": ["Deutschland", "Deutchland"]},
+        {"id": "FR", "name": "France", "aliases": ["Frankreich"]},
+        {"id": "US", "name": "United States", "aliases": ["USA", "America"]},
     ]
 
 @pytest.fixture
-def sample_embeddings():
-    """Provide pre-computed embeddings."""
-    return np.random.rand(3, 384)
+def reference_embeddings(self):
+    return np.array(
+        [[1.0, 0.0, 0.0, 0.0], [0.95, 0.05, 0.0, 0.0], ...],
+        dtype=np.float32,
+    )
 
 @pytest.fixture
-def trained_matcher(sample_entities):
-    """Provide a trained matcher instance."""
-    matcher = EntityMatcher()
-    matcher.fit(sample_entities)
-    return matcher
-
-@pytest.fixture
-def temp_dir(tmp_path):
-    """Provide temporary directory for file tests."""
-    return tmp_path
+def detector(self):
+    return NoveltyDetector(
+        config=DetectionConfig(
+            strategies=["confidence", "knn_distance", "clustering"],
+            confidence=ConfidenceConfig(threshold=0.6),
+            knn_distance=KNNConfig(distance_threshold=0.25),
+        )
+    )
 ```
 
-### Async Fixtures
-```python
-@pytest.fixture
-async def async_trained_matcher(sample_entities):
-    """Provide an async-trained matcher instance."""
-    matcher = EntityMatcher()
-    await matcher.async_fit(sample_entities)
-    return matcher
-```
-
-## Test Patterns
-
-### Unit Testing
-```python
-def test_similarity_computation():
-    """Test similarity score computation."""
-    vec1 = np.array([1.0, 0.0, 0.0])
-    vec2 = np.array([0.0, 1.0, 0.0])
-    score = cosine_similarity(vec1, vec2)
-    assert score == pytest.approx(0.0, abs=1e-6)
-
-def test_threshold_filtering():
-    """Test threshold-based filtering."""
-    results = [
-        Match(entity="A", score=0.9),
-        Match(entity="B", score=0.6),
-        Match(entity="C", score=0.3),
-    ]
-    filtered = filter_by_threshold(results, threshold=0.5)
-    assert len(filtered) == 2
-```
-
-### Integration Testing
-```python
-@pytest.mark.integration
-def test_end_to_end_matching():
-    """Test complete matching pipeline."""
-    # Load entities
-    entities = load_test_data()
-
-    # Train matcher
-    matcher = EntityMatcher()
-    matcher.fit(entities)
-
-    # Perform matching
-    results = matcher.match("python engineer")
-
-    # Verify results
-    assert len(results) > 0
-    assert results[0].score > 0.7
-```
-
-### Async Testing
-```python
-@pytest.mark.asyncio
-async def test_async_batch_match():
-    """Test async batch matching."""
-    matcher = EntityMatcher()
-    await matcher.async_fit(entities)
-
-    queries = ["query 1", "query 2", "query 3"]
-    results = await matcher.async_batch_match(queries)
-
-    assert len(results) == len(queries)
-    assert all(len(r) > 0 for r in results)
-```
-
-### Parametrized Testing
-```python
-@pytest.mark.parametrize("model_name,expected_dim", [
-    ("miniLM", 384),
-    ("mpnet", 768),
-    ("multilingual", 384),
-])
-def test_model_dimensions(model_name, expected_dim):
-    """Test that models produce correct dimensions."""
-    model = load_model(model_name)
-    embeddings = model.encode(["test"])
-    assert embeddings.shape[1] == expected_dim
-```
-
-### Exception Testing
-```python
-def test_invalid_entity_validation():
-    """Test that invalid entities raise errors."""
-    with pytest.raises(ValidationError) as exc_info:
-        validate_entity({"invalid": "data"})
-
-    assert "name" in str(exc_info.value)
-
-def test_untrained_matcher():
-    """Test that untrained matcher raises error."""
-    matcher = EntityMatcher()
-    with pytest.raises(TrainingError):
-        matcher.match("query")
-```
-
-## Mocking and Patching
-
-### External API Mocking
-```python
-from unittest.mock import patch, MagicMock
-
-@patch("semanticmatcher.backends.litellm.litellm_embedding")
-def test_litellm_backend(mock_embedding):
-    """Test LiteLLM backend with mocked API."""
-    mock_embedding.return_value = np.array([[0.1, 0.2, 0.3]])
-
-    backend = LiteLLMBackend(model="text-embedding-ada-002")
-    embeddings = backend.encode(["test"])
-
-    assert embeddings.shape == (1, 3)
-    mock_embedding.assert_called_once()
-```
-
-### Model Mocking
-```python
-@pytest.fixture
-def mock_model():
-    """Provide a mock model for testing."""
-    model = MagicMock()
-    model.encode.return_value = np.random.rand(10, 384)
-    return model
-
-def test_classifier_with_mock(mock_model):
-    """Test classifier with mocked model."""
-    classifier = EntityClassifier(model=mock_model)
-    results = classifier.classify(["test"])
-    assert len(results) > 0
-```
-
-## Performance Testing
-
-### Benchmark Testing
-```python
-def test_matching_performance(benchmark):
-    """Benchmark matching performance."""
-    matcher = EntityMatcher()
-    matcher.fit(large_dataset)
-
-    result = benchmark(matcher.match, "test query")
-    assert len(result) > 0
-
-@pytest.mark.slow
-def test_large_dataset_performance():
-    """Test performance with large dataset."""
-    import time
-
-    start = time.time()
-    matcher = EntityMatcher()
-    matcher.fit(large_dataset)
-    fit_time = time.time() - start
-
-    assert fit_time < 60  # Should complete in under 60 seconds
-```
-
-### Memory Testing
-```python
-@pytest.mark.slow
-def test_memory_usage():
-    """Test memory usage with large dataset."""
-    import tracemalloc
-
-    tracemalloc.start()
-    matcher = EntityMatcher()
-    matcher.fit(large_dataset)
-
-    current, peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
-
-    # Peak memory should be under 1GB
-    assert peak < 1024 * 1024 * 1024
-```
+**Location:**
+- Fixtures defined in test classes as methods with `@pytest.fixture`
+- Shared fixtures in `tests/conftest.py` (currently: `clear_model_cache`)
+- Synthetic numpy arrays with `dtype=np.float32` for embedding tests
 
 ## Coverage
 
-### Coverage Configuration
+**Requirements:** None enforced (no coverage threshold in config)
+
+**View Coverage:**
 ```bash
-# Run with coverage
-pytest --cov=semanticmatcher --cov-report=html
-
-# Generate terminal report
-pytest --cov=semanticmatcher --cov-report=term-missing
-
-# Generate XML report (for CI)
-pytest --cov=semanticmatcher --cov-report=xml
+pytest --cov=novelentitymatcher --cov-report=html
+pytest --cov=novelentitymatcher --cov-report=term-missing
 ```
 
-### Coverage Goals
-- **Overall**: >80% coverage
-- **Core modules**: >90% coverage
-- **Critical paths**: 100% coverage
+## Test Types
 
-## Continuous Integration
+**Unit Tests:**
+- Test individual classes and functions in isolation
+- Use synthetic/small data (3-6 entities, small embedding arrays)
+- Mock external dependencies (models, APIs)
+- Located in `tests/test_core/`, `tests/test_utils/`, `tests/test_backends/`
 
-### GitHub Actions Matrix
-```yaml
-test:
-  runs-on: ubuntu-latest
-  strategy:
-    matrix:
-      python-version: ["3.9", "3.10", "3.11", "3.12"]
-  steps:
-    - uses: actions/checkout@v3
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        pip install -e ".[dev]"
-    - name: Run tests
-      run: |
-        pytest -m "not integration" --cov=semanticmatcher
+**Integration Tests:**
+- Test complete pipelines end-to-end
+- Use `@pytest.mark.integration` for external service tests
+- `tests/test_integration.py`, `tests/test_integration_extended.py`
+- Exercise multiple components together (Matcher + NoveltyDetector + storage)
+
+**E2E Tests:**
+- Marked with `@pytest.mark.e2e`
+- Full pipeline tests with real data flows
+- `tests/test_pipeline_orchestrator.py`, `tests/test_discovery_pipeline.py`
+
+**LLM Tests:**
+- `@pytest.mark.llm` — real API calls (slow, require API key)
+- `@pytest.mark.llm_mocked` — mocked LLM responses (fast, CI-safe)
+- `tests/test_llm_proposer.py` uses mocking pattern
+
+## Common Patterns
+
+**Async Testing:**
+```python
+# pytest-asyncio with auto mode — async tests just work
+async def test_async_match(self, sample_entities):
+    matcher = await AsyncMatcher(entities=sample_entities)
+    result = await matcher.match("Deutschland")
+    assert result["id"] == "DE"
 ```
 
-## Best Practices
+**Error Testing:**
+```python
+def test_classifier_without_training_raises(self, labels):
+    clf = SetFitClassifier(labels=labels)
+    with pytest.raises(RuntimeError, match="not trained"):
+        clf.predict("test")
 
-### Test Organization
-1. **One test class per module** - Group related tests
-2. **Descriptive test names** - `test_<function>_<condition>`
-3. **Independent tests** - No shared state between tests
-4. **Fast feedback** - Keep tests fast, use markers for slow tests
+def test_matcher_invalid_mode(self):
+    with pytest.raises(ModeError, match="Invalid mode"):
+        Matcher(entities=[], mode="invalid")
+```
 
-### Test Data
-1. **Fixtures for data** - Reuse test data via fixtures
-2. **Minimal datasets** - Use smallest dataset that tests the feature
-3. **Realistic data** - Use data that resembles production
-4. **Edge cases** - Include boundary conditions and error cases
+**Logging Test Helpers:**
+```python
+def _reset_novelentitymatcher_logging():
+    logger = logging.getLogger("novelentitymatcher")
+    logger.handlers.clear()
+    logger.setLevel(logging.NOTSET)
+    logging_config._logging_configured = False
+    return logger
+```
 
-### Assertion Guidelines
-1. **Specific assertions** - Test exact behavior, not just "it works"
-2. **Error messages** - Provide helpful failure messages
-3. **Approximate comparisons** - Use `pytest.approx()` for floats
-4. **Exception testing** - Test both error type and message content
+---
 
-### Async Testing
-1. **Use pytest-asyncio** - Automatic async test handling
-2. **Mock async operations** - Patch external async calls
-3. **Test concurrency** - Verify thread safety where applicable
-4. **Clean up resources** - Ensure proper cleanup in async tests
+*Testing analysis: 2026-04-06*

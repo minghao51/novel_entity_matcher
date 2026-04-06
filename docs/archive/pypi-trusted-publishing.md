@@ -1,5 +1,7 @@
 # PyPI Trusted Publishing Setup
 
+Archived note: this is a narrow release-operations reference rather than part of the main user or contributor docs path.
+
 Use this for GitHub Actions OIDC-based publishing (no long-lived PyPI API token).
 
 ## One-Time Setup (PyPI)
