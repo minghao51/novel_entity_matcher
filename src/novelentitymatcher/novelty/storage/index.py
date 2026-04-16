@@ -20,6 +20,7 @@ class ANNBackend:
 
     HNSWLIB = "hnswlib"
     FAISS = "faiss"
+    EXACT = "exact"
 
 
 class ANNIndex:
@@ -58,6 +59,8 @@ class ANNIndex:
             self._init_hnswlib(ef_construction, M)
         elif backend == ANNBackend.FAISS:
             self._init_faiss()
+        elif backend == ANNBackend.EXACT:
+            logger.info("Initialized exact ANN fallback with dim=%s", self.dim)
         else:
             raise ValueError(f"Unsupported backend: {backend}")
 
@@ -75,10 +78,10 @@ class ANNIndex:
             self._index.set_ef(ef_construction)
             logger.info(f"Initialized HNSWlib index with dim={self.dim}")
         except ImportError:
-            raise ImportError(
-                "hnswlib is required for HNSWlib backend. "
-                "Install with: pip install hnswlib"
+            logger.warning(
+                "hnswlib is unavailable; falling back to exact similarity search"
             )
+            self.backend = ANNBackend.EXACT
 
     def _init_faiss(self):
         """Initialize FAISS index."""
@@ -122,7 +125,7 @@ class ANNIndex:
                     f"Index capacity exceeded: {current_count + len(vectors)} > {self.max_elements}"
                 )
             self._index.add_items(vectors)
-        else:  # FAISS
+        elif self.backend == ANNBackend.FAISS:
             self._index.add(vectors)
 
         self._vectors = np.vstack([self._vectors, vectors])
@@ -157,10 +160,20 @@ class ANNIndex:
             # HNSWlib returns distances (lower is better), convert to similarities
             similarities = 1 - distances
             return similarities, labels
-        else:  # FAISS
+        if self.backend == ANNBackend.FAISS:
             distances, indices = self._index.search(query, k)
             # FAISS IndexFlatIP returns similarities directly
             return distances, indices
+
+        if self._vectors.size == 0:
+            empty = np.empty((len(query), 0), dtype=np.float32)
+            return empty, empty.astype(int)
+
+        k = min(k, len(self._vectors))
+        similarities = np.dot(query.astype(np.float32, copy=False), self._vectors.T)
+        top_indices = np.argsort(-similarities, axis=1)[:, :k]
+        top_similarities = np.take_along_axis(similarities, top_indices, axis=1)
+        return top_similarities, top_indices
 
     def get_distance_matrix(
         self, queries: np.ndarray, targets: Optional[np.ndarray] = None
@@ -207,11 +220,13 @@ class ANNIndex:
         if self.backend == ANNBackend.HNSWLIB:
             self._index.save_index(str(path.with_suffix(".bin")))
             logger.info(f"Saved HNSWlib index to {path}")
-        else:  # FAISS
+        elif self.backend == ANNBackend.FAISS:
             import faiss
 
             faiss.write_index(self._index, str(path.with_suffix(".index")))
             logger.info(f"Saved FAISS index to {path}")
+        else:
+            logger.info(f"Saved exact ANN fallback index to {path}")
 
         labels_path.write_text(
             json.dumps(self._labels, ensure_ascii=False, indent=2),
@@ -231,7 +246,7 @@ class ANNIndex:
                 raise FileNotFoundError(f"Index file not found: {bin_path}")
             self._index.load_index(str(bin_path))
             logger.info(f"Loaded HNSWlib index from {path}")
-        else:  # FAISS
+        elif self.backend == ANNBackend.FAISS:
             import faiss
 
             index_path = path.with_suffix(".index")
@@ -239,6 +254,8 @@ class ANNIndex:
                 raise FileNotFoundError(f"Index file not found: {index_path}")
             self._index = faiss.read_index(str(index_path))
             logger.info(f"Loaded FAISS index from {path}")
+        else:
+            logger.info(f"Loaded exact ANN fallback index from {path}")
 
         if labels_path.exists():
             loaded_labels = json.loads(labels_path.read_text(encoding="utf-8"))
@@ -257,8 +274,9 @@ class ANNIndex:
         """Get number of elements in the index."""
         if self.backend == ANNBackend.HNSWLIB:
             return self._index.get_current_count()
-        else:  # FAISS
+        if self.backend == ANNBackend.FAISS:
             return self._index.ntotal
+        return len(self._vectors)
 
     def clear(self) -> None:
         """Clear all elements from the index."""
@@ -267,13 +285,17 @@ class ANNIndex:
             raise NotImplementedError(
                 "HNSWlib doesn't support clearing. Create a new index instead."
             )
-        else:  # FAISS
+        elif self.backend == ANNBackend.FAISS:
             import faiss
 
             self._index = faiss.IndexFlatIP(self.dim)
             self._labels = []
             self._vectors = np.empty((0, self.dim), dtype=np.float32)
             logger.info("Cleared FAISS index")
+        else:
+            self._labels = []
+            self._vectors = np.empty((0, self.dim), dtype=np.float32)
+            logger.info("Cleared exact ANN fallback index")
 
     @property
     def labels(self) -> List[str]:

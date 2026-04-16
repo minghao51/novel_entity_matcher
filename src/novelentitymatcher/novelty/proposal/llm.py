@@ -18,6 +18,7 @@ from ..schemas import (
     NovelClassAnalysis,
     NovelSampleMetadata,
 )
+from ...exceptions import LLMError
 from ...utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -252,9 +253,7 @@ class LLMClassProposer:
         summaries = self._hierarchical_summarize_clusters(
             discovery_clusters, existing_classes, context
         )
-        prompt = self._build_hierarchical_prompt(
-            summaries, existing_classes, context
-        )
+        prompt = self._build_hierarchical_prompt(summaries, existing_classes, context)
 
         top_clusters = discovery_clusters[: self.max_clusters_per_summary]
         return self._run_structured_cluster_proposal(
@@ -303,7 +302,7 @@ Return valid JSON with this schema:
   ],
   "rejected_as_noise": ["group ids or sample text"],
   "analysis_summary": "brief summary",
-  "cluster_count": {sum(s['total_samples'] for s in summaries)}
+  "cluster_count": {sum(s["total_samples"] for s in summaries)}
 }}
 
 Prefer one proposal per coherent group. Use source_cluster_ids for traceability."""
@@ -333,14 +332,14 @@ Prefer one proposal per coherent group. Use source_cluster_ids for traceability.
             summaries.append(self._summarize_cluster_group(chunk))
         return summaries
 
-    def _summarize_cluster_group(self, clusters: List[DiscoveryCluster]) -> Dict[str, Any]:
+    def _summarize_cluster_group(
+        self, clusters: List[DiscoveryCluster]
+    ) -> Dict[str, Any]:
         """Create a summary dict for a group of clusters."""
         return {
             "cluster_ids": [c.cluster_id for c in clusters],
             "total_samples": sum(c.sample_count for c in clusters),
-            "keywords": ", ".join(
-                ", ".join(c.keywords or []) for c in clusters[:3]
-            ),
+            "keywords": ", ".join(", ".join(c.keywords or []) for c in clusters[:3]),
             "representative_examples": "; ".join(
                 ex
                 for c in clusters[:2]
@@ -600,23 +599,76 @@ Please fix the errors above and return ONLY valid JSON matching the schema."""
 
     def _call_llm_with_fallback(self, prompt: str) -> tuple[str, str]:
         """Call LLM with automatic fallback on failure."""
+        try:
+            from litellm import (
+                AuthenticationError,
+                RateLimitError,
+                ServiceUnavailableError,
+            )
+            from litellm.exceptions import (
+                AuthenticationError as LiteLLMAuthError,
+                RateLimitError as LiteLLMRateLimitError,
+                ServiceUnavailableError as LiteLLMServiceUnavailableError,
+            )
+        except ImportError:
+            AuthenticationError = type("AuthenticationError", (Exception,), {})
+            RateLimitError = type("RateLimitError", (Exception,), {})
+            ServiceUnavailableError = type(
+                "ServiceUnavailableError", (Exception,), {}
+            )
+            LiteLLMAuthError = AuthenticationError
+            LiteLLMRateLimitError = RateLimitError
+            LiteLLMServiceUnavailableError = ServiceUnavailableError
+
+        LLM_RETRYABLE_ERRORS = (
+            RateLimitError,
+            ServiceUnavailableError,
+            LiteLLMRateLimitError,
+            LiteLLMServiceUnavailableError,
+            TimeoutError,
+            ConnectionError,
+        )
+        LLM_AUTH_ERRORS = (
+            AuthenticationError,
+            LiteLLMAuthError,
+        )
+
         models_to_try = [m for m in ([self.primary_model] + self.fallback_models) if m]
 
-        last_error = None
+        last_error: Optional[Exception] = None
         for model in models_to_try:
             try:
                 logger.info(f"Trying model: {model}")
                 response = self._call_litellm(model, prompt)
                 return response, model
-            except Exception as e:
-                logger.warning(f"Model {model} failed: {e}")
+            except LLM_AUTH_ERRORS as e:
+                logger.error(f"Authentication failed for model {model}: {e}")
+                raise LLMError(
+                    f"LLM authentication failed for model {model}. Check your API key.",
+                    last_error=e,
+                    attempted_models=models_to_try,
+                ) from e
+            except LLM_RETRYABLE_ERRORS as e:
+                logger.warning(f"Retryable error for model {model}: {e}")
+                last_error = e
+                continue
+            except (ImportError, ValueError, TypeError, RuntimeError) as e:
+                logger.warning(f"Non-retryable error for model {model}: {e}")
+                last_error = e
+                continue
+            except Exception as e:  # pragma: no cover - defensive fallback wrapper
+                logger.warning(f"Unexpected error for model {model}: {e}")
                 last_error = e
                 continue
 
         # All models failed
         error_msg = f"All LLM providers failed. Last error: {last_error}"
         logger.error(error_msg)
-        raise RuntimeError(error_msg) from last_error
+        raise LLMError(
+            error_msg,
+            last_error=last_error,
+            attempted_models=models_to_try,
+        ) from last_error
 
     def _call_litellm(self, model: str, prompt: str) -> str:
         """Call litellm completion API."""

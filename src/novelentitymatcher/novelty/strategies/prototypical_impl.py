@@ -9,8 +9,10 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
 from sklearn.metrics.pairwise import cosine_distances, euclidean_distances
+from sentence_transformers import SentenceTransformer
 
 from novelentitymatcher.utils.logging_config import get_logger
 from novelentitymatcher.utils.embeddings import get_cached_sentence_transformer

@@ -10,7 +10,11 @@ def test_hf_reranker_score_returns_numeric_list(monkeypatch):
         def predict(self, pairs):
             return [0.9, 0.2, -0.1]
 
-    monkeypatch.setattr(st_backend_module, "CrossEncoder", FakeCrossEncoder)
+    monkeypatch.setattr(
+        st_backend_module,
+        "get_cached_cross_encoder",
+        lambda m, d=None, c=None: FakeCrossEncoder(m),
+    )
 
     backend = st_backend_module.HFReranker("fake-model")
     scores = backend.score("query", ["doc1", "doc2", "doc3"])
@@ -28,7 +32,11 @@ def test_hf_reranker_rerank_uses_cross_encoder_scores(monkeypatch):
             # Matches order of input docs: A, B, C
             return [0.1, 0.8, 0.3]
 
-    monkeypatch.setattr(st_backend_module, "CrossEncoder", FakeCrossEncoder)
+    monkeypatch.setattr(
+        st_backend_module,
+        "get_cached_cross_encoder",
+        lambda m, d=None, c=None: FakeCrossEncoder(m),
+    )
 
     backend = st_backend_module.HFReranker("fake-model")
     candidates = [
@@ -50,7 +58,12 @@ def test_st_reranker_forwards_device(monkeypatch):
             captured["model_name"] = model_name
             captured["device"] = device
 
-    monkeypatch.setattr(reranker_st_module, "CrossEncoder", FakeCrossEncoder)
+    def fake_get_cached_cross_encoder(model_name, device=None, cache=None):
+        return FakeCrossEncoder(model_name, device)
+
+    monkeypatch.setattr(
+        reranker_st_module, "get_cached_cross_encoder", fake_get_cached_cross_encoder
+    )
 
     reranker_st_module.STReranker("fake-reranker", device="cpu")
 

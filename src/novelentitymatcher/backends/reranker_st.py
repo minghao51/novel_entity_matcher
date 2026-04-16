@@ -2,9 +2,9 @@
 
 from typing import List, Optional
 
-from sentence_transformers import CrossEncoder
 
 from .base import RerankerBackend
+from ..utils.embeddings import get_cached_cross_encoder
 
 
 class STReranker(RerankerBackend):
@@ -31,7 +31,7 @@ class STReranker(RerankerBackend):
         self.model_name = model_name
         self.device = device
         self.batch_size = batch_size
-        self.model = CrossEncoder(model_name, device=device)
+        self.model = get_cached_cross_encoder(model_name, device=device)
 
     def score(self, query: str, docs: list[str]) -> List[float]:
         """

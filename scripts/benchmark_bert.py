@@ -191,7 +191,7 @@ def run_benchmark(
             f"  Throughput: {setfit_infer['throughput_samples_per_sec']:.2f} samples/s"
         )
         print(f"  Accuracy: {setfit_infer['accuracy']:.2%}")
-    except Exception as e:
+    except (ValueError, RuntimeError) as e:
         print(f"  SetFit benchmark failed: {e}")
         results["setfit"] = None
 
@@ -222,7 +222,7 @@ def run_benchmark(
         print(f"  Inference time: {bert_infer['inference_time']:.2f}s")
         print(f"  Throughput: {bert_infer['throughput_samples_per_sec']:.2f} samples/s")
         print(f"  Accuracy: {bert_infer['accuracy']:.2%}")
-    except Exception as e:
+    except (ValueError, RuntimeError) as e:
         print(f"  BERT benchmark failed: {e}")
         results["bert"] = None
 

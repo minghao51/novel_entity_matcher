@@ -484,7 +484,7 @@ class NoveltyBenchmark:
                             dataset="",
                         )
                     )
-                except Exception as e:
+                except (ValueError, RuntimeError) as e:
                     print(f"    LOF failed: {e}")
 
         return results
@@ -615,7 +615,7 @@ class NoveltyBenchmark:
                             dataset="",
                         )
                     )
-                except Exception as e:
+                except (ValueError, RuntimeError) as e:
                     print(f"    OneClassSVM failed: {e}")
 
         return results
@@ -698,7 +698,7 @@ class NoveltyBenchmark:
                             dataset="",
                         )
                     )
-                except Exception as e:
+                except (ValueError, RuntimeError) as e:
                     print(f"    IsolationForest failed: {e}")
 
         return results
@@ -785,7 +785,7 @@ class NoveltyBenchmark:
                             dataset="",
                         )
                     )
-                except Exception as e:
+                except (ValueError, RuntimeError) as e:
                     print(f"    SetFit novelty failed: {e}")
 
         return results
@@ -972,10 +972,16 @@ class NoveltyBenchmark:
         conf_strategy = ConfidenceStrategy()
         conf_strategy.initialize(train_emb, split.train_labels, conf_config)
         flags_v, metrics_v = conf_strategy.detect(
-            split.val_texts, val_emb, ["unknown"] * len(split.val_texts), np.ones(len(split.val_texts)) * 0.5,
+            split.val_texts,
+            val_emb,
+            ["unknown"] * len(split.val_texts),
+            np.ones(len(split.val_texts)) * 0.5,
         )
         flags_t, metrics_t = conf_strategy.detect(
-            split.test_texts, test_emb, ["unknown"] * len(split.test_texts), np.ones(len(split.test_texts)) * 0.5,
+            split.test_texts,
+            test_emb,
+            ["unknown"] * len(split.test_texts),
+            np.ones(len(split.test_texts)) * 0.5,
         )
         strategy_outputs_val["confidence"] = (flags_v, metrics_v)
         strategy_outputs_test["confidence"] = (flags_t, metrics_t)
@@ -985,42 +991,70 @@ class NoveltyBenchmark:
         knn_strategy = KNNDistanceStrategy()
         knn_strategy.initialize(train_emb, split.train_labels, knn_config)
         flags_v, metrics_v = knn_strategy.detect(
-            split.val_texts, val_emb, ["unknown"] * len(split.val_texts), np.ones(len(split.val_texts)) * 0.5,
+            split.val_texts,
+            val_emb,
+            ["unknown"] * len(split.val_texts),
+            np.ones(len(split.val_texts)) * 0.5,
         )
         flags_t, metrics_t = knn_strategy.detect(
-            split.test_texts, test_emb, ["unknown"] * len(split.test_texts), np.ones(len(split.test_texts)) * 0.5,
+            split.test_texts,
+            test_emb,
+            ["unknown"] * len(split.test_texts),
+            np.ones(len(split.test_texts)) * 0.5,
         )
         strategy_outputs_val["knn_distance"] = (flags_v, metrics_v)
         strategy_outputs_test["knn_distance"] = (flags_t, metrics_t)
 
         # Pattern
         pattern_scorer = PatternScorer(split.train_texts)
-        pattern_scores_val = np.array([pattern_scorer.score_novelty(t) for t in split.val_texts])
-        pattern_scores_test = np.array([pattern_scorer.score_novelty(t) for t in split.test_texts])
+        pattern_scores_val = np.array(
+            [pattern_scorer.score_novelty(t) for t in split.val_texts]
+        )
+        pattern_scores_test = np.array(
+            [pattern_scorer.score_novelty(t) for t in split.test_texts]
+        )
         pattern_flags_v, pattern_metrics_v = {}, {}
         pattern_flags_t, pattern_metrics_t = {}, {}
         for i, s in enumerate(pattern_scores_val):
             is_novel = s < 0.5
             if is_novel:
                 pattern_flags_v[i] = i
-            pattern_metrics_v[i] = {"pattern_is_novel": is_novel, "pattern_score": 1.0 - s}
+            pattern_metrics_v[i] = {
+                "pattern_is_novel": is_novel,
+                "pattern_score": 1.0 - s,
+            }
         for i, s in enumerate(pattern_scores_test):
             is_novel = s < 0.5
             if is_novel:
                 pattern_flags_t[i] = i
-            pattern_metrics_t[i] = {"pattern_is_novel": is_novel, "pattern_score": 1.0 - s}
-        strategy_outputs_val["pattern"] = (set(pattern_flags_v.values()), pattern_metrics_v)
-        strategy_outputs_test["pattern"] = (set(pattern_flags_t.values()), pattern_metrics_t)
+            pattern_metrics_t[i] = {
+                "pattern_is_novel": is_novel,
+                "pattern_score": 1.0 - s,
+            }
+        strategy_outputs_val["pattern"] = (
+            set(pattern_flags_v.values()),
+            pattern_metrics_v,
+        )
+        strategy_outputs_test["pattern"] = (
+            set(pattern_flags_t.values()),
+            pattern_metrics_t,
+        )
 
         # SetFit Centroid
         sf_config = SetFitCentroidConfig()
         sf_strategy = SetFitCentroidStrategy()
         sf_strategy.initialize(train_emb, split.train_labels, sf_config)
         flags_v, metrics_v = sf_strategy.detect(
-            split.val_texts, val_emb, ["unknown"] * len(split.val_texts), np.ones(len(split.val_texts)) * 0.5,
+            split.val_texts,
+            val_emb,
+            ["unknown"] * len(split.val_texts),
+            np.ones(len(split.val_texts)) * 0.5,
         )
         flags_t, metrics_t = sf_strategy.detect(
-            split.test_texts, test_emb, ["unknown"] * len(split.test_texts), np.ones(len(split.test_texts)) * 0.5,
+            split.test_texts,
+            test_emb,
+            ["unknown"] * len(split.test_texts),
+            np.ones(len(split.test_texts)) * 0.5,
         )
         strategy_outputs_val["setfit_centroid"] = (flags_v, metrics_v)
         strategy_outputs_test["setfit_centroid"] = (flags_t, metrics_t)
@@ -1049,13 +1083,23 @@ class NoveltyBenchmark:
                 train_features.append(feats)
                 train_labels_arr.append(val_true[idx])
             if len(set(train_labels_arr)) > 1:
-                combiner.train_meta_learner(np.array(train_features), np.array(train_labels_arr))
+                combiner.train_meta_learner(
+                    np.array(train_features), np.array(train_labels_arr)
+                )
 
-        novel_indices_val, novelty_scores_val = combiner.combine(strategy_outputs_val, all_metrics_val)
-        novel_indices_test, novelty_scores_test = combiner.combine(strategy_outputs_test, all_metrics_test)
+        novel_indices_val, novelty_scores_val = combiner.combine(
+            strategy_outputs_val, all_metrics_val
+        )
+        novel_indices_test, novelty_scores_test = combiner.combine(
+            strategy_outputs_test, all_metrics_test
+        )
 
-        scores_val = np.array([novelty_scores_val.get(i, 0.0) for i in range(len(split.val_texts))])
-        scores_test = np.array([novelty_scores_test.get(i, 0.0) for i in range(len(split.test_texts))])
+        scores_val = np.array(
+            [novelty_scores_val.get(i, 0.0) for i in range(len(split.val_texts))]
+        )
+        scores_test = np.array(
+            [novelty_scores_test.get(i, 0.0) for i in range(len(split.test_texts))]
+        )
 
         val_metrics = self.evaluate_on_split(split.val_texts, val_true, scores_val)
         test_metrics = self.evaluate_on_split(split.test_texts, test_true, scores_test)
@@ -1102,10 +1146,16 @@ class NoveltyBenchmark:
         conf_strategy = ConfidenceStrategy()
         conf_strategy.initialize(train_emb, split.train_labels, conf_config)
         flags_v, metrics_v = conf_strategy.detect(
-            split.val_texts, val_emb, ["unknown"] * len(split.val_texts), np.ones(len(split.val_texts)) * 0.5,
+            split.val_texts,
+            val_emb,
+            ["unknown"] * len(split.val_texts),
+            np.ones(len(split.val_texts)) * 0.5,
         )
         flags_t, metrics_t = conf_strategy.detect(
-            split.test_texts, test_emb, ["unknown"] * len(split.test_texts), np.ones(len(split.test_texts)) * 0.5,
+            split.test_texts,
+            test_emb,
+            ["unknown"] * len(split.test_texts),
+            np.ones(len(split.test_texts)) * 0.5,
         )
         strategy_outputs_val["confidence"] = (flags_v, metrics_v)
         strategy_outputs_test["confidence"] = (flags_t, metrics_t)
@@ -1114,40 +1164,68 @@ class NoveltyBenchmark:
         knn_strategy = KNNDistanceStrategy()
         knn_strategy.initialize(train_emb, split.train_labels, knn_config)
         flags_v, metrics_v = knn_strategy.detect(
-            split.val_texts, val_emb, ["unknown"] * len(split.val_texts), np.ones(len(split.val_texts)) * 0.5,
+            split.val_texts,
+            val_emb,
+            ["unknown"] * len(split.val_texts),
+            np.ones(len(split.val_texts)) * 0.5,
         )
         flags_t, metrics_t = knn_strategy.detect(
-            split.test_texts, test_emb, ["unknown"] * len(split.test_texts), np.ones(len(split.test_texts)) * 0.5,
+            split.test_texts,
+            test_emb,
+            ["unknown"] * len(split.test_texts),
+            np.ones(len(split.test_texts)) * 0.5,
         )
         strategy_outputs_val["knn_distance"] = (flags_v, metrics_v)
         strategy_outputs_test["knn_distance"] = (flags_t, metrics_t)
 
         pattern_scorer = PatternScorer(split.train_texts)
-        pattern_scores_val = np.array([pattern_scorer.score_novelty(t) for t in split.val_texts])
-        pattern_scores_test = np.array([pattern_scorer.score_novelty(t) for t in split.test_texts])
+        pattern_scores_val = np.array(
+            [pattern_scorer.score_novelty(t) for t in split.val_texts]
+        )
+        pattern_scores_test = np.array(
+            [pattern_scorer.score_novelty(t) for t in split.test_texts]
+        )
         pattern_flags_v, pattern_metrics_v = {}, {}
         pattern_flags_t, pattern_metrics_t = {}, {}
         for i, s in enumerate(pattern_scores_val):
             is_novel = s < 0.5
             if is_novel:
                 pattern_flags_v[i] = i
-            pattern_metrics_v[i] = {"pattern_is_novel": is_novel, "pattern_score": 1.0 - s}
+            pattern_metrics_v[i] = {
+                "pattern_is_novel": is_novel,
+                "pattern_score": 1.0 - s,
+            }
         for i, s in enumerate(pattern_scores_test):
             is_novel = s < 0.5
             if is_novel:
                 pattern_flags_t[i] = i
-            pattern_metrics_t[i] = {"pattern_is_novel": is_novel, "pattern_score": 1.0 - s}
-        strategy_outputs_val["pattern"] = (set(pattern_flags_v.values()), pattern_metrics_v)
-        strategy_outputs_test["pattern"] = (set(pattern_flags_t.values()), pattern_metrics_t)
+            pattern_metrics_t[i] = {
+                "pattern_is_novel": is_novel,
+                "pattern_score": 1.0 - s,
+            }
+        strategy_outputs_val["pattern"] = (
+            set(pattern_flags_v.values()),
+            pattern_metrics_v,
+        )
+        strategy_outputs_test["pattern"] = (
+            set(pattern_flags_t.values()),
+            pattern_metrics_t,
+        )
 
         sf_config = SetFitCentroidConfig()
         sf_strategy = SetFitCentroidStrategy()
         sf_strategy.initialize(train_emb, split.train_labels, sf_config)
         flags_v, metrics_v = sf_strategy.detect(
-            split.val_texts, val_emb, ["unknown"] * len(split.val_texts), np.ones(len(split.val_texts)) * 0.5,
+            split.val_texts,
+            val_emb,
+            ["unknown"] * len(split.val_texts),
+            np.ones(len(split.val_texts)) * 0.5,
         )
         flags_t, metrics_t = sf_strategy.detect(
-            split.test_texts, test_emb, ["unknown"] * len(split.test_texts), np.ones(len(split.test_texts)) * 0.5,
+            split.test_texts,
+            test_emb,
+            ["unknown"] * len(split.test_texts),
+            np.ones(len(split.test_texts)) * 0.5,
         )
         strategy_outputs_val["setfit_centroid"] = (flags_v, metrics_v)
         strategy_outputs_test["setfit_centroid"] = (flags_t, metrics_t)
@@ -1161,13 +1239,23 @@ class NoveltyBenchmark:
             for idx, mm in m.items():
                 all_metrics_test[idx].update(mm)
 
-        det_config = DetectionConfig(combine_method="weighted", weights=adjusted_weights)
+        det_config = DetectionConfig(
+            combine_method="weighted", weights=adjusted_weights
+        )
         combiner = SignalCombiner(det_config)
-        novel_indices_val, novelty_scores_val = combiner.combine(strategy_outputs_val, all_metrics_val)
-        novel_indices_test, novelty_scores_test = combiner.combine(strategy_outputs_test, all_metrics_test)
+        novel_indices_val, novelty_scores_val = combiner.combine(
+            strategy_outputs_val, all_metrics_val
+        )
+        novel_indices_test, novelty_scores_test = combiner.combine(
+            strategy_outputs_test, all_metrics_test
+        )
 
-        scores_val = np.array([novelty_scores_val.get(i, 0.0) for i in range(len(split.val_texts))])
-        scores_test = np.array([novelty_scores_test.get(i, 0.0) for i in range(len(split.test_texts))])
+        scores_val = np.array(
+            [novelty_scores_val.get(i, 0.0) for i in range(len(split.val_texts))]
+        )
+        scores_test = np.array(
+            [novelty_scores_test.get(i, 0.0) for i in range(len(split.test_texts))]
+        )
 
         val_metrics = self.evaluate_on_split(split.val_texts, val_true, scores_val)
         test_metrics = self.evaluate_on_split(split.test_texts, test_true, scores_test)
@@ -1347,7 +1435,9 @@ def run_full_benchmark():
         if results:
             best = results[0]
             print(f"    Val: AUROC={best.val_auroc:.3f}, DR@1%={best.val_dr_1fp:.3f}")
-            print(f"    Test: AUROC={best.test_auroc:.3f}, DR@1%={best.test_dr_1fp:.3f}")
+            print(
+                f"    Test: AUROC={best.test_auroc:.3f}, DR@1%={best.test_dr_1fp:.3f}"
+            )
 
         print("\n--- Signal Combiner: Voting ---")
         results = benchmark.benchmark_signal_combiner(split, combine_method="voting")
@@ -1357,17 +1447,23 @@ def run_full_benchmark():
         if results:
             best = results[0]
             print(f"    Val: AUROC={best.val_auroc:.3f}, DR@1%={best.val_dr_1fp:.3f}")
-            print(f"    Test: AUROC={best.test_auroc:.3f}, DR@1%={best.test_dr_1fp:.3f}")
+            print(
+                f"    Test: AUROC={best.test_auroc:.3f}, DR@1%={best.test_dr_1fp:.3f}"
+            )
 
         print("\n--- Signal Combiner: Meta-Learner ---")
-        results = benchmark.benchmark_signal_combiner(split, combine_method="meta_learner")
+        results = benchmark.benchmark_signal_combiner(
+            split, combine_method="meta_learner"
+        )
         for r in results:
             r.dataset = ds_name
             ds_results.append(r)
         if results:
             best = results[0]
             print(f"    Val: AUROC={best.val_auroc:.3f}, DR@1%={best.val_dr_1fp:.3f}")
-            print(f"    Test: AUROC={best.test_auroc:.3f}, DR@1%={best.test_dr_1fp:.3f}")
+            print(
+                f"    Test: AUROC={best.test_auroc:.3f}, DR@1%={best.test_dr_1fp:.3f}"
+            )
 
         print("\n--- Signal Combiner: Adaptive Weights ---")
         results = benchmark.benchmark_adaptive_weights(split)
@@ -1377,7 +1473,9 @@ def run_full_benchmark():
         if results:
             best = results[0]
             print(f"    Val: AUROC={best.val_auroc:.3f}, DR@1%={best.val_dr_1fp:.3f}")
-            print(f"    Test: AUROC={best.test_auroc:.3f}, DR@1%={best.test_dr_1fp:.3f}")
+            print(
+                f"    Test: AUROC={best.test_auroc:.3f}, DR@1%={best.test_dr_1fp:.3f}"
+            )
 
         all_results.extend(ds_results)
 

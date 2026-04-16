@@ -246,6 +246,23 @@ class TestUnifiedMatcher:
         matcher = Matcher(entities=sample_entities, mode="full")
         assert matcher._training_mode == "full"
 
+    def test_matcher_component_injection_still_works(self, sample_entities):
+        matcher = Matcher(entities=sample_entities, mode="full")
+        injected = object()
+
+        matcher._entity_matcher = injected
+
+        assert matcher.entity_matcher is injected
+
+    def test_matcher_set_threshold_updates_existing_components(self, sample_entities):
+        matcher = Matcher(entities=sample_entities, mode="full", threshold=0.6)
+        entity_matcher = matcher.entity_matcher
+
+        matcher.set_threshold(0.25)
+
+        assert matcher.threshold == 0.25
+        assert entity_matcher.threshold == 0.25
+
     def test_matcher_hybrid_mode(self, sample_entities):
         """Test hybrid mode is accepted."""
         matcher = Matcher(entities=sample_entities, mode="hybrid")

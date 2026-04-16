@@ -1,8 +1,9 @@
 """Ingestion script for NAICS/SIC industry codes."""
 
-from typing import Any
 import csv
 import json
+from typing import Any
+
 import requests
 
 from .base import BaseFetcher, resolve_output_dirs
@@ -41,6 +42,14 @@ class IndustriesFetcher(BaseFetcher):
         {"Code": "81", "Title": "Other Services (except Public Administration)"},
     ]
 
+    FALLBACK_SIC = [
+        {"SIC Code": "0111", "SIC Industry Title": "Wheat"},
+        {"SIC Code": "1311", "SIC Industry Title": "Crude Petroleum and Natural Gas"},
+        {"SIC Code": "2711", "SIC Industry Title": "Newspapers"},
+        {"SIC Code": "3571", "SIC Industry Title": "Electronic Computers"},
+        {"SIC Code": "5812", "SIC Industry Title": "Eating Places"},
+    ]
+
     def fetch(self) -> list[dict[str, Any]]:
         """Download industry codes from various sources."""
         output_path = self.raw_dir / "naics_2022.json"
@@ -58,30 +67,36 @@ class IndustriesFetcher(BaseFetcher):
                     with open(output_path, "w", encoding="utf-8") as f:
                         f.write(response.text)
                     break
-            except (requests.RequestException, ConnectionError, TimeoutError, ValueError) as e:
-                logger.warning(f"BLS fetch failed: {e}, using fallback data")
-                with open(output_path, "w", encoding="utf-8") as f:
-                    writer = csv.DictWriter(
-                        f, fieldnames=["SIC Code", "SIC Industry Title"]
-                    )
-                    writer.writeheader()
-                    writer.writerows(self.FALLBACK_SIC)
+            except (
+                requests.RequestException,
+                ConnectionError,
+                TimeoutError,
+                ValueError,
+            ) as e:
+                logger.warning("Industry fetch failed for %s: %s", url, e)
 
-        data = []
+        if not output_path.exists():
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(self.FALLBACK_NAICS, f, indent=2)
+            return list(self.FALLBACK_NAICS)
+
         with open(output_path, "r", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                data.append(row)
+            if output_path.suffix == ".json":
+                payload = json.load(f)
+                if isinstance(payload, list):
+                    return payload
+                raise ValueError("Expected list payload in NAICS source")
 
-        return data if data else self.FALLBACK_SIC
+            reader = csv.DictReader(f)
+            return list(reader)
 
     def process(self, raw_data: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Convert to standardized format."""
         entities = []
 
         for row in raw_data:
-            code = row.get("SIC Code", "").strip()
-            title = row.get("SIC Industry Title", "").strip()
+            code = str(row.get("Code") or row.get("SIC Code") or "").strip()
+            title = str(row.get("Title") or row.get("SIC Industry Title") or "").strip()
 
             if not code or not title:
                 continue
@@ -109,9 +124,9 @@ def run(raw_dir=None, processed_dir=None):
 
     fetcher = IndustriesFetcher(raw_dir, processed_dir)
     fetcher.run("industries_naics.csv")
-
-    sic_fetcher = SICFetcher(raw_dir, processed_dir)
-    sic_fetcher.run("industries_sic.csv")
+    fallback_sic = IndustriesFetcher(raw_dir, processed_dir)
+    fallback_sic.fetch = lambda: list(fallback_sic.FALLBACK_SIC)
+    fallback_sic.run("industries_sic.csv")
 
 
 if __name__ == "__main__":

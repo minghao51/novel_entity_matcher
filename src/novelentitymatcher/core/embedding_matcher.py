@@ -230,9 +230,9 @@ class EmbeddingMatcher:
 
         return await self._ensure_async_executor().run_in_thread(
             self.match,
-            texts,
-            candidates,
-            top_k,
-            batch_size,
-            threshold_override,
+            texts=texts,
+            candidates=candidates,
+            top_k=top_k,
+            batch_size=batch_size,
+            threshold_override=threshold_override,
         )

@@ -193,29 +193,21 @@ class CommunityDetectionStage(PipelineStage):
         if len(embeddings) == 1:
             return [0], "singleton"
 
-        if self.clusterer is not None:
-            try:
-                labels, _, info = self.clusterer.fit_predict(embeddings)
-                return [int(label) for label in labels], str(
-                    info.get("backend", "custom")
-                )
-            except (ValueError, TypeError, RuntimeError):
-                logger.warning("Clustering with pre-built clusterer failed, falling back to registry")
-
         try:
-            from ..novelty.clustering.backends import (
-                ClusteringBackendRegistry,
-            )
+            from ..novelty.clustering.scalable import ScalableClusterer
 
-            backend = ClusteringBackendRegistry.create(self.backend_name)
-            labels, _, info = backend.fit_predict(
-                embeddings, min_cluster_size=self.min_cluster_size
+            clusterer = self.clusterer or ScalableClusterer(
+                backend=self.backend_name,
+                min_cluster_size=self.min_cluster_size,
             )
+            labels, _, info = clusterer.fit_predict(embeddings)
             return [int(label) for label in labels], str(
-                info.get("backend", self.backend_name)
+                info.get("backend", getattr(clusterer, "backend", self.backend_name))
             )
-        except (ValueError, TypeError, RuntimeError):
-            logger.warning("Registry clustering failed, falling back to connected components")
+        except (ImportError, ValueError, TypeError, RuntimeError):
+            logger.warning(
+                "Clusterer execution failed, falling back to connected components"
+            )
 
         labels = self._fallback_connected_components(embeddings)
         return labels, "fallback_connected_components"
@@ -401,17 +393,17 @@ class ClusterEvidenceStage(PipelineStage):
         if not any(joined_texts):
             return []
 
-        vectorizer = TfidfVectorizer(
-            stop_words=list(_STOPWORDS),
-            token_pattern=r"[a-zA-Z0-9]+",
-            max_features=1000,
-        )
         try:
-            tfidf_matrix = vectorizer.fit_transform(joined_texts)
+            tfidf_vectorizer = TfidfVectorizer(
+                stop_words=list(_STOPWORDS),
+                token_pattern=r"[a-zA-Z0-9]+",
+                max_features=1000,
+            )
+            tfidf_matrix = tfidf_vectorizer.fit_transform(joined_texts)
         except ValueError:
             return []
 
-        feature_names = vectorizer.get_feature_names_out()
+        feature_names = tfidf_vectorizer.get_feature_names_out()
         avg_scores = np.asarray(tfidf_matrix.mean(axis=0)).flatten()
         ranked_indices = avg_scores.argsort()[::-1]
         return [feature_names[i] for i in ranked_indices[: self.max_keywords]]
@@ -586,7 +578,12 @@ class ProposalStage(PipelineStage):
                         existing_classes=existing_classes,
                         context=self.context_text,
                     )
-            except (ValueError, TypeError, RuntimeError, ConnectionError) as exc:  # pragma: no cover - defensive wrapper
+            except (
+                ValueError,
+                TypeError,
+                RuntimeError,
+                ConnectionError,
+            ) as exc:  # pragma: no cover - defensive wrapper
                 error = str(exc)
 
         return StageResult(

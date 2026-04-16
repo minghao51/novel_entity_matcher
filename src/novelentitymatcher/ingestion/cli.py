@@ -1,6 +1,7 @@
 """CLI for running data ingestion scripts."""
 
 import argparse
+import subprocess
 import sys
 from pathlib import Path
 
@@ -77,7 +78,12 @@ def main(argv=None):
                 if func is None:
                     continue
                 func(raw_dir=args.raw_dir, processed_dir=args.processed_dir)
-            except Exception as e:
+            except (
+                FileNotFoundError,
+                PermissionError,
+                subprocess.CalledProcessError,
+                RuntimeError,
+            ) as e:
                 print(f"Error ingesting {name}: {e}", file=sys.stderr)
                 failures.append((name, e))
         if failures:

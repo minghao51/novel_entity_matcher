@@ -9,10 +9,6 @@ from novelentitymatcher.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-from novelentitymatcher.utils.logging_config import get_logger
-
-logger = get_logger(__name__)
-
 
 def track_performance(func: Callable) -> Callable:
     """

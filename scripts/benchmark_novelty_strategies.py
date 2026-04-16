@@ -404,7 +404,10 @@ class StrategyBenchmark:
         inference_time = time.time() - start_time
 
         novelty_scores = np.array(
-            [metrics[i].get("setfit_centroid_novelty_score", 0.0) for i in range(len(all_texts))]
+            [
+                metrics[i].get("setfit_centroid_novelty_score", 0.0)
+                for i in range(len(all_texts))
+            ]
         )
         true_labels = np.array([0] * len(known_texts) + [1] * len(ood_texts))
 
@@ -486,7 +489,10 @@ class StrategyBenchmark:
         conf_strategy = ConfidenceStrategy()
         conf_strategy.initialize(known_emb, known_labels, conf_config)
         flags, metrics = conf_strategy.detect(
-            all_texts, embeddings, ["unknown"] * len(all_texts), np.ones(len(all_texts)) * 0.5,
+            all_texts,
+            embeddings,
+            ["unknown"] * len(all_texts),
+            np.ones(len(all_texts)) * 0.5,
         )
         strategy_outputs["confidence"] = (flags, metrics)
 
@@ -495,7 +501,10 @@ class StrategyBenchmark:
         knn_strategy = KNNDistanceStrategy()
         knn_strategy.initialize(known_emb, known_labels, knn_config)
         flags, metrics = knn_strategy.detect(
-            all_texts, embeddings, ["unknown"] * len(all_texts), np.ones(len(all_texts)) * 0.5,
+            all_texts,
+            embeddings,
+            ["unknown"] * len(all_texts),
+            np.ones(len(all_texts)) * 0.5,
         )
         strategy_outputs["knn_distance"] = (flags, metrics)
 
@@ -508,7 +517,10 @@ class StrategyBenchmark:
             is_novel = s < 0.5
             if is_novel:
                 pattern_flags.add(i)
-            pattern_metrics[i] = {"pattern_is_novel": is_novel, "pattern_score": 1.0 - s}
+            pattern_metrics[i] = {
+                "pattern_is_novel": is_novel,
+                "pattern_score": 1.0 - s,
+            }
         strategy_outputs["pattern"] = (pattern_flags, pattern_metrics)
 
         # SetFit Centroid
@@ -516,7 +528,10 @@ class StrategyBenchmark:
         sf_strategy = SetFitCentroidStrategy()
         sf_strategy.initialize(known_emb, known_labels, sf_config)
         flags, metrics = sf_strategy.detect(
-            all_texts, embeddings, ["unknown"] * len(all_texts), np.ones(len(all_texts)) * 0.5,
+            all_texts,
+            embeddings,
+            ["unknown"] * len(all_texts),
+            np.ones(len(all_texts)) * 0.5,
         )
         strategy_outputs["setfit_centroid"] = (flags, metrics)
 
@@ -529,6 +544,7 @@ class StrategyBenchmark:
                 all_metrics[idx].update(m)
 
         from novelentitymatcher.novelty.config.base import DetectionConfig
+
         det_config = DetectionConfig(combine_method="weighted")
         combiner = SignalCombiner(det_config)
         novel_indices, novelty_scores = combiner.combine(strategy_outputs, all_metrics)
@@ -566,7 +582,10 @@ class StrategyBenchmark:
         conf_strategy = ConfidenceStrategy()
         conf_strategy.initialize(known_emb, known_labels, conf_config)
         flags, metrics = conf_strategy.detect(
-            all_texts, embeddings, ["unknown"] * len(all_texts), np.ones(len(all_texts)) * 0.5,
+            all_texts,
+            embeddings,
+            ["unknown"] * len(all_texts),
+            np.ones(len(all_texts)) * 0.5,
         )
         strategy_outputs["confidence"] = (flags, metrics)
 
@@ -574,7 +593,10 @@ class StrategyBenchmark:
         knn_strategy = KNNDistanceStrategy()
         knn_strategy.initialize(known_emb, known_labels, knn_config)
         flags, metrics = knn_strategy.detect(
-            all_texts, embeddings, ["unknown"] * len(all_texts), np.ones(len(all_texts)) * 0.5,
+            all_texts,
+            embeddings,
+            ["unknown"] * len(all_texts),
+            np.ones(len(all_texts)) * 0.5,
         )
         strategy_outputs["knn_distance"] = (flags, metrics)
 
@@ -586,14 +608,20 @@ class StrategyBenchmark:
             is_novel = s < 0.5
             if is_novel:
                 pattern_flags.add(i)
-            pattern_metrics[i] = {"pattern_is_novel": is_novel, "pattern_score": 1.0 - s}
+            pattern_metrics[i] = {
+                "pattern_is_novel": is_novel,
+                "pattern_score": 1.0 - s,
+            }
         strategy_outputs["pattern"] = (pattern_flags, pattern_metrics)
 
         sf_config = SetFitCentroidConfig()
         sf_strategy = SetFitCentroidStrategy()
         sf_strategy.initialize(known_emb, known_labels, sf_config)
         flags, metrics = sf_strategy.detect(
-            all_texts, embeddings, ["unknown"] * len(all_texts), np.ones(len(all_texts)) * 0.5,
+            all_texts,
+            embeddings,
+            ["unknown"] * len(all_texts),
+            np.ones(len(all_texts)) * 0.5,
         )
         strategy_outputs["setfit_centroid"] = (flags, metrics)
 
@@ -605,6 +633,7 @@ class StrategyBenchmark:
                 all_metrics[idx].update(m)
 
         from novelentitymatcher.novelty.config.base import DetectionConfig
+
         det_config = DetectionConfig(combine_method="voting")
         combiner = SignalCombiner(det_config)
         novel_indices, novelty_scores = combiner.combine(strategy_outputs, all_metrics)
@@ -645,7 +674,10 @@ class StrategyBenchmark:
         conf_strategy = ConfidenceStrategy()
         conf_strategy.initialize(known_emb, known_labels, conf_config)
         flags, metrics = conf_strategy.detect(
-            all_texts, embeddings, ["unknown"] * len(all_texts), np.ones(len(all_texts)) * 0.5,
+            all_texts,
+            embeddings,
+            ["unknown"] * len(all_texts),
+            np.ones(len(all_texts)) * 0.5,
         )
         strategy_outputs["confidence"] = (flags, metrics)
 
@@ -653,7 +685,10 @@ class StrategyBenchmark:
         knn_strategy = KNNDistanceStrategy()
         knn_strategy.initialize(known_emb, known_labels, knn_config)
         flags, metrics = knn_strategy.detect(
-            all_texts, embeddings, ["unknown"] * len(all_texts), np.ones(len(all_texts)) * 0.5,
+            all_texts,
+            embeddings,
+            ["unknown"] * len(all_texts),
+            np.ones(len(all_texts)) * 0.5,
         )
         strategy_outputs["knn_distance"] = (flags, metrics)
 
@@ -665,14 +700,20 @@ class StrategyBenchmark:
             is_novel = s < 0.5
             if is_novel:
                 pattern_flags.add(i)
-            pattern_metrics[i] = {"pattern_is_novel": is_novel, "pattern_score": 1.0 - s}
+            pattern_metrics[i] = {
+                "pattern_is_novel": is_novel,
+                "pattern_score": 1.0 - s,
+            }
         strategy_outputs["pattern"] = (pattern_flags, pattern_metrics)
 
         sf_config = SetFitCentroidConfig()
         sf_strategy = SetFitCentroidStrategy()
         sf_strategy.initialize(known_emb, known_labels, sf_config)
         flags, metrics = sf_strategy.detect(
-            all_texts, embeddings, ["unknown"] * len(all_texts), np.ones(len(all_texts)) * 0.5,
+            all_texts,
+            embeddings,
+            ["unknown"] * len(all_texts),
+            np.ones(len(all_texts)) * 0.5,
         )
         strategy_outputs["setfit_centroid"] = (flags, metrics)
 
@@ -685,7 +726,10 @@ class StrategyBenchmark:
 
         from novelentitymatcher.novelty.config.base import DetectionConfig
         from novelentitymatcher.novelty.config.weights import WeightConfig
-        det_config = DetectionConfig(combine_method="weighted", weights=adjusted_weights)
+
+        det_config = DetectionConfig(
+            combine_method="weighted", weights=adjusted_weights
+        )
         combiner = SignalCombiner(det_config)
         novel_indices, novelty_scores = combiner.combine(strategy_outputs, all_metrics)
 
@@ -695,12 +739,15 @@ class StrategyBenchmark:
         return [
             BenchmarkResult(
                 strategy="ensemble_adaptive",
-                params={"method": "adaptive", "adjusted_weights": {
-                    "confidence": adjusted_weights.confidence,
-                    "knn": adjusted_weights.knn,
-                    "pattern": adjusted_weights.pattern,
-                    "setfit_centroid": adjusted_weights.setfit_centroid,
-                }},
+                params={
+                    "method": "adaptive",
+                    "adjusted_weights": {
+                        "confidence": adjusted_weights.confidence,
+                        "knn": adjusted_weights.knn,
+                        "pattern": adjusted_weights.pattern,
+                        "setfit_centroid": adjusted_weights.setfit_centroid,
+                    },
+                },
                 train_time=0.0,
                 inference_time=0.0,
                 num_known=len(known_texts),
@@ -792,7 +839,7 @@ def run_benchmark():
             print(
                 f"  Best: thresh={best_maha.params['threshold']:.1f}: AUROC={best_maha.auroc:.3f}, DR@1%={best_maha.detection_rate_1fp:.3f}"
             )
-        except Exception as e:
+        except (ValueError, RuntimeError) as e:
             print(f"  Failed: {e}")
 
         # LOF strategy
@@ -806,7 +853,7 @@ def run_benchmark():
             print(
                 f"  Best: n={best_lof.params['n_neighbors']}, cont={best_lof.params['contamination']:.2f}: AUROC={best_lof.auroc:.3f}, DR@1%={best_lof.detection_rate_1fp:.3f}"
             )
-        except Exception as e:
+        except (ValueError, RuntimeError) as e:
             print(f"  Failed: {e}")
 
         # Pattern strategy
@@ -820,63 +867,63 @@ def run_benchmark():
             print(
                 f"  Best: thresh={best_pattern.params['threshold']:.2f}: AUROC={best_pattern.auroc:.3f}, DR@1%={best_pattern.detection_rate_1fp:.3f}"
             )
-        except Exception as e:
+        except (ValueError, RuntimeError) as e:
             print(f"  Failed: {e}")
 
         # SetFit Centroid strategy
         print("\n--- SetFit Centroid Strategy ---")
         try:
-            results = benchmark.benchmark_setfit_centroid(known_texts, ood_texts, known_labels)
+            results = benchmark.benchmark_setfit_centroid(
+                known_texts, ood_texts, known_labels
+            )
             for r in results:
                 r.dataset = ds_name
                 all_results.append(r)
             for r in results:
-                print(
-                    f"  AUROC={r.auroc:.3f}, DR@1%={r.detection_rate_1fp:.3f}"
-                )
-        except Exception as e:
+                print(f"  AUROC={r.auroc:.3f}, DR@1%={r.detection_rate_1fp:.3f}")
+        except (ValueError, RuntimeError) as e:
             print(f"  Failed: {e}")
 
         # Ensemble: weighted combination
         print("\n--- Ensemble: Weighted ---")
         try:
-            results = benchmark.benchmark_ensemble_weighted(known_texts, ood_texts, known_labels)
+            results = benchmark.benchmark_ensemble_weighted(
+                known_texts, ood_texts, known_labels
+            )
             for r in results:
                 r.dataset = ds_name
                 all_results.append(r)
             for r in results:
-                print(
-                    f"  AUROC={r.auroc:.3f}, DR@1%={r.detection_rate_1fp:.3f}"
-                )
-        except Exception as e:
+                print(f"  AUROC={r.auroc:.3f}, DR@1%={r.detection_rate_1fp:.3f}")
+        except (ValueError, RuntimeError) as e:
             print(f"  Failed: {e}")
 
         # Ensemble: voting
         print("\n--- Ensemble: Voting ---")
         try:
-            results = benchmark.benchmark_ensemble_voting(known_texts, ood_texts, known_labels)
+            results = benchmark.benchmark_ensemble_voting(
+                known_texts, ood_texts, known_labels
+            )
             for r in results:
                 r.dataset = ds_name
                 all_results.append(r)
             for r in results:
-                print(
-                    f"  AUROC={r.auroc:.3f}, DR@1%={r.detection_rate_1fp:.3f}"
-                )
-        except Exception as e:
+                print(f"  AUROC={r.auroc:.3f}, DR@1%={r.detection_rate_1fp:.3f}")
+        except (ValueError, RuntimeError) as e:
             print(f"  Failed: {e}")
 
         # Ensemble: adaptive weights
         print("\n--- Ensemble: Adaptive Weights ---")
         try:
-            results = benchmark.benchmark_ensemble_adaptive(known_texts, ood_texts, known_labels)
+            results = benchmark.benchmark_ensemble_adaptive(
+                known_texts, ood_texts, known_labels
+            )
             for r in results:
                 r.dataset = ds_name
                 all_results.append(r)
             for r in results:
-                print(
-                    f"  AUROC={r.auroc:.3f}, DR@1%={r.detection_rate_1fp:.3f}"
-                )
-        except Exception as e:
+                print(f"  AUROC={r.auroc:.3f}, DR@1%={r.detection_rate_1fp:.3f}")
+        except (ValueError, RuntimeError) as e:
             print(f"  Failed: {e}")
 
     # Summary

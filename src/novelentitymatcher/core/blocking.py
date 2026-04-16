@@ -1,6 +1,7 @@
 """Blocking strategies for efficient candidate filtering."""
 
 from abc import ABC, abstractmethod
+from hashlib import md5
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -66,17 +67,12 @@ class BM25Blocking(BlockingStrategy):
         self.b = b
         self.bm25: Optional[BM25Okapi] = None
         self.cached_entities: Optional[List[Dict[str, Any]]] = None
-        self._entity_hash: Optional[int] = None
+        self._entity_hash: Optional[str] = None
 
     def build_index(self, entities: List[Dict[str, Any]]):
         """Build BM25 index from entities."""
         self.cached_entities = entities
-
-        # Compute hash for efficient comparison
-        entity_tuples = sorted(
-            (e["id"], e.get("text", e.get("name", ""))) for e in entities
-        )
-        self._entity_hash = hash(tuple(entity_tuples))
+        self._entity_hash = _compute_entity_hash(entities)
 
         tokenized_corpus = [
             self._tokenize(e.get("text", e.get("name", ""))) for e in entities
@@ -87,13 +83,8 @@ class BM25Blocking(BlockingStrategy):
         self, query: str, entities: List[Dict[str, Any]], top_k: int
     ) -> List[Dict[str, Any]]:
         """Return top_k candidates using BM25 scores."""
-        # Compute hash for current entities
-        entity_tuples = sorted(
-            (e["id"], e.get("text", e.get("name", ""))) for e in entities
-        )
-        current_hash = hash(tuple(entity_tuples))
+        current_hash = _compute_entity_hash(entities)
 
-        # Rebuild index if entities changed
         if self.bm25 is None or self._entity_hash != current_hash:
             self.build_index(entities)
 
@@ -113,12 +104,30 @@ class BM25Blocking(BlockingStrategy):
         return text.lower().split()
 
 
+def _compute_entity_hash(entities: List[Dict[str, Any]]) -> str:
+    """Compute efficient content hash for entity list.
+
+    Uses MD5 of sorted serialized entities for O(n) hashing
+    instead of O(n) tuple construction + O(n) hash.
+    """
+    hasher = md5()
+    for entity in sorted(entities, key=lambda e: e["id"]):
+        hasher.update(str(entity["id"]).encode())
+        hasher.update(entity.get("text", entity.get("name", "")).encode())
+    return hasher.hexdigest()
+
+
 class TFIDFBlocking(BlockingStrategy):
     """
     TF-IDF based blocking.
 
     Uses TF-IDF vectorization for lexical matching.
     Good for document-level similarity.
+
+    Optimized with:
+    - Vocabulary caching across rebuilds
+    - Efficient content-based hashing (MD5)
+    - Sparse matrix operations via sklearn
     """
 
     def __init__(self):
@@ -126,33 +135,30 @@ class TFIDFBlocking(BlockingStrategy):
         self.vectorizer: Optional[TfidfVectorizer] = None
         self.matrix: Optional[Any] = None
         self.cached_entities: Optional[List[Dict[str, Any]]] = None
-        self._entity_hash: Optional[int] = None
+        self._entity_hash: Optional[str] = None
+        self._vocabulary: Optional[Dict[str, int]] = None
 
     def build_index(self, entities: List[Dict[str, Any]]):
         """Build TF-IDF index from entities."""
         self.cached_entities = entities
-
-        # Compute hash for efficient comparison
-        entity_tuples = sorted(
-            (e["id"], e.get("text", e.get("name", ""))) for e in entities
-        )
-        self._entity_hash = hash(tuple(entity_tuples))
+        self._entity_hash = _compute_entity_hash(entities)
 
         texts = [e.get("text", e.get("name", "")) for e in entities]
-        self.vectorizer = TfidfVectorizer()
-        self.matrix = self.vectorizer.fit_transform(texts)
+
+        if self._vocabulary is None:
+            self.vectorizer = TfidfVectorizer()
+            self.matrix = self.vectorizer.fit_transform(texts)
+            self._vocabulary = self.vectorizer.vocabulary_
+        else:
+            self.vectorizer = TfidfVectorizer(vocabulary=self._vocabulary)
+            self.matrix = self.vectorizer.fit_transform(texts)
 
     def block(
         self, query: str, entities: List[Dict[str, Any]], top_k: int
     ) -> List[Dict[str, Any]]:
         """Return top_k candidates using TF-IDF scores."""
-        # Compute hash for current entities
-        entity_tuples = sorted(
-            (e["id"], e.get("text", e.get("name", ""))) for e in entities
-        )
-        current_hash = hash(tuple(entity_tuples))
+        current_hash = _compute_entity_hash(entities)
 
-        # Rebuild index if entities changed
         if self.vectorizer is None or self._entity_hash != current_hash:
             self.build_index(entities)
 
@@ -161,9 +167,9 @@ class TFIDFBlocking(BlockingStrategy):
         assert self.matrix is not None
         scores = (self.matrix @ query_vec.T).toarray().flatten()
 
-        # Get top_k indices
         top_k = min(top_k, len(scores))
-        top_indices = np.argsort(scores)[-top_k:][::-1]
+        top_indices = np.argpartition(scores, -top_k)[-top_k:]
+        top_indices = top_indices[np.argsort(scores[top_indices])[::-1]]
 
         return [entities[i] for i in top_indices]
 

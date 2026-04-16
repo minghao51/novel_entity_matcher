@@ -52,10 +52,10 @@ logs/
 artifacts/
 proposals/
 .claude/
-benchmark-results.json
-benchmarks_bert_results.json
-benchmarks_embedding_results.json
-benchmarks_training_results.json
+.opencode/
+
+# Scripts
+scripts/__pycache__/
 
 # Local config (user-specific)
 config.yaml

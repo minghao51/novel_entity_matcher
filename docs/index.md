@@ -33,6 +33,7 @@ This folder is split into active guides, experiment docs, architecture notes, an
 
 - [`technical-roadmap.md`](./technical-roadmap.md): active technical roadmap grounded in the current repo and target discovery-pipeline architecture
 - [`phase2-roadmap.md`](./phase2-roadmap.md): next phase implementation plan (signal fusion, pipeline contracts, discovery quality)
+- [`audit-report.md`](./audit-report.md): latest comprehensive codebase audit and gap analysis
 
 ## Archive
 

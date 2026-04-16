@@ -274,7 +274,9 @@ def run_benchmarks(
         logger.info("\n=== Classification Results ===")
         for model_results in results["classification"]:
             for r in model_results:
-                logger.info(f"  {r.get('dataset')}: Accuracy={r.get('accuracy', 0):.4f}")
+                logger.info(
+                    f"  {r.get('dataset')}: Accuracy={r.get('accuracy', 0):.4f}"
+                )
 
         logger.info("\n=== Novelty Detection Results ===")
         for model_results in results["novelty"]:
@@ -409,8 +411,8 @@ def main(argv: list[str] | None = None) -> int:
 
         return 0
 
-    except Exception as e:
-        logger.error(f"Error: {e}")
+    except (ValueError, RuntimeError, FileNotFoundError) as e:
+        logger.warning("Benchmarks command failed: %s", e)
         if args.verbose:
             raise
         return 1

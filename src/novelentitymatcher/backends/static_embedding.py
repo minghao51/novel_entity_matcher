@@ -10,7 +10,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 if platform.system() == "Darwin" and platform.machine() == "arm64":
     os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
-from sentence_transformers import SentenceTransformer
 from sentence_transformers.models import StaticEmbedding
 
 from ..utils.embeddings import get_cached_sentence_transformer

@@ -615,8 +615,8 @@ class BenchmarkRunner:
                                 "macro_f1", 0.0
                             )
 
-            except Exception as e:
-                logger.error(f"Error evaluating {name}: {e}")
+            except (ValueError, RuntimeError, AttributeError) as e:
+                logger.warning("Error evaluating %s: %s", name, e)
                 records.append(
                     {
                         "dataset": name,
@@ -725,8 +725,8 @@ class BenchmarkRunner:
                 }
                 records.append(record)
 
-            except Exception as e:
-                logger.error(f"Error evaluating {name}: {e}")
+            except (ValueError, RuntimeError, AttributeError) as e:
+                logger.warning("Error evaluating %s: %s", name, e)
                 records.append(
                     {
                         "dataset": name,
@@ -792,8 +792,10 @@ class BenchmarkRunner:
                     }
                     records.append(record)
 
-            except Exception as e:
-                logger.error(f"Error evaluating {name}: {e}")
+            except (ValueError, RuntimeError, AttributeError) as e:
+                logger.warning(
+                    "Error evaluating %s with threshold %.2f: %s", name, thresh, e
+                )
 
         return pd.DataFrame(records)
 
@@ -984,11 +986,13 @@ class BenchmarkRunner:
                     }
                 )
 
-            except Exception as e:
-                import traceback
-
-                logger.error(f"Error evaluating {section_name}: {e}")
-                traceback.print_exc()
+            except (ValueError, RuntimeError, AttributeError) as e:
+                logger.warning(
+                    "Error evaluating %s: %s (traceback logged above)",
+                    section_name,
+                    e,
+                    exc_info=True,
+                )
 
         return pd.DataFrame(records)
 

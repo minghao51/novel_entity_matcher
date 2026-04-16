@@ -25,17 +25,15 @@ from .schemas import NovelClassDiscoveryReport, NovelSampleMetadata, NovelSample
 from .storage.persistence import export_summary, save_proposals
 from .storage.review import ProposalReviewManager
 from ..core.matcher import Matcher
-from ..pipeline.adapters import (
-    ClusterEvidenceStage,
-    CommunityDetectionStage,
-    MatcherMetadataStage,
-    OODDetectionStage,
-    ProposalStage,
-)
 from ..pipeline.contracts import StageContext
+from ..pipeline.discovery_support import (
+    build_novel_match_result,
+    build_stage_config,
+    derive_existing_classes,
+)
 from ..pipeline.match_result import MatchResultWithMetadata
-from ..pipeline.match_pipeline_base import DiscoveryPipelineMixin
 from ..pipeline.orchestrator import PipelineOrchestrator
+from ..pipeline.pipeline_builder import PipelineBuilder
 from ..utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -60,7 +58,7 @@ class NovelEntityMatchResult:
 NoveltyMatchResult = NovelEntityMatchResult
 
 
-class NovelEntityMatcher(DiscoveryPipelineMixin):
+class NovelEntityMatcher:
     """
     Primary public API for novelty-aware matching.
 
@@ -244,7 +242,11 @@ class NovelEntityMatcher(DiscoveryPipelineMixin):
     def _derive_existing_classes(
         self, existing_classes: Optional[List[str]] = None
     ) -> List[str]:
-        return super()._derive_existing_classes(existing_classes)
+        return derive_existing_classes(
+            entities=self.entities,
+            get_reference_corpus=self.get_reference_corpus,
+            existing_classes=existing_classes,
+        )
 
     async def _collect_match_result_async(
         self, queries: List[str]
@@ -276,7 +278,7 @@ class NovelEntityMatcher(DiscoveryPipelineMixin):
         )
         return result, self.get_reference_corpus()
 
-    def _build_discovery_pipeline(
+    def _build_orchestrator(
         self,
         *,
         existing_classes: Optional[List[str]] = None,
@@ -284,15 +286,33 @@ class NovelEntityMatcher(DiscoveryPipelineMixin):
         run_llm_proposal: bool = True,
     ) -> PipelineOrchestrator:
         clustering_cfg = self.detection_config.clustering
-        return self._build_discovery_stages(
-            existing_classes=existing_classes,
-            context=context,
-            run_llm_proposal=run_llm_proposal,
+        stage_config = build_stage_config(
+            collect_sync=self._collect_match_result_sync,
+            collect_async=self._collect_match_result_async,
+            detector=self.detector,
+            clusterer=self.clusterer,
+            llm_proposer=self.llm_proposer,
+            use_novelty_detector=self.use_novelty_detector,
             clustering_enabled=True,
+            clustering_backend=getattr(self.clusterer, "backend", "auto"),
+            similarity_threshold=0.75,
             min_cluster_size=(
                 clustering_cfg.min_cluster_size if clustering_cfg else 5
             ),
             evidence_enabled=True,
+            use_tfidf=True,
+            run_llm_proposal=run_llm_proposal,
+            existing_classes_resolver=lambda: self._derive_existing_classes(
+                existing_classes
+            ),
+            context_text=context,
+            max_retries=2,
+            prefer_cluster_level=True,
+        )
+        return PipelineBuilder(stage_config).build(
+            existing_classes=existing_classes,
+            context=context,
+            run_llm_proposal=run_llm_proposal,
         )
 
     def _coerce_novel_sample_report(self, report: Any) -> NovelSampleReport:
@@ -327,11 +347,13 @@ class NovelEntityMatcher(DiscoveryPipelineMixin):
         existing_classes: Optional[List[str]] = None,
     ) -> NovelEntityMatchResult:
         match_result, reference_corpus = self._collect_match_result_sync([text])
-        return self._build_match_result(
-            text,
-            match_result,
-            reference_corpus,
-            existing_classes=existing_classes,
+        return build_novel_match_result(
+            query=text,
+            match_result=match_result,
+            reference_corpus=reference_corpus,
+            detector=self.detector,
+            use_novelty_detector=self.use_novelty_detector,
+            acceptance_threshold=self.acceptance_threshold,
             return_alternatives=return_alternatives,
         )
 
@@ -342,11 +364,13 @@ class NovelEntityMatcher(DiscoveryPipelineMixin):
         existing_classes: Optional[List[str]] = None,
     ) -> NovelEntityMatchResult:
         match_result, reference_corpus = await self._collect_match_result_async([text])
-        return self._build_match_result(
-            text,
-            match_result,
-            reference_corpus,
-            existing_classes=existing_classes,
+        return build_novel_match_result(
+            query=text,
+            match_result=match_result,
+            reference_corpus=reference_corpus,
+            detector=self.detector,
+            use_novelty_detector=self.use_novelty_detector,
+            acceptance_threshold=self.acceptance_threshold,
             return_alternatives=return_alternatives,
         )
 
@@ -358,9 +382,9 @@ class NovelEntityMatcher(DiscoveryPipelineMixin):
     ) -> list[NovelEntityMatchResult]:
         match_result, reference_corpus = self._collect_match_result_sync(texts)
         return [
-            self._build_match_result(
-                text,
-                MatchResultWithMetadata(
+            build_novel_match_result(
+                query=text,
+                match_result=MatchResultWithMetadata(
                     predictions=[match_result.predictions[idx]],
                     confidences=np.asarray(
                         [match_result.confidences[idx]], dtype=float
@@ -373,8 +397,10 @@ class NovelEntityMatcher(DiscoveryPipelineMixin):
                     candidate_results=[match_result.candidate_results[idx]],
                     records=[match_result.records[idx]],
                 ),
-                reference_corpus,
-                existing_classes=existing_classes,
+                reference_corpus=reference_corpus,
+                detector=self.detector,
+                use_novelty_detector=self.use_novelty_detector,
+                acceptance_threshold=self.acceptance_threshold,
                 return_alternatives=return_alternatives,
             )
             for idx, text in enumerate(texts)
@@ -394,7 +420,7 @@ class NovelEntityMatcher(DiscoveryPipelineMixin):
             discovery_id,
             len(queries),
         )
-        pipeline = self._build_discovery_pipeline(
+        pipeline = self._build_orchestrator(
             existing_classes=existing_classes,
             context=context,
             run_llm_proposal=run_llm_proposal,

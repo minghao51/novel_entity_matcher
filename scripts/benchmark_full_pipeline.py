@@ -450,7 +450,7 @@ def run_novelty_benchmark(split: SplitData) -> list[NoveltyResult]:
                 test_dr_5fp=test_metrics["dr_5fp"],
             )
         )
-    except Exception as e:
+    except (ValueError, RuntimeError) as e:
         print(f"  Mahalanobis failed: {e}")
 
     print("\n--- Strategy: LOF (Local Outlier Factor) ---")
@@ -484,7 +484,7 @@ def run_novelty_benchmark(split: SplitData) -> list[NoveltyResult]:
                     test_dr_5fp=test_metrics["dr_5fp"],
                 )
             )
-        except Exception as e:
+        except (ValueError, RuntimeError) as e:
             print(f"  LOF failed: {e}")
 
     print("\n--- Strategy: Isolation Forest ---")
@@ -547,7 +547,7 @@ def run_novelty_benchmark(split: SplitData) -> list[NoveltyResult]:
                     test_dr_5fp=test_metrics["dr_5fp"],
                 )
             )
-        except Exception as e:
+        except (ValueError, RuntimeError) as e:
             print(f"  One-Class SVM failed: {e}")
 
     print("\n" + "=" * 80)
@@ -650,7 +650,7 @@ def run_novelty_benchmark(split: SplitData) -> list[NoveltyResult]:
                     test_dr_5fp=test_metrics["dr_5fp"],
                 )
             )
-        except Exception as e:
+        except (ValueError, RuntimeError) as e:
             print(f"  SetFit prob boundary failed: {e}")
 
     print("\n--- Strategy: SetFit Class Centroid Distance ---")
@@ -691,7 +691,7 @@ def run_novelty_benchmark(split: SplitData) -> list[NoveltyResult]:
                     test_dr_5fp=test_metrics["dr_5fp"],
                 )
             )
-    except Exception as e:
+    except (ValueError, RuntimeError) as e:
         print(f"  SetFit centroid distance failed: {e}")
 
     print("\n--- Strategy: SetFit Mahalanobis (Trained Embeddings) ---")
@@ -728,7 +728,7 @@ def run_novelty_benchmark(split: SplitData) -> list[NoveltyResult]:
                 test_dr_5fp=test_metrics["dr_5fp"],
             )
         )
-    except Exception as e:
+    except (ValueError, RuntimeError) as e:
         print(f"  SetFit Mahalanobis failed: {e}")
 
     print("\n--- Strategy: Hybrid Ensemble (SetFit + Traditional) ---")
@@ -781,7 +781,7 @@ def run_novelty_benchmark(split: SplitData) -> list[NoveltyResult]:
                 test_dr_5fp=test_metrics["dr_5fp"],
             )
         )
-    except Exception as e:
+    except (ValueError, RuntimeError) as e:
         print(f"  Hybrid ensemble failed: {e}")
 
     print("\n--- Strategy: Ensemble (KNN + Mahalanobis + LOF) ---")
@@ -828,12 +828,14 @@ def run_novelty_benchmark(split: SplitData) -> list[NoveltyResult]:
                 test_dr_5fp=test_metrics["dr_5fp"],
             )
         )
-    except Exception as e:
+    except (ValueError, RuntimeError) as e:
         print(f"  Ensemble failed: {e}")
 
     print("\n--- Strategy: SetFit Centroid Distance ---")
     try:
-        from novelentitymatcher.novelty.strategies.setfit_centroid import SetFitCentroidStrategy
+        from novelentitymatcher.novelty.strategies.setfit_centroid import (
+            SetFitCentroidStrategy,
+        )
         from novelentitymatcher.novelty.config.strategies import SetFitCentroidConfig
 
         sf_config = SetFitCentroidConfig()
@@ -841,14 +843,30 @@ def run_novelty_benchmark(split: SplitData) -> list[NoveltyResult]:
         sf_strategy.initialize(train_emb, split.train_labels, sf_config)
 
         flags_val, metrics_val = sf_strategy.detect(
-            split.val_texts, val_emb, ["unknown"] * len(split.val_texts), np.ones(len(split.val_texts)) * 0.5,
+            split.val_texts,
+            val_emb,
+            ["unknown"] * len(split.val_texts),
+            np.ones(len(split.val_texts)) * 0.5,
         )
         flags_test, metrics_test = sf_strategy.detect(
-            split.test_texts, test_emb, ["unknown"] * len(split.test_texts), np.ones(len(split.test_texts)) * 0.5,
+            split.test_texts,
+            test_emb,
+            ["unknown"] * len(split.test_texts),
+            np.ones(len(split.test_texts)) * 0.5,
         )
 
-        novelty_val = np.array([metrics_val[i].get("setfit_centroid_novelty_score", 0.0) for i in range(len(split.val_texts))])
-        novelty_test = np.array([metrics_test[i].get("setfit_centroid_novelty_score", 0.0) for i in range(len(split.test_texts))])
+        novelty_val = np.array(
+            [
+                metrics_val[i].get("setfit_centroid_novelty_score", 0.0)
+                for i in range(len(split.val_texts))
+            ]
+        )
+        novelty_test = np.array(
+            [
+                metrics_test[i].get("setfit_centroid_novelty_score", 0.0)
+                for i in range(len(split.test_texts))
+            ]
+        )
 
         val_metrics = compute_ood_metrics(split.val_labels, novelty_val)
         test_metrics = compute_ood_metrics(split.test_labels, novelty_test)
@@ -869,7 +887,7 @@ def run_novelty_benchmark(split: SplitData) -> list[NoveltyResult]:
                 test_dr_5fp=test_metrics["dr_5fp"],
             )
         )
-    except Exception as e:
+    except (ValueError, RuntimeError) as e:
         print(f"  SetFit Centroid failed: {e}")
 
     return results

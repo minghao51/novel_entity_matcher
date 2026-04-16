@@ -202,7 +202,7 @@ def run_benchmark(
             )
             print(f"  Accuracy: {infer_metrics['accuracy']:.2%}")
 
-        except Exception as e:
+        except (ValueError, RuntimeError) as e:
             print(f"  FAILED: {e}")
             results[model_name] = {
                 "model_name": model_name,

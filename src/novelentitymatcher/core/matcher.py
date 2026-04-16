@@ -1,8 +1,12 @@
 import asyncio
+import inspect
 import os
 import platform
 from collections import defaultdict
 from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING, Union
+
+if TYPE_CHECKING:
+    from .matching_strategy import MatchingStrategy
 
 import numpy as np
 from sentence_transformers import SentenceTransformer
@@ -13,6 +17,8 @@ if platform.system() == "Darwin" and platform.machine() == "arm64":
 
 
 from .embedding_matcher import EmbeddingMatcher
+from .matcher_components import MatcherComponentFactory
+from .matcher_runtime import MatcherRuntimeState
 from .matcher_shared import (
     TextInput,
     coerce_texts,
@@ -22,13 +28,11 @@ from .matcher_shared import (
     resolve_threshold,
     unwrap_single,
 )
+from .matching_strategy import MatcherFacade
 from ..pipeline.match_result import build_match_result_with_metadata
 from .normalizer import TextNormalizer
 from ..config import (
     is_bert_model,
-    resolve_bert_model_alias,
-    resolve_model_alias,
-    resolve_training_model_alias,
     supports_training_model,
 )
 from ..exceptions import ModeError, TrainingError, ValidationError
@@ -45,6 +49,7 @@ if TYPE_CHECKING:
     from .classifier import SetFitClassifier
 
 EmbeddingModel = SentenceTransformer
+__all__ = ["EmbeddingMatcher", "EmbeddingModel", "Matcher"]
 
 # Backwards-compatible aliases for internal helpers that some callers may import.
 _coerce_texts = coerce_texts
@@ -73,6 +78,7 @@ class _EntityMatcher:
         self.classifier_type = classifier_type
 
         self.normalizer = TextNormalizer() if normalize else None
+        self.logger = get_logger(__name__)
         self.classifier: Optional[Union[SetFitClassifier, BERTClassifier]] = None
         self.is_trained = False
         self._async_executor: Optional[Any] = None
@@ -199,7 +205,8 @@ class _EntityMatcher:
                     results.append(matches[0] if matches else None)
                 else:
                     results.append(matches)
-            except ValueError:
+            except (ValueError, RuntimeError) as exc:
+                self.logger.warning("Match prediction failed for text sample: %s", exc)
                 results.append(None if top_k == 1 else [])
 
         return unwrap_single(results, single_input)
@@ -233,10 +240,10 @@ class _EntityMatcher:
 
         return await self._ensure_async_executor().run_in_thread(
             self.match,
-            texts,
-            candidates,
-            top_k,
-            threshold_override,
+            texts=texts,
+            candidates=candidates,
+            top_k=top_k,
+            threshold_override=threshold_override,
         )
 
     async def predict_async(
@@ -314,11 +321,16 @@ class Matcher:
         self.logger = get_logger(__name__)
 
         self.entities = entities
-        self.model_name = resolve_model_alias(model)
-        self._requested_model = model
-        self._training_model_name = resolve_training_model_alias(model)
-        self._bert_model_name = resolve_bert_model_alias(model)
-        self.threshold = threshold
+        self._runtime_state = MatcherRuntimeState.create(
+            model=model,
+            threshold=threshold,
+            mode=mode,
+        )
+        self.model_name = self._runtime_state.model_name
+        self._requested_model = self._runtime_state.requested_model
+        self._training_model_name = self._runtime_state.training_model_name
+        self._bert_model_name = self._runtime_state.bert_model_name
+        self.threshold = self._runtime_state.threshold
         self.normalize = normalize
         self.mode = mode
         self.blocking_strategy = blocking_strategy
@@ -328,20 +340,11 @@ class Matcher:
         self._async_executor: Optional["AsyncExecutor"] = None
         self._async_fit_lock = asyncio.Lock()
 
-        if mode is None or mode == "auto":
-            self._training_mode = "auto"
-        elif mode in ("zero-shot", "head-only", "full", "hybrid", "bert"):
-            self._training_mode = mode
-        else:
-            raise ModeError(f"Invalid mode: {mode}", invalid_mode=mode)
-
-        self._embedding_matcher: Optional[Any] = None
-        self._entity_matcher: Optional[Any] = None
-        self._bert_matcher: Optional[Any] = None
-        self._hybrid_matcher: Optional[Any] = None
-        self._has_training_data = False
+        self._training_mode = self._runtime_state.training_mode
+        self._components = MatcherComponentFactory(self)
+        self._has_training_data = self._runtime_state.has_training_data
         self._active_matcher: Optional[Any] = None
-        self._detected_mode: Optional[str] = None
+        self._detected_mode: Optional[str] = self._runtime_state.detected_mode
 
     def _ensure_async_executor(self):
         if self._async_executor is None:
@@ -351,20 +354,29 @@ class Matcher:
         return self._async_executor
 
     def _apply_threshold(self, threshold: float) -> None:
-        self.threshold = validate_threshold(threshold)
-        for matcher in (
-            self._embedding_matcher,
-            self._entity_matcher,
-            self._bert_matcher,
-        ):
-            if matcher:
-                matcher.threshold = self.threshold
+        self.threshold = self._runtime_state.apply_threshold(
+            threshold,
+            self._components.iter_threshold_targets(),
+        )
 
     @staticmethod
     def _resolve_threshold(
         threshold_override: Optional[float], default: float
     ) -> float:
         return resolve_threshold(threshold_override, default)
+
+    def _get_strategy(self) -> "MatchingStrategy":
+        """Get the matching strategy for the current training mode."""
+        facade = MatcherFacade(
+            embedding_matcher=self.embedding_matcher,
+            entity_matcher=self.entity_matcher,
+            bert_matcher=self.bert_matcher,
+            hybrid_matcher=self.hybrid_matcher,
+            threshold=self.threshold,
+            model_name=self.model_name,
+            training_mode=self._training_mode,
+        )
+        return facade.get_strategy()
 
     def _match_sync_impl(
         self,
@@ -373,36 +385,18 @@ class Matcher:
         threshold_override: Optional[float] = None,
         **kwargs,
     ) -> Any:
-        effective_threshold = self._resolve_threshold(
-            threshold_override, self.threshold
-        )
-
         if self._training_mode == "hybrid":
             return self._match_hybrid(
                 texts,
                 top_k=top_k,
-                threshold_override=effective_threshold,
+                threshold_override=threshold_override,
                 **kwargs,
             )
-        if self._training_mode == "zero-shot":
-            return self.embedding_matcher.match(
-                texts,
-                top_k=top_k,
-                threshold_override=effective_threshold,
-                **kwargs,
-            )
-        if self._training_mode == "bert":
-            return self.bert_matcher.match(
-                texts,
-                candidates=kwargs.get("candidates"),
-                top_k=top_k,
-                threshold_override=effective_threshold,
-            )
-        return self.entity_matcher.match(
+        return self._get_strategy().match(
             texts,
-            candidates=kwargs.get("candidates"),
             top_k=top_k,
-            threshold_override=effective_threshold,
+            threshold_override=threshold_override,
+            **kwargs,
         )
 
     def _match_with_metadata(
@@ -501,91 +495,67 @@ class Matcher:
         threshold_override: Optional[float] = None,
         **kwargs,
     ) -> Any:
-        effective_threshold = self._resolve_threshold(
-            threshold_override, self.threshold
-        )
-        executor = self._ensure_async_executor()
-
         if self._training_mode == "hybrid":
             return await self._match_hybrid_async(
                 texts,
                 top_k=top_k,
-                threshold_override=effective_threshold,
+                threshold_override=threshold_override,
                 **kwargs,
             )
-        if self._training_mode == "zero-shot":
-            return await executor.run_in_thread(
-                self.embedding_matcher.match,
-                texts=texts,
-                candidates=kwargs.get("candidates"),
-                top_k=top_k,
-                batch_size=kwargs.get("batch_size"),
-                threshold_override=effective_threshold,
-            )
-        if self._training_mode == "bert":
-            return await executor.run_in_thread(
-                self.bert_matcher.match,
-                texts=texts,
-                candidates=kwargs.get("candidates"),
-                top_k=top_k,
-                threshold_override=effective_threshold,
-            )
-        return await executor.run_in_thread(
-            self.entity_matcher.match,
-            texts=texts,
-            candidates=kwargs.get("candidates"),
+        return await self._get_strategy().match_async(
+            texts,
             top_k=top_k,
-            threshold_override=effective_threshold,
+            threshold_override=threshold_override,
+            **kwargs,
         )
 
     @property
     def embedding_matcher(self) -> Any:
-        if self._embedding_matcher is None:
-            self._embedding_matcher = EmbeddingMatcher(
-                entities=self.entities,
-                model_name=self.model_name,
-                threshold=self.threshold,
-                normalize=self.normalize,
-            )
-        return self._embedding_matcher
+        return self._components.get_embedding_matcher()
+
+    @property
+    def _embedding_matcher(self) -> Any:
+        return self._components._embedding_matcher
+
+    @_embedding_matcher.setter
+    def _embedding_matcher(self, value: Any) -> None:
+        self._components._embedding_matcher = value
 
     @property
     def entity_matcher(self) -> Any:
-        if self._entity_matcher is None:
-            self._entity_matcher = _EntityMatcher(
-                entities=self.entities,
-                model_name=self._training_model_name,
-                threshold=self.threshold,
-                normalize=self.normalize,
-                classifier_type="setfit",
-            )
-        return self._entity_matcher
+        return self._components.get_entity_matcher()
+
+    @property
+    def _entity_matcher(self) -> Any:
+        return self._components._entity_matcher
+
+    @_entity_matcher.setter
+    def _entity_matcher(self, value: Any) -> None:
+        self._components._entity_matcher = value
 
     @property
     def bert_matcher(self) -> Any:
-        if self._bert_matcher is None:
-            self._bert_matcher = _EntityMatcher(
-                entities=self.entities,
-                model_name=self._bert_model_name,
-                threshold=self.threshold,
-                normalize=self.normalize,
-                classifier_type="bert",
-            )
-        return self._bert_matcher
+        return self._components.get_bert_matcher()
+
+    @property
+    def _bert_matcher(self) -> Any:
+        return self._components._bert_matcher
+
+    @_bert_matcher.setter
+    def _bert_matcher(self, value: Any) -> None:
+        self._components._bert_matcher = value
 
     @property
     def hybrid_matcher(self) -> Any:
-        if self._hybrid_matcher is None:
-            from .hybrid import HybridMatcher
+        return self._components.get_hybrid_matcher()
 
-            self._hybrid_matcher = HybridMatcher(
-                entities=self.entities,
-                blocking_strategy=self.blocking_strategy,
-                retriever_model=self.model_name,
-                reranker_model=self.reranker_model,
-                normalize=self.normalize,
-            )
-        return self._hybrid_matcher
+    @property
+    def _hybrid_matcher(self) -> Any:
+        return self._components._hybrid_matcher
+
+    @_hybrid_matcher.setter
+    def _hybrid_matcher(self, value: Any) -> None:
+        self._components._hybrid_matcher = value
 
     def get_reference_corpus(self) -> Dict[str, Any]:
         if self._training_mode in ("zero-shot", "hybrid", "auto"):
@@ -632,7 +602,7 @@ class Matcher:
             else:
                 detected = "full"
 
-        self._detected_mode = detected
+        self._detected_mode = self._runtime_state.set_detected_mode(detected)
         return detected
 
     def _select_matcher(self) -> Any:
@@ -665,14 +635,14 @@ class Matcher:
         self.logger.info(f"Starting fit with mode: {self._training_mode}")
 
         if mode is not None:
-            if mode not in ("zero-shot", "head-only", "full", "hybrid", "bert"):
-                raise ModeError(f"Invalid mode: {mode}", invalid_mode=mode)
-            self._training_mode = mode
+            self._training_mode = self._runtime_state.update_training_mode(mode)
         elif training_data is not None and self._training_mode == "auto":
-            self._training_mode = self._detect_training_mode(training_data)
+            self._training_mode = self._runtime_state.update_training_mode(
+                self._detect_training_mode(training_data)
+            )
             self.logger.debug(f"Auto-detected mode: {self._training_mode}")
         elif training_data is None and self._training_mode == "auto":
-            self._training_mode = "zero-shot"
+            self._training_mode = self._runtime_state.update_training_mode("zero-shot")
 
         if show_progress:
             try:
@@ -690,6 +660,7 @@ class Matcher:
                 )
             self.logger.info("Initializing hybrid pipeline")
             self._active_matcher = self.hybrid_matcher
+            self._runtime_state.has_training_data = False
             self._has_training_data = False
             return self
 
@@ -727,6 +698,7 @@ class Matcher:
             matcher = self._resolve_classifier_matcher()
             matcher.train(training_data, show_progress=show_progress, **kwargs)
             self._active_matcher = matcher
+            self._runtime_state.has_training_data = True
             self._has_training_data = True
             self.logger.info("Training complete")
             return self
@@ -972,7 +944,7 @@ class Matcher:
             completed += len(batch)
 
             if on_progress:
-                if asyncio.iscoroutinefunction(on_progress):
+                if inspect.iscoroutinefunction(on_progress):
                     await on_progress(completed, total)
                 else:
                     on_progress(completed, total)
@@ -1017,21 +989,31 @@ class Matcher:
             "is_trained": self._active_matcher is not None,
         }
 
-        if self._embedding_matcher:
-            stats["has_embeddings"] = self._embedding_matcher.embeddings is not None
+        if self._components._embedding_matcher:
+            stats["has_embeddings"] = (
+                self._components._embedding_matcher.embeddings is not None
+            )
 
-        if self._entity_matcher:
-            classifier = getattr(self._entity_matcher, "classifier", None)
+        if self._components._entity_matcher:
+            classifier = getattr(self._components._entity_matcher, "classifier", None)
             stats["classifier_trained"] = (
-                getattr(classifier, "is_trained", self._entity_matcher.is_trained)
+                getattr(
+                    classifier,
+                    "is_trained",
+                    self._components._entity_matcher.is_trained,
+                )
                 if classifier is not None
                 else False
             )
 
-        if self._bert_matcher:
-            classifier = getattr(self._bert_matcher, "classifier", None)
+        if self._components._bert_matcher:
+            classifier = getattr(self._components._bert_matcher, "classifier", None)
             stats["bert_classifier_trained"] = (
-                getattr(classifier, "is_trained", self._bert_matcher.is_trained)
+                getattr(
+                    classifier,
+                    "is_trained",
+                    self._components._bert_matcher.is_trained,
+                )
                 if classifier is not None
                 else False
             )

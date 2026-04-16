@@ -1,10 +1,9 @@
 import numpy as np
 
 from .base import EmbeddingBackend, RerankerBackend
-from sentence_transformers import CrossEncoder, SentenceTransformer
 from sentence_transformers.util import semantic_search
 
-from ..utils.embeddings import get_cached_sentence_transformer
+from ..utils.embeddings import get_cached_sentence_transformer, get_cached_cross_encoder
 
 
 def _to_numpy(embeddings):
@@ -30,7 +29,7 @@ class HFEmbedding(EmbeddingBackend):
 
 class HFReranker(RerankerBackend):
     def __init__(self, model_name: str):
-        self.model = CrossEncoder(model_name)
+        self.model = get_cached_cross_encoder(model_name)
 
     def score(self, query, docs):
         pairs = [[query, doc] for doc in docs]

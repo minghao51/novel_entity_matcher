@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from novelentitymatcher import DiscoveryPipeline, Matcher
+from novelentitymatcher import DiscoveryPipeline, Matcher, NovelEntityMatcher
 from novelentitymatcher.novelty.schemas import (
     ClassProposal,
     NovelClassAnalysis,
@@ -151,3 +151,79 @@ def test_discovery_pipeline_review_lifecycle(tmp_path: Path):
 
     assert approved.state == "approved"
     assert promoted.state == "promoted"
+
+
+def test_discovery_pipeline_and_novel_entity_matcher_share_discovery_outputs():
+    matcher = _build_trained_matcher()
+    pipeline = DiscoveryPipeline(matcher=matcher, auto_save=False)
+    novelty_matcher = NovelEntityMatcher(matcher=matcher, auto_save=False)
+
+    def detect_novel_samples(**kwargs):
+        return type(
+            "Report",
+            (),
+            {
+                "novel_samples": [
+                    type(
+                        "Sample",
+                        (),
+                        {
+                            "text": text,
+                            "index": idx,
+                            "confidence": 0.3 + idx * 0.01,
+                            "predicted_class": "physics" if idx == 0 else "biology",
+                            "novelty_score": 0.95,
+                            "cluster_id": None,
+                            "signals": {"confidence": True},
+                        },
+                    )()
+                    for idx, text in enumerate(kwargs["texts"])
+                ],
+                "detection_strategies": ["confidence"],
+            },
+        )()
+
+    def propose_from_clusters(**kwargs):
+        return NovelClassAnalysis(
+            proposed_classes=[
+                ClassProposal(
+                    name="Quantum Biology",
+                    description="Quantum effects in biological systems",
+                    confidence=0.91,
+                    sample_count=2,
+                    example_samples=[
+                        "quantum biology proteins",
+                        "quantum biology enzymes",
+                    ],
+                    justification="Both samples describe the same emerging concept",
+                    source_cluster_ids=[0],
+                )
+            ],
+            rejected_as_noise=[],
+            analysis_summary="One coherent cluster.",
+            cluster_count=1,
+            model_used="test-model",
+        )
+
+    pipeline.detector.detect_novel_samples = detect_novel_samples
+    novelty_matcher.detector.detect_novel_samples = detect_novel_samples
+    pipeline.llm_proposer.propose_from_clusters = propose_from_clusters
+    novelty_matcher.llm_proposer.propose_from_clusters = propose_from_clusters
+
+    import asyncio
+
+    queries = ["quantum biology proteins", "quantum biology enzymes"]
+    pipeline_report = asyncio.run(pipeline.discover(queries, run_llm_proposal=True))
+    novelty_report = asyncio.run(
+        novelty_matcher.discover_novel_classes(
+            queries,
+            run_llm_proposal=True,
+        )
+    )
+
+    assert len(pipeline_report.discovery_clusters) == 1
+    assert len(novelty_report.discovery_clusters) == 1
+    assert (
+        pipeline_report.class_proposals.proposed_classes[0].name
+        == novelty_report.class_proposals.proposed_classes[0].name
+    )

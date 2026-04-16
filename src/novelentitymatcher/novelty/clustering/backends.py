@@ -26,6 +26,8 @@ class ClusteringBackendRegistry:
 
     @classmethod
     def get(cls, name: str) -> type:
+        if name == "auto":
+            return cls._backends["hdbscan"]
         return cls._backends[name]
 
     @classmethod

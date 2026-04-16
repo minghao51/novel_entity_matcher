@@ -129,3 +129,36 @@ class ModeError(ValueError, SemanticMatcherError):
             msg += f"\n  Valid modes: {', '.join(self.valid_modes)}"
 
         return msg
+
+
+class LLMError(SemanticMatcherError):
+    """Raised when LLM operations fail after all retries.
+
+    Attributes:
+        last_error: The last exception that caused all models to fail
+        attempted_models: List of models that were attempted
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        last_error: Optional[Exception] = None,
+        attempted_models: Optional[list[str]] = None,
+    ):
+        self.raw_message = message
+        self.last_error = last_error
+        self.attempted_models = attempted_models or []
+        super().__init__(self._format_message())
+
+    def _format_message(self) -> str:
+        """Format the error message with context."""
+        msg = self.raw_message
+
+        if self.attempted_models:
+            msg += f"\n  Attempted models: {', '.join(self.attempted_models)}"
+
+        if self.last_error:
+            msg += f"\n  Last error: {self.last_error}"
+
+        return msg

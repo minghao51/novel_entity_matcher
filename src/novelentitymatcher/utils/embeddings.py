@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import List, Iterator, Callable, Any, Optional, Dict
 import threading
 import time
@@ -11,6 +13,8 @@ __all__ = [
     "ModelCache",
     "get_default_cache",
     "get_cached_sentence_transformer",
+    "get_cached_setfit_model",
+    "get_cached_cross_encoder",
 ]
 
 
@@ -143,6 +147,63 @@ def get_cached_sentence_transformer(
         return SentenceTransformer(model_name, trust_remote_code=trust_remote_code)
 
     return cache.get_or_load(f"{model_name}:{trust_remote_code}", factory)
+
+
+def get_cached_cross_encoder(
+    model_name: str,
+    device: Optional[str] = None,
+    cache: Optional[ModelCache] = None,
+) -> Any:
+    """Get a CrossEncoder from cache or load it.
+
+    Args:
+        model_name: HuggingFace model name or path.
+        device: Device to run model on (None for auto-detection).
+        cache: Optional ModelCache instance. Uses global default if None.
+
+    Returns:
+        Cached or newly loaded CrossEncoder instance.
+    """
+    from sentence_transformers import CrossEncoder
+
+    if cache is None:
+        cache = get_default_cache()
+
+    cache_key = f"crossencoder:{model_name}:{device}"
+
+    def factory() -> CrossEncoder:
+        return CrossEncoder(model_name, device=device)
+
+    return cache.get_or_load(cache_key, factory)
+
+
+def get_cached_setfit_model(
+    model_name: str,
+    labels: Optional[List[str]] = None,
+    cache: Optional[ModelCache] = None,
+) -> Any:
+    """Get a SetFitModel from cache or load it.
+
+    Args:
+        model_name: HuggingFace model name or path.
+        labels: Optional list of labels for the classifier.
+        cache: Optional ModelCache instance. Uses global default if None.
+
+    Returns:
+        Cached or newly loaded SetFitModel instance.
+    """
+    from setfit import SetFitModel
+
+    if cache is None:
+        cache = get_default_cache()
+
+    labels_key = ",".join(labels) if labels else "none"
+    cache_key = f"setfit:{model_name}:{labels_key}"
+
+    def factory() -> SetFitModel:
+        return SetFitModel.from_pretrained(model_name, labels=labels)
+
+    return cache.get_or_load(cache_key, factory)
 
 
 def compute_embeddings(
