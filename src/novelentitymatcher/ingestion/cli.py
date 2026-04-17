@@ -14,6 +14,7 @@ from . import (
     run_products,
     run_universities,
 )
+from .base import resolve_output_dirs, run_all_concurrent
 from ..utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -56,6 +57,17 @@ def main(argv=None):
         default=None,
         help="Base directory for processed outputs (defaults to ./data/processed)",
     )
+    parser.add_argument(
+        "--concurrent",
+        action="store_true",
+        help="Run dataset ingestion concurrently (faster for multiple datasets)",
+    )
+    parser.add_argument(
+        "--max-concurrent",
+        type=int,
+        default=4,
+        help="Maximum number of concurrent ingestions (default: 4)",
+    )
 
     args = parser.parse_args(argv)
 
@@ -66,32 +78,64 @@ def main(argv=None):
         return
 
     if args.dataset == "all":
-        print("Running all ingestions...")
-        failures = []
-        for name, func in INGESTORS.items():
-            if name == "all":
-                continue
-            print(f"\n{'=' * 50}")
-            print(f"Ingesting {name}...")
-            print("=" * 50)
-            try:
-                if func is None:
+        if args.concurrent:
+            print(f"Running all ingestions concurrently (max {args.max_concurrent})...")
+            failures: list[tuple[str, Exception]] = []
+            fetchers = []
+            for name, func in INGESTORS.items():
+                if name == "all" or func is None:
                     continue
-                func(raw_dir=args.raw_dir, processed_dir=args.processed_dir)
-            except (
-                FileNotFoundError,
-                PermissionError,
-                subprocess.CalledProcessError,
-                RuntimeError,
-            ) as e:
-                print(f"Error ingesting {name}: {e}", file=sys.stderr)
-                failures.append((name, e))
-        if failures:
-            print("\nIngestion completed with failures:", file=sys.stderr)
-            for name, error in failures:
-                print(f"  - {name}: {error}", file=sys.stderr)
-            raise SystemExit(1)
-        print("\nAll ingestions complete!")
+                raw_dir, processed_dir = resolve_output_dirs(
+                    name, args.raw_dir, args.processed_dir
+                )
+
+                # Import dynamically based on name
+                module = __import__(
+                    f"novelentitymatcher.ingestion.{name}",
+                    fromlist=[name.capitalize() + "Fetcher"],
+                )
+                fetcher_cls = getattr(module, name.capitalize() + "Fetcher")
+                fetcher = fetcher_cls(raw_dir, processed_dir)
+                fetchers.append((fetcher, f"{name}.csv"))
+
+            try:
+                output_paths = run_all_concurrent(
+                    fetchers, max_concurrent=args.max_concurrent
+                )
+                print("\nAll concurrent ingestions complete!")
+                print("Output files:")
+                for path in output_paths:
+                    print(f"  - {path}")
+            except Exception as e:
+                print(f"Error during concurrent ingestion: {e}", file=sys.stderr)
+                raise SystemExit(1)
+        else:
+            print("Running all ingestions sequentially...")
+            failures = []
+            for name, func in INGESTORS.items():
+                if name == "all":
+                    continue
+                print(f"\n{'=' * 50}")
+                print(f"Ingesting {name}...")
+                print("=" * 50)
+                try:
+                    if func is None:
+                        continue
+                    func(raw_dir=args.raw_dir, processed_dir=args.processed_dir)
+                except (
+                    FileNotFoundError,
+                    PermissionError,
+                    subprocess.CalledProcessError,
+                    RuntimeError,
+                ) as e:
+                    print(f"Error ingesting {name}: {e}", file=sys.stderr)
+                    failures.append((name, e))
+            if failures:
+                print("\nIngestion completed with failures:", file=sys.stderr)
+                for name, error in failures:
+                    print(f"  - {name}: {error}", file=sys.stderr)
+                raise SystemExit(1)
+            print("\nAll ingestions complete!")
     else:
         func = INGESTORS.get(args.dataset)
         if func:

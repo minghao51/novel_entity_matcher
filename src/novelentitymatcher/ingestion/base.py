@@ -30,8 +30,19 @@ class BaseFetcher(ABC):
     def process(self, raw_data: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Process raw data into standardized format."""
 
-    def save_csv(self, data: list[dict[str, Any]], filename: str) -> Path:
-        """Save data to CSV file."""
+    def save_csv(
+        self, data: list[dict[str, Any]], filename: str, batch_size: int = 1000
+    ) -> Path:
+        """Save data to CSV file with optional batched writes.
+
+        Args:
+            data: List of records to save
+            filename: Output filename
+            batch_size: Number of records to buffer before flushing (default: 1000)
+
+        Returns:
+            Path to saved file
+        """
         if not data:
             raise ValueError("No data to save")
 
@@ -41,26 +52,56 @@ class BaseFetcher(ABC):
         with open(output_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
-            writer.writerows(data)
+
+            # Write in batches to reduce I/O operations for large datasets
+            for i in range(0, len(data), batch_size):
+                batch = data[i : i + batch_size]
+                writer.writerows(batch)
+                f.flush()  # Ensure data is written to disk
 
         return output_path
 
-    def run(self, output_filename: str) -> Path:
-        """Execute full ingestion pipeline."""
+    def run(self, output_filename: str, batch_size: int = 1000) -> Path:
+        """Execute full ingestion pipeline.
+
+        Args:
+            output_filename: Output filename
+            batch_size: Batch size for CSV writes (default: 1000)
+
+        Returns:
+            Path to saved file
+        """
         logger.info(f"Fetching {self.__class__.__name__} data...")
         raw_data = self.fetch()
 
         logger.info(f"Processing {len(raw_data)} records...")
         processed_data = self.process(raw_data)
 
-        logger.info(f"Saving to {output_filename}...")
-        output_path = self.save_csv(processed_data, output_filename)
+        logger.info(f"Saving to {output_filename} (batch_size={batch_size})...")
+        output_path = self.save_csv(
+            processed_data, output_filename, batch_size=batch_size
+        )
 
         logger.info(f"Done! Saved {len(processed_data)} records to {output_path}")
         return output_path
 
-    async def run_async(self, output_filename: str, semaphore: Optional[asyncio.Semaphore] = None) -> Path:
-        """Execute full ingestion pipeline asynchronously with rate limiting."""
+    async def run_async(
+        self,
+        output_filename: str,
+        semaphore: Optional[asyncio.Semaphore] = None,
+        batch_size: int = 1000,
+    ) -> Path:
+        """Execute full ingestion pipeline asynchronously with rate limiting.
+
+        Args:
+            output_filename: Output filename
+            semaphore: Optional semaphore for rate limiting
+            batch_size: Batch size for CSV writes (default: 1000)
+
+        Returns:
+            Path to saved file
+        """
+
         async def _fetch():
             if semaphore:
                 async with semaphore:
@@ -74,8 +115,10 @@ class BaseFetcher(ABC):
         logger.info(f"Processing {len(raw_data)} records...")
         processed_data = self.process(raw_data)
 
-        logger.info(f"Saving to {output_filename}...")
-        output_path = self.save_csv(processed_data, output_filename)
+        logger.info(f"Saving to {output_filename} (batch_size={batch_size})...")
+        output_path = self.save_csv(
+            processed_data, output_filename, batch_size=batch_size
+        )
 
         logger.info(f"Done! Saved {len(processed_data)} records to {output_path}")
         return output_path
@@ -99,19 +142,21 @@ def resolve_output_dirs(
 async def run_concurrent(
     fetchers: list[tuple[BaseFetcher, str]],
     max_concurrent: int = 4,
+    batch_size: int = 1000,
 ) -> list[Path]:
     """Run multiple fetchers concurrently with rate limiting.
 
     Args:
         fetchers: List of (BaseFetcher, output_filename) tuples.
         max_concurrent: Maximum number of concurrent fetch operations.
+        batch_size: Batch size for CSV writes (default: 1000)
 
     Returns:
         List of paths to saved CSV files.
     """
     semaphore = asyncio.Semaphore(max_concurrent)
     tasks = [
-        fetcher.run_async(output_filename, semaphore)
+        fetcher.run_async(output_filename, semaphore, batch_size)
         for fetcher, output_filename in fetchers
     ]
     return await asyncio.gather(*tasks)
@@ -120,14 +165,16 @@ async def run_concurrent(
 def run_all_concurrent(
     fetchers: list[tuple[BaseFetcher, str]],
     max_concurrent: int = 4,
+    batch_size: int = 1000,
 ) -> list[Path]:
     """Synchronous wrapper for run_concurrent.
 
     Args:
         fetchers: List of (BaseFetcher, output_filename) tuples.
         max_concurrent: Maximum number of concurrent fetch operations.
+        batch_size: Batch size for CSV writes (default: 1000)
 
     Returns:
         List of paths to saved CSV files.
     """
-    return asyncio.run(run_concurrent(fetchers, max_concurrent))
+    return asyncio.run(run_concurrent(fetchers, max_concurrent, batch_size))

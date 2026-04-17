@@ -1,8 +1,11 @@
 """Performance monitoring utilities for semantic matchers."""
 
 import functools
+import json
 import time
 from contextlib import contextmanager
+from datetime import datetime
+from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
 from novelentitymatcher.utils.logging_config import get_logger
@@ -124,3 +127,49 @@ class PerformanceMonitor:
     def to_dict(self) -> Dict[str, List[float]]:
         """Return raw metrics as dictionary."""
         return dict(self.metrics)
+
+    def _write_csv(self, output_path: Path) -> None:
+        """Write metrics to CSV file."""
+        import csv
+
+        with open(output_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["operation", "duration_ms", "timestamp"])
+            for operation, timings in self.metrics.items():
+                for timing in timings:
+                    writer.writerow(
+                        [operation, timing * 1000, datetime.now().isoformat()]
+                    )
+
+    def export_json(self, filepath: str) -> Path:
+        """Export all metrics to JSON file.
+
+        Args:
+            filepath: Path to output JSON file
+
+        Returns:
+            Path to saved file
+        """
+        output_path = Path(filepath)
+        data = {
+            "timestamp": datetime.now().isoformat(),
+            "metrics": self.summary(),
+            "raw_timings": self.to_dict(),
+        }
+        output_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        logger.info(f"Exported metrics to {output_path}")
+        return output_path
+
+    def export_csv(self, filepath: str) -> Path:
+        """Export metrics to CSV file.
+
+        Args:
+            filepath: Path to output CSV file
+
+        Returns:
+            Path to saved file
+        """
+        output_path = Path(filepath)
+        self._write_csv(output_path)
+        logger.info(f"Exported metrics to {output_path}")
+        return output_path
