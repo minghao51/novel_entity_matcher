@@ -26,15 +26,21 @@ def test_pipeline_builder_propagates_pipeline_config_stage_options():
     orchestrator = builder.build()
 
     cluster_stage = next(
-        stage for stage in orchestrator.stages if isinstance(stage, CommunityDetectionStage)
+        stage
+        for stage in orchestrator.stages
+        if isinstance(stage, CommunityDetectionStage)
     )
     evidence_stage = next(
-        stage for stage in orchestrator.stages if isinstance(stage, ClusterEvidenceStage)
+        stage
+        for stage in orchestrator.stages
+        if isinstance(stage, ClusterEvidenceStage)
     )
     proposal_stage = next(
         stage for stage in orchestrator.stages if isinstance(stage, ProposalStage)
     )
 
-    assert cluster_stage.backend_name == "soptics"
+    # Verify clusterer was injected with correct backend
+    assert cluster_stage.clusterer is not None
+    assert cluster_stage.clusterer.backend == "soptics"
     assert evidence_stage.use_tfidf is False
     assert proposal_stage.force_cluster_level is False

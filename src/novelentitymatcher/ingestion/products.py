@@ -80,7 +80,12 @@ class UNSPSCFetcher(BaseFetcher):
                     raise ValueError("Response exceeds 10MB size limit")
                 with open(output_path, "w", encoding="utf-8") as f:
                     f.write(response.text)
-            except (requests.RequestException, ConnectionError, TimeoutError, ValueError) as e:
+            except (
+                requests.RequestException,
+                ConnectionError,
+                TimeoutError,
+                ValueError,
+            ) as e:
                 logger.warning(f"UNSPSC fetch failed: {e}, using fallback data")
                 with open(output_path, "w", encoding="utf-8") as f:
                     json.dump(self.FALLBACK_UNSPSC, f)
@@ -304,7 +309,12 @@ class MCCFetcher(BaseFetcher):
                     raise ValueError("Response exceeds 5MB size limit")
                 with open(output_path, "w", encoding="utf-8") as f:
                     f.write(response.text)
-            except (requests.RequestException, ConnectionError, TimeoutError, ValueError) as e:
+            except (
+                requests.RequestException,
+                ConnectionError,
+                TimeoutError,
+                ValueError,
+            ) as e:
                 logger.warning(f"MCC fetch failed: {e}, using fallback data")
                 with open(output_path, "w", encoding="utf-8") as f:
                     writer = csv.DictWriter(f, fieldnames=["mcc", "description"])

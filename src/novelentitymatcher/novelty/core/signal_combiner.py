@@ -8,7 +8,7 @@ into final novelty decisions.
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set
 
 import numpy as np
 
@@ -367,7 +367,9 @@ class SignalCombiner:
 
         return novel_indices, novelty_scores
 
-    def _extract_features(self, idx: int, metrics: Dict[int, Dict[str, Any]]) -> List[float]:
+    def _extract_features(
+        self, idx: int, metrics: Dict[int, Dict[str, Any]]
+    ) -> List[float]:
         """Extract a fixed-length feature vector from per-sample metrics."""
         sample = metrics.get(idx, {})
         features = []

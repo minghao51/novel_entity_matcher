@@ -61,7 +61,9 @@ class OneClassSVMDetector:
         )
 
         if show_progress:
-            logger.info(f"Training One-Class SVM (nu={self.nu}, kernel={self.kernel})...")
+            logger.info(
+                f"Training One-Class SVM (nu={self.nu}, kernel={self.kernel})..."
+            )
 
         self.oc_svm = OneClassSVM(nu=self.nu, kernel=self.kernel, gamma=self.gamma)
         self.oc_svm.fit(self.known_embeddings)

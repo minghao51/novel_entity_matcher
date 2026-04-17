@@ -613,9 +613,7 @@ Please fix the errors above and return ONLY valid JSON matching the schema."""
         except ImportError:
             AuthenticationError = type("AuthenticationError", (Exception,), {})
             RateLimitError = type("RateLimitError", (Exception,), {})
-            ServiceUnavailableError = type(
-                "ServiceUnavailableError", (Exception,), {}
-            )
+            ServiceUnavailableError = type("ServiceUnavailableError", (Exception,), {})
             LiteLLMAuthError = AuthenticationError
             LiteLLMRateLimitError = RateLimitError
             LiteLLMServiceUnavailableError = ServiceUnavailableError

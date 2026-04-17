@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 
@@ -73,7 +73,9 @@ def compute_characteristics(
             if centroid_norm > 1e-12:
                 emb_norms = np.linalg.norm(class_embeddings, axis=1, keepdims=True)
                 emb_norms = np.clip(emb_norms, 1e-12, None)
-                sims = (class_embeddings @ centroid) / (emb_norms.squeeze() * centroid_norm)
+                sims = (class_embeddings @ centroid) / (
+                    emb_norms.squeeze() * centroid_norm
+                )
                 intra_distances.extend((1.0 - sims).tolist())
 
     inter_distances = []
@@ -140,7 +142,11 @@ def adaptive_weights(
 
     sep = characteristics.class_separability
     density = 1.0 / (1.0 + characteristics.mean_knn_distance)
-    min_samples = min(characteristics.samples_per_class.values()) if characteristics.samples_per_class else 1
+    min_samples = (
+        min(characteristics.samples_per_class.values())
+        if characteristics.samples_per_class
+        else 1
+    )
     eff_dim = characteristics.effective_dimensionality
     imbalance = characteristics.class_balance_entropy
 
@@ -182,7 +188,7 @@ def _effective_dimensionality(embeddings: np.ndarray) -> float:
     except np.linalg.LinAlgError:
         return 0.5
 
-    eigenvalues = s ** 2
+    eigenvalues = s**2
     total = eigenvalues.sum()
     if total < 1e-12:
         return 0.0

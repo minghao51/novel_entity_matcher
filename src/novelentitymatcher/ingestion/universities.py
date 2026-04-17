@@ -263,7 +263,12 @@ class UniversitiesFetcher(BaseFetcher):
                 results = response.json()
                 with open(output_path, "w", encoding="utf-8") as f:
                     json.dump(results, f)
-            except (requests.RequestException, ConnectionError, TimeoutError, ValueError) as e:
+            except (
+                requests.RequestException,
+                ConnectionError,
+                TimeoutError,
+                ValueError,
+            ) as e:
                 logger.warning(f"Wikidata fetch failed: {e}, using fallback data")
                 with open(output_path, "w", encoding="utf-8") as f:
                     json.dump({"fallback": True, "data": self.FALLBACK_UNIVERSITIES}, f)

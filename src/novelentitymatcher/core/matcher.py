@@ -308,6 +308,7 @@ class Matcher:
         blocking_strategy: Optional[Any] = None,
         reranker_model: str = "default",
         verbose: bool = False,
+        metrics_callback: Optional[Callable] = None,
     ):
         validate_entities(entities)
         validate_threshold(threshold)
@@ -336,6 +337,7 @@ class Matcher:
         self.blocking_strategy = blocking_strategy
         self.reranker_model = reranker_model
         self._verbose = verbose
+        self._metrics_callback = metrics_callback
 
         self._async_executor: Optional["AsyncExecutor"] = None
         self._async_fit_lock = asyncio.Lock()
@@ -345,6 +347,29 @@ class Matcher:
         self._has_training_data = self._runtime_state.has_training_data
         self._active_matcher: Optional[Any] = None
         self._detected_mode: Optional[str] = self._runtime_state.detected_mode
+
+    def _emit_metric(
+        self,
+        name: str,
+        value: float,
+        unit: str,
+        labels: Optional[Dict[str, str]] = None,
+    ) -> None:
+        """Emit a metric event if callback is registered.
+
+        Args:
+            name: Metric name
+            value: Numeric value
+            unit: Unit of measurement
+            labels: Optional labels dictionary
+        """
+        if self._metrics_callback is None:
+            return
+
+        from ..monitoring.metrics import create_metric
+
+        event = create_metric(name, value, unit, labels)
+        self._metrics_callback(event)
 
     def _ensure_async_executor(self):
         if self._async_executor is None:
@@ -367,14 +392,20 @@ class Matcher:
 
     def _get_strategy(self) -> "MatchingStrategy":
         """Get the matching strategy for the current training mode."""
+        from .matching_strategy import StrategyConfig
+
+        config = StrategyConfig(
+            threshold=self.threshold,
+            model_name=self.model_name,
+            training_mode=self._training_mode,
+            normalize=self.normalize,
+        )
         facade = MatcherFacade(
             embedding_matcher=self.embedding_matcher,
             entity_matcher=self.entity_matcher,
             bert_matcher=self.bert_matcher,
             hybrid_matcher=self.hybrid_matcher,
-            threshold=self.threshold,
-            model_name=self.model_name,
-            training_mode=self._training_mode,
+            config=config,
         )
         return facade.get_strategy()
 

@@ -103,10 +103,20 @@ class PipelineBuilder:
         Returns:
             Configured PipelineOrchestrator with 5 stages
         """
+        from ..novelty.clustering.scalable import ScalableClusterer
+
         cfg = self._cfg
 
         if run_llm_proposal is None:
             run_llm_proposal = cfg.run_llm_proposal
+
+        # Ensure clusterer is instantiated if clustering is enabled
+        clusterer = cfg.clusterer
+        if clusterer is None and cfg.clustering_enabled:
+            clusterer = ScalableClusterer(
+                backend=cfg.clustering_backend,
+                min_cluster_size=cfg.min_cluster_size,
+            )
 
         stages = [
             MatcherMetadataStage(
@@ -118,11 +128,10 @@ class PipelineBuilder:
                 enabled=cfg.use_novelty_detector,
             ),
             CommunityDetectionStage(
-                clusterer=cfg.clusterer,
+                clusterer=clusterer,
                 enabled=cfg.clustering_enabled,
                 similarity_threshold=cfg.similarity_threshold,
                 min_cluster_size=max(2, cfg.min_cluster_size),
-                backend_name=cfg.clustering_backend,
             ),
             ClusterEvidenceStage(
                 enabled=cfg.evidence_enabled,

@@ -70,7 +70,9 @@ class SetFitCentroidStrategy(NoveltyStrategy):
 
         # Calibrate threshold from reference set if not explicitly set
         if self._config.threshold is None:
-            self._threshold = self._calibrate_threshold(reference_embeddings, reference_labels)
+            self._threshold = self._calibrate_threshold(
+                reference_embeddings, reference_labels
+            )
         else:
             self._threshold = self._config.threshold
 
@@ -184,7 +186,9 @@ class SetFitCentroidStrategy(NoveltyStrategy):
                 query_norm = np.linalg.norm(reference_embeddings[i])
                 centroid_norm = np.linalg.norm(centroid)
                 if query_norm > 0 and centroid_norm > 0:
-                    sim = np.dot(reference_embeddings[i], centroid) / (query_norm * centroid_norm)
+                    sim = np.dot(reference_embeddings[i], centroid) / (
+                        query_norm * centroid_norm
+                    )
                     distances.append(1.0 - sim)
 
         if not distances:

@@ -1,6 +1,5 @@
 """Comprehensive benchmark for all novelty detection strategies."""
 
-import argparse
 import sys
 import time
 from dataclasses import dataclass
@@ -18,25 +17,13 @@ from novelentitymatcher.novelty.config.base import DetectionConfig
 from novelentitymatcher.novelty.config.strategies import (
     ConfidenceConfig,
     KNNConfig,
-    UncertaintyConfig,
-    ClusteringConfig,
-    SelfKnowledgeConfig,
     PatternConfig,
-    OneClassConfig,
-    PrototypicalConfig,
     MahalanobisConfig,
     LOFConfig,
-    SetFitConfig,
 )
-from novelentitymatcher.novelty.strategies.base import NoveltyStrategy
 from novelentitymatcher.novelty.strategies.confidence import ConfidenceStrategy
 from novelentitymatcher.novelty.strategies.knn_distance import KNNDistanceStrategy
-from novelentitymatcher.novelty.strategies.uncertainty import UncertaintyStrategy
-from novelentitymatcher.novelty.strategies.clustering import ClusteringStrategy
-from novelentitymatcher.novelty.strategies.self_knowledge import SelfKnowledgeStrategy
 from novelentitymatcher.novelty.strategies.pattern_impl import PatternScorer
-from novelentitymatcher.novelty.strategies.oneclass_impl import OneClassSVMDetector
-from novelentitymatcher.novelty.strategies.prototypical_impl import PrototypicalDetector
 from novelentitymatcher.novelty.strategies.mahalanobis import (
     MahalanobisDistanceStrategy,
 )
@@ -543,7 +530,6 @@ class StrategyBenchmark:
             for idx, m in metrics.items():
                 all_metrics[idx].update(m)
 
-        from novelentitymatcher.novelty.config.base import DetectionConfig
 
         det_config = DetectionConfig(combine_method="weighted")
         combiner = SignalCombiner(det_config)
@@ -632,7 +618,6 @@ class StrategyBenchmark:
             for idx, m in metrics.items():
                 all_metrics[idx].update(m)
 
-        from novelentitymatcher.novelty.config.base import DetectionConfig
 
         det_config = DetectionConfig(combine_method="voting")
         combiner = SignalCombiner(det_config)
@@ -724,8 +709,6 @@ class StrategyBenchmark:
             for idx, m in metrics.items():
                 all_metrics[idx].update(m)
 
-        from novelentitymatcher.novelty.config.base import DetectionConfig
-        from novelentitymatcher.novelty.config.weights import WeightConfig
 
         det_config = DetectionConfig(
             combine_method="weighted", weights=adjusted_weights

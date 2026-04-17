@@ -100,7 +100,12 @@ class OccupationsFetcher(BaseFetcher):
                     raise ValueError("Response exceeds 100MB size limit")
                 with open(output_path, "wb") as f:
                     f.write(response.content)
-            except (requests.RequestException, ConnectionError, TimeoutError, ValueError) as e:
+            except (
+                requests.RequestException,
+                ConnectionError,
+                TimeoutError,
+                ValueError,
+            ) as e:
                 logger.warning(f"O*NET fetch failed: {e}, using fallback data")
                 fallback_path = self.raw_dir / "occupation_data.txt"
                 with open(fallback_path, "w", encoding="utf-8") as f:

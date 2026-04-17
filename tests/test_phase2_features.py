@@ -3,13 +3,10 @@
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import numpy as np
-import pytest
 
 from novelentitymatcher.novelty.config.strategies import SetFitCentroidConfig
-from novelentitymatcher.novelty.config.weights import WeightConfig
 from novelentitymatcher.novelty.core.adaptive_weights import (
     DatasetCharacteristics,
     adaptive_weights,
@@ -49,20 +46,28 @@ class TestSetFitCentroidStrategy:
         centroid_b = rng.randn(64).astype(np.float32)
         centroid_b /= np.linalg.norm(centroid_b)
 
-        known_embeddings = np.vstack([
-            centroid_a + rng.randn(20, 64).astype(np.float32) * 0.05,
-            centroid_b + rng.randn(20, 64).astype(np.float32) * 0.05,
-        ])
-        known_embeddings = known_embeddings / np.linalg.norm(known_embeddings, axis=1, keepdims=True)
+        known_embeddings = np.vstack(
+            [
+                centroid_a + rng.randn(20, 64).astype(np.float32) * 0.05,
+                centroid_b + rng.randn(20, 64).astype(np.float32) * 0.05,
+            ]
+        )
+        known_embeddings = known_embeddings / np.linalg.norm(
+            known_embeddings, axis=1, keepdims=True
+        )
         labels = ["A"] * 20 + ["B"] * 20
 
         strategy.initialize(known_embeddings, labels, SetFitCentroidConfig())
 
-        query_embeddings = np.vstack([
-            centroid_a + rng.randn(2, 64).astype(np.float32) * 0.02,
-            centroid_b + rng.randn(2, 64).astype(np.float32) * 0.02,
-        ])
-        query_embeddings = query_embeddings / np.linalg.norm(query_embeddings, axis=1, keepdims=True)
+        query_embeddings = np.vstack(
+            [
+                centroid_a + rng.randn(2, 64).astype(np.float32) * 0.02,
+                centroid_b + rng.randn(2, 64).astype(np.float32) * 0.02,
+            ]
+        )
+        query_embeddings = query_embeddings / np.linalg.norm(
+            query_embeddings, axis=1, keepdims=True
+        )
 
         flags, metrics = strategy.detect(
             texts=[""] * 4,
@@ -86,11 +91,15 @@ class TestSetFitCentroidStrategy:
         centroid_b = rng.randn(64).astype(np.float32)
         centroid_b /= np.linalg.norm(centroid_b)
 
-        known_embeddings = np.vstack([
-            centroid_a + rng.randn(10, 64).astype(np.float32) * 0.01,
-            centroid_b + rng.randn(10, 64).astype(np.float32) * 0.01,
-        ])
-        known_embeddings = known_embeddings / np.linalg.norm(known_embeddings, axis=1, keepdims=True)
+        known_embeddings = np.vstack(
+            [
+                centroid_a + rng.randn(10, 64).astype(np.float32) * 0.01,
+                centroid_b + rng.randn(10, 64).astype(np.float32) * 0.01,
+            ]
+        )
+        known_embeddings = known_embeddings / np.linalg.norm(
+            known_embeddings, axis=1, keepdims=True
+        )
         labels = ["A"] * 10 + ["B"] * 10
 
         strategy.initialize(known_embeddings, labels, SetFitCentroidConfig())
@@ -141,6 +150,7 @@ class TestMetaLearnerSignalCombiner:
 
     def _make_config(self, method="weighted"):
         from novelentitymatcher.novelty.config.base import DetectionConfig
+
         return DetectionConfig(
             strategies=["confidence", "knn_distance"],
             combine_method=method,
@@ -194,12 +204,14 @@ class TestMetaLearnerSignalCombiner:
         config = self._make_config("meta_learner")
         combiner = SignalCombiner(config)
 
-        features = np.array([
-            [1.0, 0.8, 0.7, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.6],
-            [0.0, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1],
-            [1.0, 0.9, 0.8, 0.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.7],
-            [0.0, 0.05, 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.05],
-        ])
+        features = np.array(
+            [
+                [1.0, 0.8, 0.7, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.6],
+                [0.0, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1],
+                [1.0, 0.9, 0.8, 0.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.7],
+                [0.0, 0.05, 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.05],
+            ]
+        )
         labels = np.array([1, 0, 1, 0])
 
         accuracy = combiner.train_meta_learner(features, labels)
@@ -241,10 +253,12 @@ class TestMetaLearnerSignalCombiner:
         config = self._make_config("meta_learner")
         combiner = SignalCombiner(config)
 
-        features = np.array([
-            [1.0, 0.8, 0.7, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.6],
-            [0.0, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1],
-        ])
+        features = np.array(
+            [
+                [1.0, 0.8, 0.7, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.6],
+                [0.0, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1],
+            ]
+        )
         labels = np.array([1, 0])
         combiner.train_meta_learner(features, labels)
 
@@ -271,11 +285,13 @@ class TestAdaptiveWeights:
         centroids = rng.randn(3, 64).astype(np.float32)
         centroids = centroids / np.linalg.norm(centroids, axis=1, keepdims=True)
 
-        embeddings = np.vstack([
-            centroids[0] + rng.randn(10, 64).astype(np.float32) * 0.1,
-            centroids[1] + rng.randn(10, 64).astype(np.float32) * 0.1,
-            centroids[2] + rng.randn(10, 64).astype(np.float32) * 0.1,
-        ])
+        embeddings = np.vstack(
+            [
+                centroids[0] + rng.randn(10, 64).astype(np.float32) * 0.1,
+                centroids[1] + rng.randn(10, 64).astype(np.float32) * 0.1,
+                centroids[2] + rng.randn(10, 64).astype(np.float32) * 0.1,
+            ]
+        )
         embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
         labels = ["A"] * 10 + ["B"] * 10 + ["C"] * 10
 

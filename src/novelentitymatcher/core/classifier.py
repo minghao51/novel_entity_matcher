@@ -14,11 +14,14 @@ from ..utils.embeddings import (
 
 from sklearn.linear_model import LogisticRegression
 
+
 def _load_setfit_model_class():
     try:
         from setfit import SetFitModel
     except ImportError as exc:
-        raise ImportError("setfit is required. Install with: pip install setfit") from exc
+        raise ImportError(
+            "setfit is required. Install with: pip install setfit"
+        ) from exc
     return SetFitModel
 
 
@@ -26,7 +29,9 @@ def _load_setfit_trainer_classes():
     try:
         from setfit import Trainer, TrainingArguments
     except ImportError as exc:
-        raise ImportError("setfit is required. Install with: pip install setfit") from exc
+        raise ImportError(
+            "setfit is required. Install with: pip install setfit"
+        ) from exc
     return Trainer, TrainingArguments
 
 
@@ -92,7 +97,9 @@ class SetFitClassifier:
             self._train_fallback_head(embeddings, labels_arr, training_data)
         else:
             try:
-                self.model = get_cached_setfit_model(self.model_name, labels=self.labels)
+                self.model = get_cached_setfit_model(
+                    self.model_name, labels=self.labels
+                )
                 self._use_sentence_transformer_fallback = False
                 Trainer, TrainingArguments = _load_setfit_trainer_classes()
             except ImportError as exc:
@@ -139,7 +146,9 @@ class SetFitClassifier:
                 else:
                     trainer.train()
 
-                embeddings = self.model.model_body.encode(texts, show_progress_bar=False)
+                embeddings = self.model.model_body.encode(
+                    texts, show_progress_bar=False
+                )
                 self._train_logistic_head(embeddings, labels_arr, training_data)
 
         self.is_trained = True
@@ -180,7 +189,9 @@ class SetFitClassifier:
         if self.pca_dims:
             from sklearn.decomposition import PCA
 
-            n_components = min(self.pca_dims, len(training_data) - 1, embeddings.shape[1])
+            n_components = min(
+                self.pca_dims, len(training_data) - 1, embeddings.shape[1]
+            )
             if n_components >= len(self.labels):
                 self.pca = PCA(n_components=n_components)
                 embeddings = self.pca.fit_transform(embeddings)
@@ -283,7 +294,9 @@ class SetFitClassifier:
                 },
                 output_dir / "fallback_artifacts.pkl",
             )
-            with open(output_dir / "fallback_metadata.json", "w", encoding="utf-8") as f:
+            with open(
+                output_dir / "fallback_metadata.json", "w", encoding="utf-8"
+            ) as f:
                 json.dump(
                     {
                         "model_name": self.model_name,

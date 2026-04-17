@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -11,6 +12,20 @@ if TYPE_CHECKING:
     from .bert_classifier import BERTClassifier
     from .hybrid_matcher import HybridMatcher
     from .matcher_shared import TextInput
+
+
+@dataclass
+class StrategyConfig:
+    """Configuration for matching strategies.
+
+    Encapsulates threshold, model settings, and training mode
+    that were previously managed in _EntityMatcher.
+    """
+
+    threshold: float
+    model_name: str
+    training_mode: str
+    normalize: bool = True
 
 
 class MatchingStrategy(ABC):
@@ -259,25 +274,28 @@ class MatcherFacade:
         entity_matcher: "EntityMatcher",
         bert_matcher: "BERTClassifier",
         hybrid_matcher: "HybridMatcher",
-        threshold: float,
-        model_name: str,
-        training_mode: str,
+        config: StrategyConfig,
     ):
         self.embedding_matcher = embedding_matcher
         self.entity_matcher = entity_matcher
         self.bert_matcher = bert_matcher
         self.hybrid_matcher = hybrid_matcher
-        self.threshold = threshold
-        self.model_name = model_name
-        self._training_mode = training_mode
+        self.threshold = config.threshold
+        self.model_name = config.model_name
+        self._training_mode = config.training_mode
+        self._config = config
 
     @staticmethod
     def _resolve_threshold(
         threshold_override: Optional[float], default: float
     ) -> float:
-        if threshold_override is not None:
-            return threshold_override
-        return default
+        """Resolve threshold from override or default.
+
+        Moved from _EntityMatcher to MatcherFacade for better encapsulation.
+        """
+        from .matcher_shared import resolve_threshold
+
+        return resolve_threshold(threshold_override, default)
 
     def get_strategy(self, mode: Optional[str] = None) -> MatchingStrategy:
         """Get strategy instance for the given or current mode."""

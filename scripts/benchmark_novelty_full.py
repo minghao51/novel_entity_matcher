@@ -7,13 +7,11 @@ This benchmark evaluates all novelty detection strategies with:
 - Same depth as the SetFit classification study
 """
 
-import argparse
 import sys
 import time
-import json
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -40,7 +38,6 @@ RANDOM_SEED = 42
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from sentence_transformers import SentenceTransformer
 from novelentitymatcher.novelty.config.base import DetectionConfig
 from novelentitymatcher.novelty.config.weights import WeightConfig
 from novelentitymatcher.novelty.config.strategies import (

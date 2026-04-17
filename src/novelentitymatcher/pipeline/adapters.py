@@ -126,18 +126,16 @@ class CommunityDetectionStage(PipelineStage):
 
     def __init__(
         self,
-        clusterer: Any | None = None,
+        clusterer: Any,
         *,
         enabled: bool = True,
         similarity_threshold: float = 0.75,
         min_cluster_size: int = 2,
-        backend_name: str = "auto",
     ):
         self.clusterer = clusterer
         self.enabled = enabled
         self.similarity_threshold = similarity_threshold
         self.min_cluster_size = min_cluster_size
-        self.backend_name = backend_name
 
     def run(self, context: StageContext) -> StageResult:
         report = context.artifacts["novel_sample_report"]
@@ -196,14 +194,22 @@ class CommunityDetectionStage(PipelineStage):
         try:
             from ..novelty.clustering.scalable import ScalableClusterer
 
-            clusterer = self.clusterer or ScalableClusterer(
-                backend=self.backend_name,
-                min_cluster_size=self.min_cluster_size,
+            if self.clusterer is None:
+                raise ValueError(
+                    "CommunityDetectionStage requires a clusterer instance. "
+                    "Inject ScalableClusterer through PipelineBuilder."
+                )
+
+            if not isinstance(self.clusterer, ScalableClusterer):
+                logger.warning(
+                    f"Expected ScalableClusterer but got {type(self.clusterer).__name__}"
+                )
+
+            labels, _, info = self.clusterer.fit_predict(embeddings)
+            backend_name = str(
+                info.get("backend", getattr(self.clusterer, "backend", "unknown"))
             )
-            labels, _, info = clusterer.fit_predict(embeddings)
-            return [int(label) for label in labels], str(
-                info.get("backend", getattr(clusterer, "backend", self.backend_name))
-            )
+            return [int(label) for label in labels], backend_name
         except (ImportError, ValueError, TypeError, RuntimeError):
             logger.warning(
                 "Clusterer execution failed, falling back to connected components"

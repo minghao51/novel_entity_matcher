@@ -88,7 +88,9 @@ class PrototypicalDetector:
         self.is_trained = True
 
         if show_progress:
-            logger.info(f"Training complete! Computed {len(self.prototypes)} prototypes.")
+            logger.info(
+                f"Training complete! Computed {len(self.prototypes)} prototypes."
+            )
 
     def is_novel(self, text: str) -> Tuple[bool, float, Optional[str]]:
         if not self.is_trained:

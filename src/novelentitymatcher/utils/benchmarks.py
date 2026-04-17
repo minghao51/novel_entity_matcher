@@ -260,9 +260,7 @@ def benchmark_embedding_models(
                         "track": "trained",
                         "section": section_name,
                         "model": alias,
-                        "resolved_model": spec.get("name", alias)
-                        if spec
-                        else alias,
+                        "resolved_model": spec.get("name", alias) if spec else alias,
                         "status": "skipped",
                         "build_time": None,
                         "cold_query_time": None,
