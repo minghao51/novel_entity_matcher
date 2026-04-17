@@ -2,12 +2,73 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
 from .match_result import MatchResultWithMetadata
 from .pipeline_builder import PipelineStageConfig
+
+
+async def collect_match_result_async(
+    matcher: Any,
+    queries: List[str],
+    top_k: int = 5,
+) -> tuple[MatchResultWithMetadata, Dict[str, Any]]:
+    """Async helper to collect match result and reference corpus.
+
+    Consolidates duplicated logic from NovelEntityMatcher and DiscoveryPipeline.
+
+    Args:
+        matcher: Matcher instance
+        queries: List of query texts
+        top_k: Number of top candidates to retrieve
+
+    Returns:
+        Tuple of (match_result, reference_corpus)
+    """
+    match_async = getattr(matcher, "match_async", None)
+    if callable(match_async):
+        result = await match_async(
+            queries,
+            return_metadata=True,
+            top_k=top_k,
+        )
+    else:
+        result = await asyncio.to_thread(
+            matcher.match,
+            queries,
+            return_metadata=True,
+            top_k=top_k,
+        )
+
+    return result, matcher.get_reference_corpus()
+
+
+def collect_match_result_sync(
+    matcher: Any,
+    queries: List[str],
+    top_k: int = 5,
+) -> tuple[MatchResultWithMetadata, Dict[str, Any]]:
+    """Sync helper to collect match result and reference corpus.
+
+    Consolidates duplicated logic from NovelEntityMatcher and DiscoveryPipeline.
+
+    Args:
+        matcher: Matcher instance
+        queries: List of query texts
+        top_k: Number of top candidates to retrieve
+
+    Returns:
+        Tuple of (match_result, reference_corpus)
+    """
+    result = matcher.match(
+        queries,
+        return_metadata=True,
+        top_k=top_k,
+    )
+    return result, matcher.get_reference_corpus()
 
 
 def derive_existing_classes(

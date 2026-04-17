@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -28,7 +27,12 @@ from ..novelty.storage.persistence import export_summary, save_proposals
 from ..novelty.storage.review import ProposalReviewManager, PromotionResult
 from .config import PipelineConfig
 from .contracts import StageContext
-from .discovery_support import build_novel_match_result, derive_existing_classes
+from .discovery_support import (
+    build_novel_match_result,
+    collect_match_result_async,
+    collect_match_result_sync,
+    derive_existing_classes,
+)
 from .match_result import MatchResultWithMetadata
 from .orchestrator import PipelineOrchestrator
 from .pipeline_builder import PipelineBuilder
@@ -222,31 +226,20 @@ class DiscoveryPipeline:
     async def _collect_match_result_async(
         self, queries: List[str]
     ) -> tuple[MatchResultWithMetadata, Dict[str, Any]]:
-        match_async = getattr(self.matcher, "match_async", None)
-        if callable(match_async):
-            result = await match_async(
-                queries,
-                return_metadata=True,
-                top_k=self._config.top_k,
-            )
-        else:
-            result = await asyncio.to_thread(
-                self.matcher.match,
-                queries,
-                return_metadata=True,
-                top_k=self._config.top_k,
-            )
-        return result, self.get_reference_corpus()
+        return await collect_match_result_async(
+            self.matcher,
+            queries,
+            top_k=self._config.top_k,
+        )
 
     def _collect_match_result_sync(
         self, queries: List[str]
     ) -> tuple[MatchResultWithMetadata, Dict[str, Any]]:
-        result = self.matcher.match(
+        return collect_match_result_sync(
+            self.matcher,
             queries,
-            return_metadata=True,
             top_k=self._config.top_k,
         )
-        return result, self.get_reference_corpus()
 
     # ------------------------------------------------------------------
     # Public API: fit
@@ -508,6 +501,48 @@ class DiscoveryPipeline:
         self, discovery_id: str | None = None
     ) -> list[ProposalReviewRecord]:
         return self.review_manager.list_records(discovery_id)
+
+    def export_metrics(
+        self,
+        format: str = "json",
+        path: Optional[str] = None,
+    ) -> Path:
+        """Export collected metrics to file.
+
+        Args:
+            format: Export format ('json' or 'csv')
+            path: Output file path (default: './metrics_{timestamp}.{ext}')
+
+        Returns:
+            Path to exported metrics file
+
+        Raises:
+            ValueError: If format is not 'json' or 'csv'
+        """
+        from ..core.monitoring import PerformanceMonitor
+
+        if format not in ("json", "csv"):
+            raise ValueError(f"Unsupported format: {format}. Use 'json' or 'csv'.")
+
+        if path is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            path = f"metrics_{timestamp}.{format}"
+
+        monitor = PerformanceMonitor()
+
+        # Collect basic stats
+        monitor.record("num_entities", len(self.entities))
+        if hasattr(self.matcher, "model_name"):
+            monitor.record("model_name", 0)
+        monitor.record("acceptance_threshold", self.acceptance_threshold)
+        monitor.record("use_novelty_detector", 1 if self._config.ood_enabled else 0)
+        monitor.record("auto_save", 1 if self._config.auto_save else 0)
+
+        # Export
+        if format == "json":
+            return monitor.export_json(path)
+        else:
+            return monitor.export_csv(path)
 
     # ------------------------------------------------------------------
     # Backward-compatibility classmethod
