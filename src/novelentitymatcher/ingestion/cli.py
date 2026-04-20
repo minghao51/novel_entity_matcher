@@ -89,7 +89,6 @@ def main(argv=None):
                     name, args.raw_dir, args.processed_dir
                 )
 
-                # Import dynamically based on name
                 module = __import__(
                     f"novelentitymatcher.ingestion.{name}",
                     fromlist=[name.capitalize() + "Fetcher"],

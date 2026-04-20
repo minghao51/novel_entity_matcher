@@ -5,12 +5,57 @@ from pathlib import Path
 from typing import Any, Optional, Union
 import asyncio
 import csv
+import requests
 
 from novelentitymatcher.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
 PathLike = Union[str, Path]
+
+DEFAULT_MAX_BYTES = 50 * 1024 * 1024
+
+
+def _fetch_url(
+    url: str,
+    output_path: Path,
+    expected_content_type: Optional[str] = None,
+    max_bytes: int = DEFAULT_MAX_BYTES,
+    timeout: int = 60,
+) -> None:
+    """Fetch a URL and write its content to a file with validation.
+
+    Args:
+        url: URL to fetch.
+        output_path: Path to write the response body.
+        expected_content_type: If set, the response Content-Type header must
+            contain this substring or a ValueError is raised.
+        max_bytes: Maximum allowed response body size in bytes. Defaults to 50MB.
+        timeout: Request timeout in seconds.
+
+    Raises:
+        ValueError: If Content-Type is unexpected or response exceeds max_bytes.
+        requests.HTTPError: If the response status is 4xx/5xx.
+    """
+    response = requests.get(url, timeout=timeout)
+    response.raise_for_status()
+
+    if expected_content_type:
+        content_type = response.headers.get("Content-Type", "")
+        if expected_content_type not in content_type:
+            raise ValueError(
+                f"Unexpected Content-Type '{content_type}' for {url}; "
+                f"expected '{expected_content_type}'"
+            )
+
+    if len(response.content) > max_bytes:
+        raise ValueError(
+            f"Response from {url} exceeds {max_bytes} bytes "
+            f"({len(response.content)} bytes received)"
+        )
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(response.text)
 
 
 class BaseFetcher(ABC):

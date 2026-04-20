@@ -17,7 +17,6 @@ from novelentitymatcher.novelty.config.base import DetectionConfig
 from novelentitymatcher.novelty.config.strategies import (
     ConfidenceConfig,
     KNNConfig,
-    PatternConfig,
     MahalanobisConfig,
     LOFConfig,
 )
@@ -161,13 +160,13 @@ class StrategyBenchmark:
         all_texts = known_texts + ood_texts
         embeddings = encode_texts(self.model, all_texts)
         known_emb = embeddings[: len(known_texts)]
-        ood_emb = embeddings[len(known_texts) :]
 
         results = []
         for threshold in thresholds:
-            config = ConfidenceConfig(threshold=threshold)
             strategy = ConfidenceStrategy()
-            strategy.initialize(known_emb, known_labels, config)
+            strategy.initialize(
+                known_emb, known_labels, ConfidenceConfig(threshold=threshold)
+            )
 
             start_time = time.time()
             flags, metrics = strategy.detect(
@@ -216,7 +215,6 @@ class StrategyBenchmark:
         all_texts = known_texts + ood_texts
         embeddings = encode_texts(self.model, all_texts)
         known_emb = embeddings[: len(known_texts)]
-        ood_emb = embeddings[len(known_texts) :]
 
         results = []
         for k in k_values:
@@ -269,7 +267,6 @@ class StrategyBenchmark:
         all_texts = known_texts + ood_texts
         embeddings = encode_texts(self.model, all_texts)
         known_emb = embeddings[: len(known_texts)]
-        ood_emb = embeddings[len(known_texts) :]
 
         results = []
         for threshold in thresholds:
@@ -324,7 +321,6 @@ class StrategyBenchmark:
         all_texts = known_texts + ood_texts
         embeddings = encode_texts(self.model, all_texts)
         known_emb = embeddings[: len(known_texts)]
-        ood_emb = embeddings[len(known_texts) :]
 
         results = []
         for n_neighbors in n_neighbors_list:
@@ -424,16 +420,11 @@ class StrategyBenchmark:
             thresholds = [0.3, 0.4, 0.5, 0.6, 0.7]
 
         all_texts = known_texts + ood_texts
-        embeddings = encode_texts(self.model, all_texts)
-        known_emb = embeddings[: len(known_texts)]
-        ood_emb = embeddings[len(known_texts) :]
 
         scorer = PatternScorer(known_texts)
 
         results = []
         for threshold in thresholds:
-            config = PatternConfig(threshold=threshold)
-
             start_time = time.time()
             novelty_scores = [scorer.score_novelty(t) for t in all_texts]
             inference_time = time.time() - start_time
@@ -530,7 +521,6 @@ class StrategyBenchmark:
             for idx, m in metrics.items():
                 all_metrics[idx].update(m)
 
-
         det_config = DetectionConfig(combine_method="weighted")
         combiner = SignalCombiner(det_config)
         novel_indices, novelty_scores = combiner.combine(strategy_outputs, all_metrics)
@@ -617,7 +607,6 @@ class StrategyBenchmark:
         for _, (_, metrics) in strategy_outputs.items():
             for idx, m in metrics.items():
                 all_metrics[idx].update(m)
-
 
         det_config = DetectionConfig(combine_method="voting")
         combiner = SignalCombiner(det_config)
@@ -709,7 +698,6 @@ class StrategyBenchmark:
             for idx, m in metrics.items():
                 all_metrics[idx].update(m)
 
-
         det_config = DetectionConfig(
             combine_method="weighted", weights=adjusted_weights
         )
@@ -761,13 +749,11 @@ def run_benchmark():
         if ds_name == "ag_news":
             df = load_dataset_data("ag_news")
             label_col = "label"
-            class_names = ["World", "Sports", "Business", "Sci/Tech"]
         else:
             df = load_dataset_data("go_emotions")
             df = df[df["labels"].apply(lambda x: isinstance(x, list) and len(x) == 1)]
             df["labels"] = df["labels"].apply(lambda x: x[0])
             label_col = "labels"
-            class_names = None
 
         known_data, ood_data, ood_labels = create_ood_split(
             df, label_col, OOD_RATIO, MAX_SAMPLES

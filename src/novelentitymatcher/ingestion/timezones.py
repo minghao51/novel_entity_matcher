@@ -2,9 +2,8 @@
 
 from typing import Any
 import json
-import requests
 
-from .base import BaseFetcher, resolve_output_dirs
+from .base import BaseFetcher, _fetch_url, resolve_output_dirs
 
 
 class TimezonesFetcher(BaseFetcher):
@@ -17,11 +16,12 @@ class TimezonesFetcher(BaseFetcher):
         output_path = self.raw_dir / "zone.tab"
 
         if not output_path.exists():
-            response = requests.get(self.TZ_URL, timeout=60)
-            response.raise_for_status()
-
-            with open(output_path, "w", encoding="utf-8") as f:
-                f.write(response.text)
+            _fetch_url(
+                self.TZ_URL,
+                output_path,
+                expected_content_type="text",
+                max_bytes=5 * 1024 * 1024,
+            )
 
         data = []
         with open(output_path, "r", encoding="utf-8") as f:
@@ -82,18 +82,16 @@ class WorldTimeAPIFetcher(BaseFetcher):
         output_path = self.raw_dir / "timezone_list.json"
 
         if not output_path.exists():
-            response = requests.get(self.TZ_LIST_URL, timeout=60)
-            response.raise_for_status()
-            timezones = response.json()
-
-            with open(output_path, "w", encoding="utf-8") as f:
-                json.dump(timezones, f)
-
-            return [{"timezone": tz} for tz in timezones]
+            _fetch_url(
+                self.TZ_LIST_URL,
+                output_path,
+                expected_content_type="json",
+                max_bytes=5 * 1024 * 1024,
+            )
 
         with open(output_path, "r", encoding="utf-8") as f:
             timezones = json.load(f)
-            return [{"timezone": tz} for tz in timezones]
+        return [{"timezone": tz} for tz in timezones]
 
     def process(self, raw_data: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Convert to standardized format."""

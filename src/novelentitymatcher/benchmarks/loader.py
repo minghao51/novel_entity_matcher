@@ -161,6 +161,16 @@ class DatasetLoader:
             url = f"{base_url}/{path}"
             response = requests.get(url, timeout=60)
             response.raise_for_status()
+            content_type = response.headers.get("Content-Type", "")
+            if "csv" not in content_type and "text" not in content_type:
+                raise ValueError(
+                    f"Unexpected Content-Type '{content_type}' for {url}; expected CSV data"
+                )
+            if len(response.content) > 100 * 1024 * 1024:
+                raise ValueError(
+                    f"Response from {url} exceeds 100MB limit "
+                    f"({len(response.content)} bytes received)"
+                )
             return pd.read_csv(StringIO(response.text))
 
         def _fetch_all():

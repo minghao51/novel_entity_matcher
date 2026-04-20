@@ -1,4 +1,5 @@
 import pytest
+
 from novelentitymatcher.utils.embeddings import get_default_cache
 
 
@@ -12,7 +13,6 @@ def clear_model_cache():
 
 
 def pytest_configure(config):
-    """Support asyncio-marked tests when pytest-asyncio is not installed."""
     config.addinivalue_line(
         "markers",
         "asyncio: compatibility alias for async tests executed via anyio",
@@ -20,7 +20,17 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(items):
-    """Map legacy asyncio markers onto anyio so async tests still execute."""
     for item in items:
         if "asyncio" in item.keywords and "anyio" not in item.keywords:
             item.add_marker(pytest.mark.anyio)
+
+        nodeid = item.nodeid
+        if "/unit/" in nodeid and not any(
+            m.name == "unit" for m in item.iter_markers()
+        ):
+            item.add_marker(pytest.mark.unit)
+        elif "/integration/" in nodeid:
+            if not any(m.name == "integration" for m in item.iter_markers()):
+                item.add_marker(pytest.mark.integration)
+            if not any(m.name == "slow" for m in item.iter_markers()):
+                item.add_marker(pytest.mark.slow)

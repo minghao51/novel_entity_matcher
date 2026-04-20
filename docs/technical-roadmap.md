@@ -82,12 +82,12 @@ The long-term discovery flow should be:
 
 1. Normalize and vectorize input text.
 2. Run known-entity matching for standard retrieval/classification.
-3. Route low-confidence or out-of-distribution items into a dedicated discovery path.
+3. Route out-of-distribution items using **Conformal Prediction** (statistically grounded p-values rather than raw distance thresholds).
 4. Cluster likely novel items into communities.
-5. Extract concise statistical evidence for each cluster.
-6. Run LLM proposal/judgment at the cluster level, not per sample.
+5. Extract concise statistical evidence and keyword centroids for each cluster.
+6. Run LLM proposal/judgment to generate class names and **discovered attribute schemas**.
 7. Validate structured outputs and persist review-ready proposals.
-8. Support review, approval, promotion, and retraining/index refresh.
+8. Support review, approval, and **instant promotion** (updating ANN indexes without full retraining).
 
 ### Architectural principles
 
@@ -96,22 +96,22 @@ The long-term discovery flow should be:
 - Breaking API changes are acceptable when they simplify the architecture materially.
 - Configuration should drive stage selection and optional capabilities.
 - LLM usage should stay optional, bounded, and cost-aware.
-- Promotion of new classes should be explicit and auditable.
+- Promotion of new classes should be explicit, auditable, and **computationally efficient**.
 
 ## Current vs Target Gap Analysis
 
 | Area | Current state | Target state | Gap |
 |---|---|---|---|
 | Matching API | `Matcher` is the main public interface | Matching becomes one subsystem within a broader pipeline | Medium |
-| Novelty detection | Multi-strategy detector exists | Dedicated OOD/discovery stage contracts with clearer boundaries | Medium |
+| Novelty detection | Multi-strategy detector exists | **Conformalized OOD** with p-value calibration for rigorous routing | Medium |
 | Discovery orchestration | `NovelEntityMatcher` chains matcher, detector, proposer | Explicit pipeline orchestrator with named stages and stable stage I/O | High |
 | Clustering | Scalable clustering exists | Clustering becomes a standard pipeline stage with interchangeable backends | Medium |
-| Evidence extraction | No dedicated keyword/statistical extraction stage | Cluster summarization before LLM calls | High |
-| LLM proposals | LLM proposer exists | Cluster-level judge/proposer with validation and retries | Medium |
+| Evidence extraction | No dedicated keyword/statistical extraction stage | Cluster summarization and keyword centroids before LLM calls | High |
+| LLM proposals | LLM proposer exists | Cluster-level judge/proposer with **Attribute Discovery (Schema Evolution)** | Medium |
 | Schema enforcement | Pydantic models exist | Retry-aware schema enforcement and cleaner proposal contracts | Medium |
-| HITL workflow | Persistence/export exists | Review queue, promotion workflow, index/model update path | High |
+| HITL workflow | Persistence/export exists | **Active Learning Loop** with instant index updates and promotion workflow | High |
 | Configuration | Current config/model registries exist | Stage-oriented pipeline configuration | Medium |
-| Documentation | Multiple roadmap narratives, some stale | One active technical roadmap aligned to repo reality | Completed by this task |
+| Documentation | Multiple roadmap narratives, some stale | One active technical roadmap aligned to repo reality | Completed |
 
 ## Roadmap Phases
 
@@ -185,18 +185,14 @@ Exit criteria:
 Goal: improve the quality and efficiency of novel class discovery.
 
 - Split discovery into explicit stages:
-  - OOD filtering
-  - community detection
-  - cluster evidence extraction
-  - proposal/judgment
-  - schema enforcement
+  - **Conformal OOD Filtering:** Replace raw thresholding with p-value calibration. Implement a calibration step during initialization to provide statistical guarantees on novelty.
+  - **Community Detection:** Make clustering backends pluggable through a stage contract.
+  - **Cluster Evidence Extraction:** Add statistical keywords, representative examples, and **keyword centroids**. Implement token-budget-aware context packaging.
+  - **Schema Evolution (Proposal):** Update the LLM proposer to discover common attributes/fields, proposing a data structure (Pydantic schema) for the new class.
+  - **Schema Enforcement:** Retry-aware validation of LLM outputs against discovered schemas.
 - Add stronger OOD methods where they materially outperform threshold-only logic.
-  - candidate methods include Mahalanobis distance and local outlier approaches
+  - candidate methods include Mahalanobis distance with conformal wrapping and local outlier approaches.
 - Keep current clustering support, but make clustering backends pluggable through a stage contract.
-- Add a cluster summarization layer before LLM use.
-  - statistical keywords
-  - representative examples
-  - token-budget-aware context packaging
 - Refactor proposal generation toward cluster-level calls instead of sample-level prompting.
 
 Planned public/interface changes:
@@ -209,6 +205,8 @@ Exit criteria:
 - cluster-level discovery path works without per-sample LLM dependence
 - structured proposal generation uses evidence extracted from clusters
 - discovery cost and latency are meaningfully improved on benchmark scenarios
+- novelty signals use calibrated p-values
+- proposal generation includes attribute/field discovery
 
 ### Phase 4: Human-in-the-Loop Review and Promotion
 
@@ -220,10 +218,10 @@ Goal: make novel concept handling operational rather than just analytical.
   - approved
   - rejected
   - promoted
-- Add promotion mechanics that can update the known reference index and trigger refresh/retrain workflows where required.
+- **Close the Active Learning Loop:** Add promotion mechanics that instantly update the `Matcher`'s ANN index (FAISS/HNSW) with new centroids, avoiding the need for heavy model retraining for every discovery.
 - Define safe promotion boundaries for:
   - embedding index updates
-  - matcher retraining requirements
+  - matcher retraining requirements (batched or scheduled)
   - proposal provenance and audit metadata
 - Provide a thin operational surface first.
   - CLI or programmatic review flows are enough initially
@@ -239,6 +237,7 @@ Exit criteria:
 - approved concepts can be promoted through a documented workflow
 - promotion updates are traceable and testable
 - rejected proposals do not silently re-enter the system as if they were unresolved
+- **instant searchable availability** of promoted entities
 
 ### Phase 5: Public Pipeline API and 1.0 Readiness
 
@@ -341,11 +340,34 @@ Technical roadmap work is only complete when accompanied by verification.
 
 These should guide the next few engineering cycles:
 
-1. Keep docs, package metadata, and architecture notes aligned with the current repository.
-2. Stabilize matcher-to-novelty metadata contracts used by downstream discovery logic.
-3. Introduce internal pipeline contracts with minimal disruption to the current public API.
-4. Upgrade discovery stages toward cluster-level evidence extraction and proposal generation.
-5. Add review/promotion lifecycle support before attempting a polished dashboard or service layer.
+ 1. Keep docs, package metadata, and architecture notes aligned with the current repository.
+ 2. Stabilize matcher-to-novelty metadata contracts used by downstream discovery logic.
+ 3. Introduce internal pipeline contracts with minimal disruption to the current public API.
+ 4. Upgrade discovery stages toward cluster-level evidence extraction and proposal generation.
+ 5. Add review/promotion lifecycle support before attempting a polished dashboard or service layer.
+
+## Implementation Priorities (2026)
+
+### Immediate Priority (Stability & Rigor)
+
+ 1. **Synchronize Tests:** Update `tests/test_pipeline_contracts.py` to match current `CommunityDetectionStage` and stage contracts.
+ 2. **Conformal Calibration:** Implement a calibration stage for the `MahalanobisDistanceStrategy` to output p-values.
+ 3. **Instant Promotion:** Implement `Matcher.add_entity()` and `Matcher.add_entities()` to support hot-swapping/updating the internal vector index without full retraining.
+ 4. **Unify Discovery Logic:** Refactor `NovelEntityMatcher` and `DiscoveryPipeline` to share a common orchestration core.
+ 5. **Refactor Matcher:** Decompose `matcher.py` by extracting `MatcherRuntimeState`, `MatcherComponentFactory`, and specific strategy implementations into separate modules within `src/novelentitymatcher/core/`.
+
+### Medium Term (Robustness & Performance)
+
+ 6. **Attribute Discovery Prompting:** Enhance `LLMClassProposer` prompts and schemas to extract common fields and data structures (schemas) from novel clusters.
+ 7. **Standardize Observability:** Replace all `print()` calls with `logger.info()` or `logger.error()`. Standardize on specific exception types instead of broad `except Exception:` blocks.
+ 8. **Implement Model Caching:** Introduce a global model registry/cache in `src/novelentitymatcher/backends/` to ensure that expensive models (SentenceTransformers, LLM clients) are only loaded once.
+ 9. **Harden Ingestion:** Add validation logic to `src/novelentitymatcher/ingestion/` to check status codes, file sizes, and data integrity before processing external datasets.
+
+### Long Term (Scalability)
+
+ 10. **Input Validation Layer:** Add Pydantic or explicit type validation at the public API boundaries (`Matcher.match`, `DiscoveryPipeline.discover`) to provide clearer error messages for malformed inputs.
+ 11. **Streaming & Batching:** Implement chunked/streaming processing for large-scale entity sets to reduce the memory footprint of holding all embeddings in RAM.
+ 12. **Streaming Active Learning:** Support high-throughput telemetry where novelty detection and promotion happen as a background "learning" task.
 
 ## Definition of Done for This Roadmap
 

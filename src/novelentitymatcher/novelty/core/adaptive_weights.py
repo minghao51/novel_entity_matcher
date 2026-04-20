@@ -61,8 +61,6 @@ def compute_characteristics(
         samples_per_class[label] = int(np.sum(mask))
         centroids[label] = np.mean(class_embeddings, axis=0)
 
-    centroid_array = np.array([centroids[l] for l in unique_labels])
-
     intra_distances = []
     for label in unique_labels:
         mask = np.array(labels) == label
@@ -96,7 +94,9 @@ def compute_characteristics(
 
     effective_dim = _effective_dimensionality(embeddings)
 
-    class_counts = np.array([samples_per_class[l] for l in unique_labels], dtype=float)
+    class_counts = np.array(
+        [samples_per_class[cls] for cls in unique_labels], dtype=float
+    )
     probs = class_counts / class_counts.sum()
     entropy = float(-np.sum(probs * np.log(probs + 1e-12)))
     max_entropy = np.log(n_classes) if n_classes > 1 else 1.0
@@ -155,7 +155,6 @@ def adaptive_weights(
     uncertainty_mult = 1.0 + 0.3 * eff_dim
     confidence_mult = 1.0 + 0.3 * (1.0 - imbalance)
 
-    lof_mult = max(0.2, 1.0 - 0.5 * max(0, (5 - min_samples) / 5.0))
     oneclass_mult = max(0.2, 1.0 - 0.5 * max(0, (5 - min_samples) / 5.0))
 
     return WeightConfig(

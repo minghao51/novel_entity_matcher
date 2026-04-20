@@ -109,11 +109,11 @@ class EmbeddingMatcher:
         )
 
         if batch_size is not None:
-            self.embeddings = self.model.encode(
+            self.embeddings = self.model.encode(  # type: ignore[assignment]
                 self.entity_texts, batch_size=batch_size
             )
         else:
-            self.embeddings = self.model.encode(self.entity_texts)
+            self.embeddings = self.model.encode(self.entity_texts)  # type: ignore[assignment]
 
         if isinstance(self.embeddings, list):
             self.embeddings = np.array(self.embeddings)

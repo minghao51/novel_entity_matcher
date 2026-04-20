@@ -13,7 +13,6 @@ class TestAsyncExecutor:
         assert executor._executor is not None
         executor.shutdown()
 
-    @pytest.mark.asyncio
     async def test_run_in_thread(self):
         executor = AsyncExecutor()
 
@@ -24,7 +23,6 @@ class TestAsyncExecutor:
         assert result == 10
         executor.shutdown()
 
-    @pytest.mark.asyncio
     async def test_run_in_thread_batch(self):
         executor = AsyncExecutor()
 
@@ -36,14 +34,12 @@ class TestAsyncExecutor:
         assert results == [2, 4, 6, 8, 10]
         executor.shutdown()
 
-    @pytest.mark.asyncio
     async def test_shutdown(self):
         executor = AsyncExecutor()
         executor.shutdown()
         # Should not raise
         executor.shutdown()
 
-    @pytest.mark.asyncio
     async def test_run_after_shutdown_raises(self):
         executor = AsyncExecutor()
         executor.shutdown()

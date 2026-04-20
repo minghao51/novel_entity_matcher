@@ -31,7 +31,7 @@ dependencies = [
     "setfit>=1.0.0",
     "datasets>=2.14.0",
     "torch>=2.0.0",
-    "transformers>=4.45.0",
+    "transformers>=4.45.0,<5.0.0",
     "nltk>=3.9.2",
     "requests>=2.31.0",
     "rank-bm25>=0.2.2",
@@ -154,13 +154,18 @@ include = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = ["--strict-markers", "-ra", "--durations=10", "--import-mode=importlib"]
 markers = [
+    "unit: fast isolated tests with no external dependencies",
     "integration: tests that depend on external services or network access",
     "slow: tests that are expensive to run in default CI",
+    "e2e: end-to-end / feature tests that exercise multiple components",
     "hf: Hugging Face model-backed tests",
     "llm: tests that make actual LLM API calls (require API key, slow)",
     "llm_mocked: tests that involve LLM logic but use mocks instead of real API calls",
-    "e2e: end-to-end / feature tests that exercise multiple components",
+    "serial: tests that cannot be run in parallel",
+    "network: tests that require internet access",
+    "smoke: critical path tests",
 ]
 asyncio_mode = "auto"
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional
+from typing import Any, Awaitable, Callable, List, Optional
 
 from .adapters import (
     ClusterEvidenceStage,
@@ -20,7 +20,7 @@ class PipelineStageConfig:
     """Configuration for a single pipeline stage."""
 
     collect_sync: Optional[Callable[[List[str]], tuple[Any, dict]]] = None
-    collect_async: Optional[Callable[[List[str]], tuple[Any, dict]]] = None
+    collect_async: Optional[Callable[[List[str]], Awaitable[tuple[Any, dict]]]] = None
     detector: Any = None
     clusterer: Any = None
     llm_proposer: Any = None
@@ -159,7 +159,9 @@ class PipelineBuilder:
         config: Any,
         *,
         collect_sync: Optional[Callable[[List[str]], tuple[Any, dict]]] = None,
-        collect_async: Optional[Callable[[List[str]], tuple[Any, dict]]] = None,
+        collect_async: Optional[
+            Callable[[List[str]], Awaitable[tuple[Any, dict]]]
+        ] = None,
         detector: Any = None,
         clusterer: Any = None,
         llm_proposer: Any = None,

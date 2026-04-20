@@ -4,7 +4,7 @@ import torch
 
 from novelentitymatcher.backends.sentencetransformer import HFEmbedding, HFReranker
 
-pytestmark = [pytest.mark.hf, pytest.mark.integration, pytest.mark.slow]
+pytestmark = [pytest.mark.hf]
 
 
 class TestHFEmbedding:

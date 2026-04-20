@@ -2,9 +2,8 @@
 
 from typing import Any
 import csv
-import requests
 
-from .base import BaseFetcher, resolve_output_dirs
+from .base import BaseFetcher, _fetch_url, resolve_output_dirs
 
 
 class CurrenciesFetcher(BaseFetcher):
@@ -17,11 +16,12 @@ class CurrenciesFetcher(BaseFetcher):
         output_path = self.raw_dir / "currencies.csv"
 
         if not output_path.exists():
-            response = requests.get(self.SOURCE_URL, timeout=60)
-            response.raise_for_status()
-
-            with open(output_path, "w", encoding="utf-8") as f:
-                f.write(response.text)
+            _fetch_url(
+                self.SOURCE_URL,
+                output_path,
+                expected_content_type="csv",
+                max_bytes=5 * 1024 * 1024,
+            )
 
         data = []
         with open(output_path, "r", encoding="utf-8") as f:

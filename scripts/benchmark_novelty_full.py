@@ -13,30 +13,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
 import numpy as np
 import pandas as pd
 from datasets import load_dataset
 from sklearn.metrics import roc_auc_score, average_precision_score
 from sklearn.model_selection import train_test_split
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
 from sentence_transformers import SentenceTransformer
-
-import warnings
-
-warnings.filterwarnings("ignore")
-
-
-MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-DATASETS = ["ag_news", "goemotions_novelty"]
-MAX_TRAIN = 200
-MAX_VAL = 200
-MAX_TEST = 500
-OOD_RATIO = 0.2
-RANDOM_SEED = 42
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from novelentitymatcher.novelty.config.base import DetectionConfig
 from novelentitymatcher.novelty.config.weights import WeightConfig
@@ -54,6 +39,18 @@ from novelentitymatcher.novelty.core.adaptive_weights import (
     adaptive_weights,
 )
 from novelentitymatcher.novelty.strategies.pattern_impl import PatternScorer
+
+import warnings
+
+warnings.filterwarnings("ignore")
+
+MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+DATASETS = ["ag_news", "goemotions_novelty"]
+MAX_TRAIN = 200
+MAX_VAL = 200
+MAX_TEST = 500
+OOD_RATIO = 0.2
+RANDOM_SEED = 42
 
 
 @dataclass
@@ -201,16 +198,16 @@ def load_and_split_data(
         test_texts=test_texts,
         test_labels=test_labels,
         known_classes=[
-            all_classes[int(l)]
-            if str(l).isdigit() and int(l) < len(all_classes)
-            else str(l)
-            for l in known_labels
+            all_classes[int(label)]
+            if str(label).isdigit() and int(label) < len(all_classes)
+            else str(label)
+            for label in known_labels
         ],
         ood_classes=[
-            all_classes[int(l)]
-            if str(l).isdigit() and int(l) < len(all_classes)
-            else str(l)
-            for l in ood_labels
+            all_classes[int(label)]
+            if str(label).isdigit() and int(label) < len(all_classes)
+            else str(label)
+            for label in ood_labels
         ],
     )
 
@@ -262,7 +259,7 @@ def compute_metrics(
 
 
 def prepare_binary_labels(labels: list[str]) -> np.ndarray:
-    return np.array([1 if l == "__OOD__" else 0 for l in labels])
+    return np.array([1 if label == "__OOD__" else 0 for label in labels])
 
 
 class NoveltyBenchmark:
@@ -365,16 +362,13 @@ class NoveltyBenchmark:
         test_true = prepare_binary_labels(split.test_labels)
 
         class_means = {}
-        for label in set(split.train_labels):
-            mask = np.array([l == label for l in split.train_labels])
-            class_means[label] = train_emb[mask].mean(axis=0)
+        for lbl in set(split.train_labels):
+            mask = np.array([sample == lbl for sample in split.train_labels])
+            class_means[lbl] = train_emb[mask].mean(axis=0)
 
         global_cov = np.cov(train_emb, rowvar=False) + 1e-6 * np.eye(train_emb.shape[1])
         cov_inv = np.linalg.inv(global_cov)
 
-        novelty_train = self._compute_mahalanobis_novelty(
-            train_emb, class_means, cov_inv
-        )
         novelty_val = self._compute_mahalanobis_novelty(val_emb, class_means, cov_inv)
         novelty_test = self._compute_mahalanobis_novelty(test_emb, class_means, cov_inv)
 
@@ -802,7 +796,6 @@ class NoveltyBenchmark:
         start_time = time.time()
 
         unique_labels = list(set(train_labels))
-        label_to_idx = {l: i for i, l in enumerate(unique_labels)}
 
         positive_pairs = []
         for i, emb in enumerate(train_emb):
@@ -818,9 +811,8 @@ class NoveltyBenchmark:
                     class_centroids[label] = []
                 class_centroids[label].append(train_emb[i])
             centroids = np.array(
-                [np.mean(class_centroids[l], axis=0) for l in unique_labels]
+                [np.mean(class_centroids[cls], axis=0) for cls in unique_labels]
             )
-            centroid_map = {l: centroids[i] for i, l in enumerate(unique_labels)}
 
             val_sim = np.array(
                 [np.max(cosine_similarity([e], centroids)[0]) for e in val_emb]
@@ -882,9 +874,9 @@ class NoveltyBenchmark:
         novelty_knn_test = self._compute_knn_novelty(train_emb, test_emb, k=5)
 
         class_means = {}
-        for label in set(split.train_labels):
-            mask = np.array([l == label for l in split.train_labels])
-            class_means[label] = train_emb[mask].mean(axis=0)
+        for lbl in set(split.train_labels):
+            mask = np.array([sample == lbl for sample in split.train_labels])
+            class_means[lbl] = train_emb[mask].mean(axis=0)
         global_cov = np.cov(train_emb, rowvar=False) + 1e-6 * np.eye(train_emb.shape[1])
         cov_inv = np.linalg.inv(global_cov)
         novelty_maha_val = self._compute_mahalanobis_novelty(
@@ -1072,7 +1064,6 @@ class NoveltyBenchmark:
 
         if combine_method == "meta_learner":
             # Build training features from val set (using val labels as ground truth)
-            feature_keys = combiner._feature_names
             train_features = []
             train_labels_arr = []
             for idx in sorted(all_metrics_val.keys()):

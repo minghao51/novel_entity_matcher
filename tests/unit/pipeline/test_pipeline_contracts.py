@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+from novelentitymatcher.novelty.clustering.scalable import ScalableClusterer
 from novelentitymatcher.pipeline import (
     ClusterEvidenceStage,
     CommunityDetectionStage,
@@ -38,7 +39,9 @@ def test_internal_pipeline_runs_stages_in_order():
                 collect_async=lambda inputs: (match_result, reference),
             ),
             OODDetectionStage(detector=detector, enabled=True),
-            CommunityDetectionStage(enabled=True, min_cluster_size=1),
+            CommunityDetectionStage(
+                ScalableClusterer(), enabled=True, min_cluster_size=1
+            ),
             ClusterEvidenceStage(enabled=True),
             ProposalStage(
                 proposer=proposer,
@@ -96,7 +99,9 @@ def test_cluster_and_evidence_stages_enrich_novel_samples():
         },
     )
 
-    clustered = CommunityDetectionStage(enabled=True, min_cluster_size=1).run(context)
+    clustered = CommunityDetectionStage(
+        ScalableClusterer(), enabled=True, min_cluster_size=1
+    ).run(context)
     context.artifacts.update(clustered.artifacts)
     evidenced = ClusterEvidenceStage(enabled=True).run(context)
 
@@ -138,10 +143,9 @@ def test_community_detection_auto_backend_does_not_crash():
     )
 
     clustered = CommunityDetectionStage(
+        ScalableClusterer(backend="auto"),
         enabled=True,
         min_cluster_size=1,
-        backend_name="auto",
-        clusterer=None,
     ).run(context)
 
     assert clustered.metadata["backend"] in {

@@ -15,6 +15,15 @@ from novelentitymatcher.novelty.strategies.base import NoveltyStrategy
 from novelentitymatcher.novelty.core.strategies import StrategyRegistry
 
 
+def _hdbscan_available() -> bool:
+    try:
+        import hdbscan  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
 class TestNoveltyDetector:
     @pytest.fixture
     def sample_texts(self):
@@ -90,6 +99,7 @@ class TestNoveltyDetector:
         detector = NoveltyDetector(config=DetectionConfig())
         assert detector.config.combine_method == "weighted"
 
+    @pytest.mark.skipif(not _hdbscan_available(), reason="hdbscan not installed")
     def test_knn_distance_detection(
         self,
         detector,
@@ -140,6 +150,7 @@ class TestNoveltyDetector:
                 predicted_classes=sample_predictions,
             )
 
+    @pytest.mark.skipif(not _hdbscan_available(), reason="hdbscan not installed")
     def test_full_detection_pipeline(
         self,
         detector,

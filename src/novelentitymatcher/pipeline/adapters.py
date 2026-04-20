@@ -6,7 +6,7 @@ import logging
 import math
 import re
 from collections import Counter, defaultdict
-from typing import Any, Callable, Iterable, List, Optional
+from typing import Any, Awaitable, Callable, Iterable, List, Optional
 
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -49,9 +49,14 @@ class MatcherMetadataStage(PipelineStage):
 
     def __init__(
         self,
-        collect_sync: Callable[[List[str]], Any],
-        collect_async: Callable[[List[str]], Any],
+        collect_sync: Callable[[List[str]], tuple[Any, dict[Any, Any]]] | None,
+        collect_async: Callable[
+            [List[str]], Awaitable[tuple[Any, dict[Any, Any]]]
+        ]
+        | None,
     ):
+        if collect_sync is None or collect_async is None:
+            raise ValueError("collect_sync and collect_async must be provided")
         self._collect_sync = collect_sync
         self._collect_async = collect_async
 

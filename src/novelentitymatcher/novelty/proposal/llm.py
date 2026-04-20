@@ -45,7 +45,7 @@ class LLMProposalSchema(BaseModel):
     )
 
     @classmethod
-    def schema_json(cls) -> str:
+    def get_schema_json(cls) -> str:
         """Return the JSON Schema representation."""
         return json.dumps(cls.model_json_schema(), indent=2)
 
@@ -117,11 +117,12 @@ class LLMClassProposer:
         self.max_tokens = max_tokens
         self.max_clusters_per_summary = max_clusters_per_summary
 
-        # Set API keys as environment variables for litellm
+        # Set API keys as environment variables for litellm, then discard from memory
         for provider, key in self._api_keys.items():
             env_var = self._provider_to_env_var(provider)
             if env_var and not os.getenv(env_var):
                 os.environ[env_var] = key
+        self._api_keys = {}
 
     def _default_model_for_provider(self, provider: Optional[str]) -> str:
         """Select a default model, optionally honoring a preferred provider."""
@@ -573,7 +574,7 @@ Your previous response failed validation with the following errors:
 {chr(10).join(error_lines)}
 
 --- REQUIRED JSON SCHEMA ---
-{LLMProposalSchema.schema_json()}
+{LLMProposalSchema.get_schema_json()}
 
 Please fix the errors above and return ONLY valid JSON matching the schema."""
 

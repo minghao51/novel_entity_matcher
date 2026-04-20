@@ -8,10 +8,6 @@ from typing import Any, Dict, Iterable, List, Optional
 
 import pandas as pd
 
-from novelentitymatcher.utils.logging_config import get_logger
-
-logger = get_logger(__name__)
-
 from ..config import (
     get_embedding_model_aliases,
     get_model_spec,
@@ -25,6 +21,10 @@ from .benchmark_reporting import (
     print_benchmark_report,
     save_benchmark_report,
 )
+
+from novelentitymatcher.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 __all__ = [
     "format_benchmark_summary",
