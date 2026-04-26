@@ -13,7 +13,12 @@ from ..config import Config
 from ..core.matcher import Matcher
 from ..novelty.clustering.scalable import ScalableClusterer
 from ..novelty.config.base import DetectionConfig
-from ..novelty.config.strategies import ClusteringConfig, ConfidenceConfig, KNNConfig
+from ..novelty.config.strategies import (
+    ClusteringConfig,
+    ConfidenceConfig,
+    KNNConfig,
+    MahalanobisConfig,
+)
 from ..novelty.core.detector import NoveltyDetector
 from ..novelty.entity_matcher import NovelEntityMatchResult
 from ..novelty.proposal.llm import LLMClassProposer
@@ -108,6 +113,13 @@ class DiscoveryPipeline:
         self.clusterer = ScalableClusterer(
             backend=self._config.clustering_backend,
             min_cluster_size=clustering_cfg.min_cluster_size,
+            min_samples=(
+                self._config.clustering_min_samples or clustering_cfg.hdbscan_min_samples
+            ),
+            cluster_selection_epsilon=(
+                self._config.clustering_cluster_selection_epsilon
+            ),
+            umap_metric=self._config.clustering_metric,
         )
 
         # Build owned LLMClassProposer
@@ -145,8 +157,7 @@ class DiscoveryPipeline:
     def config(self) -> PipelineConfig:
         return self._config
 
-    @staticmethod
-    def _build_detection_config(kwargs: Dict[str, Any]) -> DetectionConfig:
+    def _build_detection_config(self, kwargs: Dict[str, Any]) -> DetectionConfig:
         detection_config = kwargs.get("detection_config")
         if isinstance(detection_config, DetectionConfig):
             return detection_config
@@ -154,20 +165,24 @@ class DiscoveryPipeline:
             return DetectionConfig(**detection_config)
 
         novelty_strategy = kwargs.get("novelty_strategy", "knn_distance")
-        confidence_threshold = kwargs.get("confidence_threshold", 0.3)
+        confidence_threshold = kwargs.get(
+            "confidence_threshold", self._config.confidence_threshold
+        )
         knn_k = kwargs.get("knn_k", 5)
         knn_distance_threshold = kwargs.get("knn_distance_threshold", 0.6)
-        min_cluster_size = kwargs.get("min_cluster_size", 5)
+        min_cluster_size = kwargs.get("min_cluster_size", self._config.min_cluster_size)
 
-        strategy = novelty_strategy.lower()
-        if strategy == "confidence":
-            strategies = ["confidence"]
-        elif strategy in {"knn", "knn_distance", "distance"}:
-            strategies = ["confidence", "knn_distance"]
-        elif strategy in {"cluster", "clustering"}:
-            strategies = ["confidence", "knn_distance", "clustering"]
-        else:
-            strategies = ["confidence", "knn_distance", "clustering"]
+        strategies = list(self._config.ood_strategies)
+        if not strategies:
+            strategy = novelty_strategy.lower()
+            if strategy == "confidence":
+                strategies = ["confidence"]
+            elif strategy in {"knn", "knn_distance", "distance"}:
+                strategies = ["confidence", "knn_distance"]
+            elif strategy in {"cluster", "clustering"}:
+                strategies = ["confidence", "knn_distance", "clustering"]
+            else:
+                strategies = ["confidence", "knn_distance", "clustering"]
 
         return DetectionConfig(
             strategies=strategies,
@@ -176,7 +191,23 @@ class DiscoveryPipeline:
                 k=knn_k,
                 distance_threshold=knn_distance_threshold,
             ),
-            clustering=ClusteringConfig(min_cluster_size=min_cluster_size),
+            clustering=ClusteringConfig(
+                min_cluster_size=min_cluster_size,
+                hdbscan_min_samples=(
+                    self._config.clustering_min_samples or min_cluster_size
+                ),
+                cluster_selection_epsilon=(
+                    self._config.clustering_cluster_selection_epsilon
+                ),
+            ),
+            mahalanobis=MahalanobisConfig(
+                use_class_conditional=(
+                    self._config.ood_mahalanobis_mode == "class_conditional"
+                ),
+                calibration_mode=self._config.ood_calibration_mode,
+                calibration_alpha=self._config.ood_calibration_alpha,
+                calibration_method=self._config.ood_calibration_method,
+            ),
         )
 
     # ------------------------------------------------------------------
@@ -272,6 +303,7 @@ class DiscoveryPipeline:
             use_novelty_detector=self.use_novelty_detector,
             acceptance_threshold=self.acceptance_threshold,
             return_alternatives=return_alternatives,
+            existing_classes=existing_classes,
         )
 
     async def match_async(
@@ -289,6 +321,7 @@ class DiscoveryPipeline:
             use_novelty_detector=self.use_novelty_detector,
             acceptance_threshold=self.acceptance_threshold,
             return_alternatives=return_alternatives,
+            existing_classes=existing_classes,
         )
 
     def match_batch(
@@ -319,6 +352,7 @@ class DiscoveryPipeline:
                 use_novelty_detector=self.use_novelty_detector,
                 acceptance_threshold=self.acceptance_threshold,
                 return_alternatives=return_alternatives,
+                existing_classes=existing_classes,
             )
             for idx, text in enumerate(texts)
         ]
@@ -400,24 +434,6 @@ class DiscoveryPipeline:
             report.metadata["summary_file"] = summary_path
 
         return report
-
-    async def discover_async(
-        self,
-        queries: List[str],
-        *,
-        existing_classes: Optional[List[str]] = None,
-        context: Optional[str] = None,
-        return_metadata: bool = True,
-        run_llm_proposal: Optional[bool] = None,
-    ) -> NovelClassDiscoveryReport:
-        """Alias for discover() for explicit async usage."""
-        return await self.discover(
-            queries,
-            existing_classes=existing_classes,
-            context=context,
-            return_metadata=return_metadata,
-            run_llm_proposal=run_llm_proposal,
-        )
 
     def _coerce_novel_sample_report(self, report: Any) -> NovelSampleReport:
         if isinstance(report, NovelSampleReport):
@@ -519,30 +535,18 @@ class DiscoveryPipeline:
         Raises:
             ValueError: If format is not 'json' or 'csv'
         """
-        from ..core.monitoring import PerformanceMonitor
+        from .discovery_support import export_pipeline_metrics
 
-        if format not in ("json", "csv"):
-            raise ValueError(f"Unsupported format: {format}. Use 'json' or 'csv'.")
-
-        if path is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            path = f"metrics_{timestamp}.{format}"
-
-        monitor = PerformanceMonitor()
-
-        # Collect basic stats
-        monitor.record("num_entities", len(self.entities))
+        metrics: dict[str, Any] = {
+            "num_entities": len(self.entities),
+            "acceptance_threshold": self.acceptance_threshold,
+            "use_novelty_detector": bool(self._config.ood_enabled),
+            "auto_save": bool(self._config.auto_save),
+        }
         if hasattr(self.matcher, "model_name"):
-            monitor.record("model_name", 0)
-        monitor.record("acceptance_threshold", self.acceptance_threshold)
-        monitor.record("use_novelty_detector", 1 if self._config.ood_enabled else 0)
-        monitor.record("auto_save", 1 if self._config.auto_save else 0)
+            metrics["model_name"] = str(self.matcher.model_name)
 
-        # Export
-        if format == "json":
-            return monitor.export_json(path)
-        else:
-            return monitor.export_csv(path)
+        return export_pipeline_metrics(metrics=metrics, format=format, path=path)
 
     # ------------------------------------------------------------------
     # Backward-compatibility classmethod

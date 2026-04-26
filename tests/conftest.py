@@ -12,13 +12,6 @@ def clear_model_cache():
     cache.clear()
 
 
-def pytest_configure(config):
-    config.addinivalue_line(
-        "markers",
-        "asyncio: compatibility alias for async tests executed via anyio",
-    )
-
-
 def pytest_collection_modifyitems(items):
     for item in items:
         if "asyncio" in item.keywords and "anyio" not in item.keywords:

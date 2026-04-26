@@ -29,14 +29,13 @@ from ..core.matcher import Matcher
 from ..pipeline.contracts import StageContext
 from ..pipeline.discovery_support import (
     build_novel_match_result,
-    build_stage_config,
     collect_match_result_async,
     collect_match_result_sync,
     derive_existing_classes,
 )
 from ..pipeline.match_result import MatchResultWithMetadata
 from ..pipeline.orchestrator import PipelineOrchestrator
-from ..pipeline.pipeline_builder import PipelineBuilder
+from ..pipeline.pipeline_builder import PipelineBuilder, PipelineStageConfig
 from ..utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -277,7 +276,7 @@ class NovelEntityMatcher:
         run_llm_proposal: bool = True,
     ) -> PipelineOrchestrator:
         clustering_cfg = self.detection_config.clustering
-        stage_config = build_stage_config(
+        stage_config = PipelineStageConfig(
             collect_sync=self._collect_match_result_sync,
             collect_async=self._collect_match_result_async,
             detector=self.detector,
@@ -344,6 +343,7 @@ class NovelEntityMatcher:
             use_novelty_detector=self.use_novelty_detector,
             acceptance_threshold=self.acceptance_threshold,
             return_alternatives=return_alternatives,
+            existing_classes=existing_classes,
         )
 
     async def match_async(
@@ -361,6 +361,7 @@ class NovelEntityMatcher:
             use_novelty_detector=self.use_novelty_detector,
             acceptance_threshold=self.acceptance_threshold,
             return_alternatives=return_alternatives,
+            existing_classes=existing_classes,
         )
 
     def match_batch(
@@ -391,6 +392,7 @@ class NovelEntityMatcher:
                 use_novelty_detector=self.use_novelty_detector,
                 acceptance_threshold=self.acceptance_threshold,
                 return_alternatives=return_alternatives,
+                existing_classes=existing_classes,
             )
             for idx, text in enumerate(texts)
         ]
@@ -521,31 +523,19 @@ class NovelEntityMatcher:
         Raises:
             ValueError: If format is not 'json' or 'csv'
         """
-        from ..core.monitoring import PerformanceMonitor
+        from ..pipeline.discovery_support import export_pipeline_metrics
 
-        if format not in ("json", "csv"):
-            raise ValueError(f"Unsupported format: {format}. Use 'json' or 'csv'.")
-
-        if path is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            path = f"metrics_{timestamp}.{format}"
-
-        monitor = PerformanceMonitor()
-
-        # Collect basic stats
-        monitor.record("num_entities", len(self.entities))
+        metrics: dict[str, Any] = {
+            "num_entities": len(self.entities),
+            "acceptance_threshold": self.acceptance_threshold,
+            "use_novelty_detector": bool(self.use_novelty_detector),
+        }
         if hasattr(self.matcher, "model_name"):
-            monitor.record("model_name", 0)
+            metrics["model_name"] = str(self.matcher.model_name)
         if hasattr(self.matcher, "_training_mode"):
-            monitor.record("training_mode", 0)
-        monitor.record("acceptance_threshold", self.acceptance_threshold)
-        monitor.record("use_novelty_detector", 1 if self.use_novelty_detector else 0)
+            metrics["training_mode"] = getattr(self.matcher, "_training_mode")
 
-        # Export
-        if format == "json":
-            return monitor.export_json(path)
-        else:
-            return monitor.export_csv(path)
+        return export_pipeline_metrics(metrics=metrics, format=format, path=path)
 
 
 def create_novel_entity_matcher(

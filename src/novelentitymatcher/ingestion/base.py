@@ -116,18 +116,18 @@ class BaseFetcher(ABC):
         Returns:
             Path to saved file
         """
-        logger.info(f"Fetching {self.__class__.__name__} data...")
+        logger.info("Fetching %s data...", self.__class__.__name__)
         raw_data = self.fetch()
 
-        logger.info(f"Processing {len(raw_data)} records...")
+        logger.info("Processing %d records...", len(raw_data))
         processed_data = self.process(raw_data)
 
-        logger.info(f"Saving to {output_filename} (batch_size={batch_size})...")
+        logger.info("Saving to %s (batch_size=%d)...", output_filename, batch_size)
         output_path = self.save_csv(
             processed_data, output_filename, batch_size=batch_size
         )
 
-        logger.info(f"Done! Saved {len(processed_data)} records to {output_path}")
+        logger.info("Done! Saved %d records to %s", len(processed_data), output_path)
         return output_path
 
     async def run_async(
@@ -147,25 +147,26 @@ class BaseFetcher(ABC):
             Path to saved file
         """
 
-        async def _fetch():
-            if semaphore:
-                async with semaphore:
-                    return self.fetch()
-            return self.fetch()
-
-        logger.info(f"Fetching {self.__class__.__name__} data...")
+        logger.info("Fetching %s data...", self.__class__.__name__)
         loop = asyncio.get_running_loop()
-        raw_data = await loop.run_in_executor(None, _fetch)
+        if semaphore:
+            await semaphore.acquire()
+            try:
+                raw_data = await loop.run_in_executor(None, self.fetch)
+            finally:
+                semaphore.release()
+        else:
+            raw_data = await loop.run_in_executor(None, self.fetch)
 
-        logger.info(f"Processing {len(raw_data)} records...")
+        logger.info("Processing %d records...", len(raw_data))
         processed_data = self.process(raw_data)
 
-        logger.info(f"Saving to {output_filename} (batch_size={batch_size})...")
+        logger.info("Saving to %s (batch_size=%d)...", output_filename, batch_size)
         output_path = self.save_csv(
             processed_data, output_filename, batch_size=batch_size
         )
 
-        logger.info(f"Done! Saved {len(processed_data)} records to {output_path}")
+        logger.info("Done! Saved %d records to %s", len(processed_data), output_path)
         return output_path
 
 

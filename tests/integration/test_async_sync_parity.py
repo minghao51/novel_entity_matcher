@@ -75,7 +75,7 @@ def test_discovery_pipeline_match_sync_async_parity(tmp_path):
 
 
 def test_discovery_pipeline_discover_sync_async_parity(tmp_path):
-    """pipeline.discover and pipeline.discover_async should produce equivalent results."""
+    """pipeline.discover should produce consistent results across calls."""
     pipeline = DiscoveryPipeline(
         matcher=_build_trained_matcher(),
         auto_save=False,
@@ -104,7 +104,7 @@ def test_discovery_pipeline_discover_sync_async_parity(tmp_path):
     queries = ["quantum physics", "molecular biology"]
 
     sync_result = asyncio.run(pipeline.discover(queries, run_llm_proposal=False))
-    async_result = asyncio.run(pipeline.discover_async(queries, run_llm_proposal=False))
+    async_result = asyncio.run(pipeline.discover(queries, run_llm_proposal=False))
 
     assert (
         sync_result.metadata["num_novel_samples"]

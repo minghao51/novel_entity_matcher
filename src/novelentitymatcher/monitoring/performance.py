@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
-from novelentitymatcher.utils.logging_config import get_logger
+from ..utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -157,7 +157,7 @@ class PerformanceMonitor:
             "raw_timings": self.to_dict(),
         }
         output_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        logger.info(f"Exported metrics to {output_path}")
+        logger.info("Exported metrics to %s", output_path)
         return output_path
 
     def export_csv(self, filepath: str) -> Path:
@@ -171,5 +171,5 @@ class PerformanceMonitor:
         """
         output_path = Path(filepath)
         self._write_csv(output_path)
-        logger.info(f"Exported metrics to {output_path}")
+        logger.info("Exported metrics to %s", output_path)
         return output_path

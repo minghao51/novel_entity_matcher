@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import logging
-import math
 import re
 from collections import Counter, defaultdict
 from typing import Any, Awaitable, Callable, Iterable, List, Optional
 
 import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
 
+from ..novelty.extraction import ClusterEvidenceExtractor
 from ..novelty.schemas import ClusterEvidence, DiscoveryCluster, NovelSampleReport
 from .contracts import PipelineStage, StageContext, StageResult
 
@@ -62,6 +61,7 @@ class MatcherMetadataStage(PipelineStage):
 
     def run(self, context: StageContext) -> StageResult:
         match_result, reference = self._collect_sync(context.inputs)
+        match_method = (match_result.metadata or {}).get("match_method")
         return StageResult(
             stage_name=self.name,
             artifacts={
@@ -71,11 +71,14 @@ class MatcherMetadataStage(PipelineStage):
             metadata={
                 "num_queries": len(context.inputs),
                 "candidate_top_k": (match_result.metadata or {}).get("top_k"),
+                "match_method": match_method,
             },
+            stage_config_snapshot={"top_k": (match_result.metadata or {}).get("top_k")},
         )
 
     async def run_async(self, context: StageContext) -> StageResult:
         match_result, reference = await self._collect_async(context.inputs)
+        match_method = (match_result.metadata or {}).get("match_method")
         return StageResult(
             stage_name=self.name,
             artifacts={
@@ -85,7 +88,9 @@ class MatcherMetadataStage(PipelineStage):
             metadata={
                 "num_queries": len(context.inputs),
                 "candidate_top_k": (match_result.metadata or {}).get("top_k"),
+                "match_method": match_method,
             },
+            stage_config_snapshot={"top_k": (match_result.metadata or {}).get("top_k")},
         )
 
 
@@ -94,9 +99,21 @@ class OODDetectionStage(PipelineStage):
 
     name = "ood"
 
-    def __init__(self, detector: Any, enabled: bool = True):
+    def __init__(
+        self,
+        detector: Any,
+        enabled: bool = True,
+        ood_strategies: Optional[List[str]] = None,
+        ood_calibration_mode: str = "none",
+        ood_calibration_alpha: float = 0.1,
+        ood_mahalanobis_mode: str = "class_conditional",
+    ):
         self.detector = detector
         self.enabled = enabled
+        self.ood_strategies = ood_strategies
+        self.ood_calibration_mode = ood_calibration_mode
+        self.ood_calibration_alpha = ood_calibration_alpha
+        self.ood_mahalanobis_mode = ood_mahalanobis_mode
 
     def run(self, context: StageContext) -> StageResult:
         if not self.enabled:
@@ -120,6 +137,16 @@ class OODDetectionStage(PipelineStage):
             metadata={
                 "num_novel_samples": len(report.novel_samples),
                 "strategies": list(getattr(report, "detection_strategies", [])),
+                "ood_calibration_mode": self.ood_calibration_mode,
+                "ood_calibration_alpha": self.ood_calibration_alpha,
+                "ood_mahalanobis_mode": self.ood_mahalanobis_mode,
+            },
+            stage_config_snapshot={
+                "enabled": self.enabled,
+                "ood_strategies": self.ood_strategies,
+                "ood_calibration_mode": self.ood_calibration_mode,
+                "ood_calibration_alpha": self.ood_calibration_alpha,
+                "ood_mahalanobis_mode": self.ood_mahalanobis_mode,
             },
         )
 
@@ -136,11 +163,13 @@ class CommunityDetectionStage(PipelineStage):
         enabled: bool = True,
         similarity_threshold: float = 0.75,
         min_cluster_size: int = 2,
+        clustering_metric: str = "cosine",
     ):
         self.clusterer = clusterer
         self.enabled = enabled
         self.similarity_threshold = similarity_threshold
         self.min_cluster_size = min_cluster_size
+        self.clustering_metric = clustering_metric
 
     def run(self, context: StageContext) -> StageResult:
         report = context.artifacts["novel_sample_report"]
@@ -207,10 +236,14 @@ class CommunityDetectionStage(PipelineStage):
 
             if not isinstance(self.clusterer, ScalableClusterer):
                 logger.warning(
-                    f"Expected ScalableClusterer but got {type(self.clusterer).__name__}"
+                    "Expected ScalableClusterer but got %s",
+                    type(self.clusterer).__name__,
                 )
 
-            labels, _, info = self.clusterer.fit_predict(embeddings)
+            labels, _, info = self.clusterer.fit_predict(
+                embeddings,
+                metric=self.clustering_metric,
+            )
             backend_name = str(
                 info.get("backend", getattr(self.clusterer, "backend", "unknown"))
             )
@@ -297,17 +330,19 @@ class ClusterEvidenceStage(PipelineStage):
         max_keywords: int = 8,
         max_examples: int = 4,
         token_budget: int = 256,
-        use_tfidf: bool = True,
-        use_centroid: bool = True,
         use_rake: bool = True,
+        evidence_method: str = "tfidf",
+        use_tfidf: bool | None = None,
     ):
         self.enabled = enabled
         self.max_keywords = max_keywords
         self.max_examples = max_examples
         self.token_budget = token_budget
-        self.use_tfidf = use_tfidf
-        self.use_centroid = use_centroid
         self.use_rake = use_rake
+        if use_tfidf is not None:
+            evidence_method = "tfidf" if use_tfidf else "centroid"
+        self.evidence_method = evidence_method
+        self.use_tfidf = self.evidence_method == "tfidf"
 
     def run(self, context: StageContext) -> StageResult:
         clusters: list[DiscoveryCluster] = list(
@@ -330,7 +365,7 @@ class ClusterEvidenceStage(PipelineStage):
                 for index in cluster.sample_indices
                 if index in samples_by_index
             ]
-            evidence = self._build_evidence(samples)
+            evidence = self._build_evidence(samples, context)
             cluster.keywords = list(evidence.keywords)
             cluster.evidence = evidence
             enriched.append(cluster)
@@ -340,6 +375,14 @@ class ClusterEvidenceStage(PipelineStage):
             artifacts={"discovery_clusters": enriched},
             metadata={
                 "num_clusters_with_evidence": len(enriched),
+                "token_budget": self.token_budget,
+                "evidence_method": self.evidence_method,
+            },
+            stage_config_snapshot={
+                "evidence_method": self.evidence_method,
+                "use_tfidf": self.use_tfidf,
+                "max_keywords": self.max_keywords,
+                "max_examples": self.max_examples,
                 "token_budget": self.token_budget,
             },
         )
@@ -356,32 +399,41 @@ class ClusterEvidenceStage(PipelineStage):
             if sample.novelty_score is not None
         ]
 
-        if self.use_tfidf and len(texts) > 1:
-            keywords = self._compute_tfidf_keywords(texts)
-        else:
-            keyword_counts: Counter[str] = Counter()
-            for text in texts:
-                keyword_counts.update(self._tokenize(text))
-            keywords = [
-                token for token, _ in keyword_counts.most_common(self.max_keywords)
-            ]
+        sample_indices = [sample.index for sample in samples]
+        cluster_embeddings = None
+        if context is not None:
+            match_result = context.artifacts.get("match_result")
+            if match_result is not None and hasattr(match_result, "embeddings"):
+                try:
+                    cluster_embeddings = np.asarray(
+                        [
+                            match_result.embeddings[idx]
+                            for idx in sample_indices
+                            if idx < len(match_result.embeddings)
+                        ]
+                    )
+                except (IndexError, TypeError):
+                    cluster_embeddings = None
 
+        extractor = ClusterEvidenceExtractor(
+            method=self.evidence_method,
+            max_keywords=self.max_keywords,
+            max_examples=self.max_examples,
+            token_budget=self.token_budget,
+        )
+        base_evidence = extractor.extract(
+            cluster_texts=texts,
+            cluster_embeddings=cluster_embeddings,
+        )
+        keywords = list(base_evidence.keywords)
         rake_keywords: list[str] = []
         if self.use_rake:
             rake_keywords = self._extract_rake_keywords(texts)
 
-        sample_indices = [sample.index for sample in samples]
-        if self.use_centroid and context is not None:
-            representatives = self._compute_centroid_representatives(
-                context, sample_indices, texts
-            )
-        else:
-            representatives = self._truncate_examples(texts)
-
         return ClusterEvidence(
             keywords=keywords,
             rake_keywords=rake_keywords,
-            representative_examples=representatives,
+            representative_examples=list(base_evidence.representative_examples),
             sample_indices=sample_indices,
             predicted_classes=sorted(set(predicted_classes)),
             confidence_summary={
@@ -393,75 +445,8 @@ class ClusterEvidenceStage(PipelineStage):
                 ),
             },
             token_budget=self.token_budget,
-            metadata={"sample_count": len(samples)},
+            metadata={"sample_count": len(samples), "evidence_method": self.evidence_method},
         )
-
-    def _compute_tfidf_keywords(self, texts: list[str]) -> list[str]:
-        if not texts:
-            return []
-
-        joined_texts = [" ".join(self._tokenize(text)) for text in texts]
-        if not any(joined_texts):
-            return []
-
-        try:
-            tfidf_vectorizer = TfidfVectorizer(
-                stop_words=list(_STOPWORDS),
-                token_pattern=r"[a-zA-Z0-9]+",
-                max_features=1000,
-            )
-            tfidf_matrix = tfidf_vectorizer.fit_transform(joined_texts)
-        except ValueError:
-            return []
-
-        feature_names = tfidf_vectorizer.get_feature_names_out()
-        avg_scores = np.asarray(tfidf_matrix.mean(axis=0)).flatten()
-        ranked_indices = avg_scores.argsort()[::-1]
-        return [feature_names[i] for i in ranked_indices[: self.max_keywords]]
-
-    def _compute_centroid_representatives(
-        self,
-        context: StageContext,
-        sample_indices: list[int],
-        texts: list[str],
-    ) -> list[str]:
-        match_result = context.artifacts.get("match_result")
-        if match_result is None or not hasattr(match_result, "embeddings"):
-            return self._truncate_examples(texts)
-
-        embeddings = match_result.embeddings
-        try:
-            cluster_embeddings = np.asarray(
-                [embeddings[idx] for idx in sample_indices if idx < len(embeddings)]
-            )
-        except (IndexError, TypeError):
-            return self._truncate_examples(texts)
-
-        if len(cluster_embeddings) == 0:
-            return self._truncate_examples(texts)
-
-        centroid = cluster_embeddings.mean(axis=0)
-        centroid_norm = np.linalg.norm(centroid)
-        if centroid_norm < 1e-12:
-            return self._truncate_examples(texts)
-
-        embeddings_norm = np.linalg.norm(cluster_embeddings, axis=1, keepdims=True)
-        embeddings_norm = np.clip(embeddings_norm, a_min=1e-12, a_max=None)
-        similarities = (cluster_embeddings @ centroid) / (
-            embeddings_norm.squeeze() * centroid_norm
-        )
-        top_indices = np.argsort(-similarities)[: self.max_examples]
-
-        representatives: list[str] = []
-        tokens_used = 0
-        for idx in top_indices:
-            text = texts[int(idx)]
-            token_estimate = max(1, math.ceil(len(text.split()) * 1.2))
-            if tokens_used + token_estimate > self.token_budget and representatives:
-                break
-            representatives.append(text)
-            tokens_used += token_estimate
-        return representatives
 
     def _extract_rake_keywords(self, texts: list[str]) -> list[str]:
         joined_text = " ".join(texts)
@@ -510,17 +495,6 @@ class ClusterEvidenceStage(PipelineStage):
                     break
         return results
 
-    def _truncate_examples(self, texts: list[str]) -> list[str]:
-        examples: list[str] = []
-        tokens_used = 0
-        for text in texts[: self.max_examples]:
-            token_estimate = max(1, math.ceil(len(text.split()) * 1.2))
-            if tokens_used + token_estimate > self.token_budget and examples:
-                break
-            examples.append(text)
-            tokens_used += token_estimate
-        return examples
-
     def _tokenize(self, text: str) -> list[str]:
         return [
             token
@@ -542,6 +516,10 @@ class ProposalStage(PipelineStage):
         context_text: Optional[str] = None,
         max_retries: int = 2,
         force_cluster_level: bool = True,
+        proposal_mode: str = "cluster",
+        proposal_schema_discovery: bool = False,
+        proposal_schema_max_attributes: int = 10,
+        proposal_hierarchical: bool = True,
     ):
         self.proposer = proposer
         self._existing_classes_resolver = existing_classes_resolver
@@ -549,6 +527,10 @@ class ProposalStage(PipelineStage):
         self.context_text = context_text
         self.max_retries = max_retries
         self.force_cluster_level = force_cluster_level
+        self.proposal_mode = proposal_mode
+        self.proposal_schema_discovery = proposal_schema_discovery
+        self.proposal_schema_max_attributes = proposal_schema_max_attributes
+        self.proposal_hierarchical = proposal_hierarchical
 
     def run(self, context: StageContext) -> StageResult:
         report = context.artifacts["novel_sample_report"]
@@ -559,36 +541,11 @@ class ProposalStage(PipelineStage):
 
         if self.enabled and report.novel_samples:
             try:
-                if discovery_clusters and self.force_cluster_level:
-                    if hasattr(self.proposer, "propose_from_clusters"):
-                        class_proposals = self.proposer.propose_from_clusters(
-                            discovery_clusters=discovery_clusters,
-                            existing_classes=existing_classes,
-                            context=self.context_text,
-                            max_retries=self.max_retries,
-                        )
-                    else:
-                        cluster_samples = self._flatten_clusters(discovery_clusters)
-                        class_proposals = self.proposer.propose_classes(
-                            novel_samples=cluster_samples,
-                            existing_classes=existing_classes,
-                            context=self.context_text,
-                        )
-                elif discovery_clusters and hasattr(
-                    self.proposer, "propose_from_clusters"
-                ):
-                    class_proposals = self.proposer.propose_from_clusters(
-                        discovery_clusters=discovery_clusters,
-                        existing_classes=existing_classes,
-                        context=self.context_text,
-                        max_retries=self.max_retries,
-                    )
-                else:
-                    class_proposals = self.proposer.propose_classes(
-                        novel_samples=report.novel_samples,
-                        existing_classes=existing_classes,
-                        context=self.context_text,
-                    )
+                class_proposals = self._generate_proposals(
+                    report=report,
+                    discovery_clusters=discovery_clusters,
+                    existing_classes=existing_classes,
+                )
             except (
                 ValueError,
                 TypeError,
@@ -606,8 +563,96 @@ class ProposalStage(PipelineStage):
                 "generated": class_proposals is not None,
                 "num_clusters": len(discovery_clusters),
                 "force_cluster_level": self.force_cluster_level,
+                "proposal_mode": self.proposal_mode,
+                "proposal_schema_discovery": self.proposal_schema_discovery,
+                "proposal_schema_max_attributes": self.proposal_schema_max_attributes,
                 "error": error,
             },
+            stage_config_snapshot={
+                "proposal_mode": self.proposal_mode,
+                "proposal_schema_discovery": self.proposal_schema_discovery,
+                "proposal_schema_max_attributes": self.proposal_schema_max_attributes,
+                "max_retries": self.max_retries,
+                "proposal_hierarchical": self.proposal_hierarchical,
+            },
+        )
+
+    def _generate_proposals(
+        self,
+        *,
+        report: Any,
+        discovery_clusters: list[Any],
+        existing_classes: list[str],
+    ) -> Any:
+        use_cluster_mode = self.proposal_mode in {"cluster", "rag_cluster"} and (
+            discovery_clusters and self.force_cluster_level
+        )
+        use_cluster_fallback = (
+            self.proposal_mode in {"cluster", "rag_cluster"}
+            and discovery_clusters
+            and hasattr(self.proposer, "propose_from_clusters")
+        )
+
+        if use_cluster_mode:
+            return self._propose_from_clusters(discovery_clusters, existing_classes)
+
+        if self.proposal_mode == "sample":
+            return self.proposer.propose_classes(
+                novel_samples=report.novel_samples,
+                existing_classes=existing_classes,
+                context=self.context_text,
+            )
+
+        if use_cluster_fallback:
+            return self._propose_from_clusters(discovery_clusters, existing_classes)
+
+        if discovery_clusters and self.proposal_mode == "rag_cluster":
+            cluster_samples = self._flatten_clusters(discovery_clusters)
+            return self.proposer.propose_classes(
+                novel_samples=cluster_samples,
+                existing_classes=existing_classes,
+                context=self.context_text,
+            )
+
+        return self.proposer.propose_classes(
+            novel_samples=report.novel_samples,
+            existing_classes=existing_classes,
+            context=self.context_text,
+        )
+
+    def _propose_from_clusters(
+        self,
+        discovery_clusters: list[Any],
+        existing_classes: list[str],
+    ) -> Any:
+        if hasattr(self.proposer, "propose_from_clusters"):
+            propose_kwargs: dict[str, Any] = {
+                "max_retries": self.max_retries,
+                "hierarchical": self.proposal_hierarchical,
+            }
+            if self.proposal_schema_discovery and hasattr(
+                self.proposer, "propose_from_clusters_with_schema"
+            ):
+                propose_kwargs["max_attributes"] = self.proposal_schema_max_attributes
+                return self.proposer.propose_from_clusters_with_schema(
+                    discovery_clusters=discovery_clusters,
+                    existing_classes=existing_classes,
+                    context=self.context_text,
+                    **propose_kwargs,
+                )
+
+            return self.proposer.propose_from_clusters(
+                discovery_clusters=discovery_clusters,
+                existing_classes=existing_classes,
+                context=self.context_text,
+                **propose_kwargs,
+            )
+
+        cluster_samples = self._flatten_clusters(discovery_clusters)
+        return self.proposer.propose_classes(
+            novel_samples=cluster_samples,
+            existing_classes=existing_classes,
+            context=self.context_text,
         )
 
     def _flatten_clusters(self, discovery_clusters: list[Any]) -> list[Any]:

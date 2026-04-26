@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Callable, Dict, List, Optional
+import csv
+import json
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 import numpy as np
 
 from .match_result import MatchResultWithMetadata
-from .pipeline_builder import PipelineStageConfig
 
 
 async def collect_match_result_async(
@@ -94,6 +97,7 @@ def build_novel_match_result(
     use_novelty_detector: bool,
     acceptance_threshold: float,
     return_alternatives: bool = False,
+    existing_classes: Optional[List[str]] = None,
 ):
     from ..novelty.entity_matcher import NovelEntityMatchResult
 
@@ -130,7 +134,17 @@ def build_novel_match_result(
         and not is_novel
     )
 
-    if accepted_known:
+    outside_existing = (
+        existing_classes is not None
+        and predicted_id not in (None, "unknown")
+        and predicted_id not in existing_classes
+    )
+
+    if outside_existing:
+        accepted_known = False
+        is_novel = True
+        match_method = "outside_existing_classes"
+    elif accepted_known:
         match_method = "accepted_known"
     elif is_novel:
         match_method = "novelty_detector"
@@ -156,48 +170,45 @@ def build_novel_match_result(
     )
 
 
-def build_stage_config(
+def export_pipeline_metrics(
     *,
-    collect_sync: Callable[[List[str]], tuple[Any, dict]],
-    collect_async: Callable[[List[str]], tuple[Any, dict]],
-    detector: Any,
-    clusterer: Any,
-    llm_proposer: Any,
-    use_novelty_detector: bool,
-    clustering_enabled: bool = True,
-    clustering_backend: str = "auto",
-    similarity_threshold: float = 0.75,
-    min_cluster_size: int = 5,
-    evidence_enabled: bool = True,
-    max_keywords: int = 8,
-    max_examples: int = 4,
-    token_budget: int = 256,
-    use_tfidf: bool = True,
-    run_llm_proposal: bool = True,
-    existing_classes_resolver: Optional[Callable[[], List[str]]] = None,
-    context_text: Optional[str] = None,
-    max_retries: int = 2,
-    prefer_cluster_level: bool = True,
-) -> PipelineStageConfig:
-    return PipelineStageConfig(
-        collect_sync=collect_sync,
-        collect_async=collect_async,
-        detector=detector,
-        clusterer=clusterer,
-        llm_proposer=llm_proposer,
-        use_novelty_detector=use_novelty_detector,
-        clustering_enabled=clustering_enabled,
-        clustering_backend=clustering_backend,
-        similarity_threshold=similarity_threshold,
-        min_cluster_size=min_cluster_size,
-        evidence_enabled=evidence_enabled,
-        max_keywords=max_keywords,
-        max_examples=max_examples,
-        token_budget=token_budget,
-        use_tfidf=use_tfidf,
-        run_llm_proposal=run_llm_proposal,
-        existing_classes_resolver=existing_classes_resolver,
-        context_text=context_text,
-        max_retries=max_retries,
-        prefer_cluster_level=prefer_cluster_level,
-    )
+    metrics: Dict[str, Any],
+    format: str = "json",
+    path: Optional[str] = None,
+) -> Path:
+    """Export pipeline metrics to file.
+
+    Args:
+        metrics: Key-value pairs of metric data.
+        format: Export format ('json' or 'csv').
+        path: Output file path (default: './metrics_{timestamp}.{ext}').
+
+    Returns:
+        Path to exported metrics file.
+
+    Raises:
+        ValueError: If format is not 'json' or 'csv'.
+    """
+    if format not in ("json", "csv"):
+        raise ValueError(f"Unsupported format: {format}. Use 'json' or 'csv'.")
+
+    if path is None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        path = f"metrics_{timestamp}.{format}"
+
+    output_path = Path(path)
+
+    if format == "json":
+        data = {
+            "timestamp": datetime.now().isoformat(),
+            "metrics": metrics,
+        }
+        output_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    else:
+        with open(output_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["metric", "value"])
+            for key, value in metrics.items():
+                writer.writerow([key, value])
+
+    return output_path

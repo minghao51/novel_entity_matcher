@@ -29,16 +29,28 @@ class PipelineStageConfig:
     clustering_backend: str = "auto"
     similarity_threshold: float = 0.75
     min_cluster_size: int = 5
+    clustering_metric: str = "cosine"
+    clustering_min_samples: Optional[int] = None
+    clustering_cluster_selection_epsilon: float = 0.0
     evidence_enabled: bool = True
+    evidence_method: str = "tfidf"
     max_keywords: int = 8
     max_examples: int = 4
     token_budget: int = 256
-    use_tfidf: bool = True
+    use_tfidf: Optional[bool] = None
     run_llm_proposal: bool = True
     existing_classes_resolver: Optional[Callable[[], List[str]]] = None
     context_text: Optional[str] = None
     max_retries: int = 2
     prefer_cluster_level: bool = True
+    ood_strategies: Optional[List[str]] = None
+    ood_calibration_mode: str = "none"
+    ood_calibration_alpha: float = 0.1
+    ood_mahalanobis_mode: str = "class_conditional"
+    proposal_mode: str = "cluster"
+    proposal_schema_discovery: bool = False
+    proposal_schema_max_attributes: int = 10
+    proposal_hierarchical: bool = True
 
 
 class PipelineBuilder:
@@ -74,16 +86,34 @@ class PipelineBuilder:
             clustering_backend=kwargs.get("clustering_backend", "auto"),
             similarity_threshold=kwargs.get("similarity_threshold", 0.75),
             min_cluster_size=min_cluster_size,
+            clustering_metric=kwargs.get("clustering_metric", "cosine"),
+            clustering_min_samples=kwargs.get("clustering_min_samples"),
+            clustering_cluster_selection_epsilon=kwargs.get(
+                "clustering_cluster_selection_epsilon", 0.0
+            ),
             evidence_enabled=kwargs.get("evidence_enabled", True),
+            evidence_method=kwargs.get("evidence_method", "tfidf"),
             max_keywords=kwargs.get("max_keywords", 8),
             max_examples=kwargs.get("max_examples", 4),
             token_budget=kwargs.get("token_budget", 256),
-            use_tfidf=kwargs.get("use_tfidf", True),
+            use_tfidf=kwargs.get("use_tfidf"),
             run_llm_proposal=kwargs.get("run_llm_proposal", True),
             existing_classes_resolver=kwargs.get("existing_classes_resolver"),
             context_text=kwargs.get("context"),
             max_retries=kwargs.get("max_retries", 2),
             prefer_cluster_level=kwargs.get("prefer_cluster_level", True),
+            ood_strategies=kwargs.get("ood_strategies"),
+            ood_calibration_mode=kwargs.get("ood_calibration_mode", "none"),
+            ood_calibration_alpha=kwargs.get("ood_calibration_alpha", 0.1),
+            ood_mahalanobis_mode=kwargs.get(
+                "ood_mahalanobis_mode", "class_conditional"
+            ),
+            proposal_mode=kwargs.get("proposal_mode", "cluster"),
+            proposal_schema_discovery=kwargs.get("proposal_schema_discovery", False),
+            proposal_schema_max_attributes=kwargs.get(
+                "proposal_schema_max_attributes", 10
+            ),
+            proposal_hierarchical=kwargs.get("proposal_hierarchical", True),
         )
 
     def build(
@@ -93,30 +123,31 @@ class PipelineBuilder:
         context: Optional[str] = None,
         run_llm_proposal: Optional[bool] = None,
     ) -> PipelineOrchestrator:
-        """Build the 5-stage pipeline orchestrator.
-
-        Args:
-            existing_classes: Optional list of known classes for proposal stage
-            context: Optional context text for LLM proposal
-            run_llm_proposal: Override whether to run proposal stage
-
-        Returns:
-            Configured PipelineOrchestrator with 5 stages
-        """
-        from ..novelty.clustering.scalable import ScalableClusterer
-
+        """Build the 5-stage pipeline orchestrator."""
         cfg = self._cfg
 
         if run_llm_proposal is None:
             run_llm_proposal = cfg.run_llm_proposal
 
-        # Ensure clusterer is instantiated if clustering is enabled
         clusterer = cfg.clusterer
         if clusterer is None and cfg.clustering_enabled:
-            clusterer = ScalableClusterer(
-                backend=cfg.clustering_backend,
-                min_cluster_size=cfg.min_cluster_size,
-            )
+            try:
+                from ..novelty.clustering.scalable import ScalableClusterer
+
+                clusterer = ScalableClusterer(
+                    backend=cfg.clustering_backend,
+                    min_cluster_size=cfg.min_cluster_size,
+                    min_samples=cfg.clustering_min_samples or cfg.min_cluster_size,
+                    cluster_selection_epsilon=cfg.clustering_cluster_selection_epsilon,
+                    umap_metric=cfg.clustering_metric,
+                )
+            except ImportError:
+                from ..utils.logging_config import get_logger
+
+                get_logger(__name__).warning(
+                    "ScalableClusterer not available; disabling clustering"
+                )
+                clusterer = None
 
         stages = [
             MatcherMetadataStage(
@@ -126,18 +157,24 @@ class PipelineBuilder:
             OODDetectionStage(
                 detector=cfg.detector,
                 enabled=cfg.use_novelty_detector,
+                ood_strategies=cfg.ood_strategies,
+                ood_calibration_mode=cfg.ood_calibration_mode,
+                ood_calibration_alpha=cfg.ood_calibration_alpha,
+                ood_mahalanobis_mode=cfg.ood_mahalanobis_mode,
             ),
             CommunityDetectionStage(
                 clusterer=clusterer,
                 enabled=cfg.clustering_enabled,
                 similarity_threshold=cfg.similarity_threshold,
                 min_cluster_size=max(2, cfg.min_cluster_size),
+                clustering_metric=cfg.clustering_metric,
             ),
             ClusterEvidenceStage(
                 enabled=cfg.evidence_enabled,
                 max_keywords=cfg.max_keywords,
                 max_examples=cfg.max_examples,
                 token_budget=cfg.token_budget,
+                evidence_method=cfg.evidence_method,
                 use_tfidf=cfg.use_tfidf,
             ),
             ProposalStage(
@@ -148,6 +185,10 @@ class PipelineBuilder:
                 context_text=context or cfg.context_text,
                 max_retries=cfg.max_retries,
                 force_cluster_level=cfg.prefer_cluster_level,
+                proposal_mode=cfg.proposal_mode,
+                proposal_schema_discovery=cfg.proposal_schema_discovery,
+                proposal_schema_max_attributes=cfg.proposal_schema_max_attributes,
+                proposal_hierarchical=cfg.proposal_hierarchical,
             ),
         ]
 
@@ -167,17 +208,7 @@ class PipelineBuilder:
         llm_proposer: Any = None,
         existing_classes_resolver: Optional[Callable[[], List[str]]] = None,
     ) -> "PipelineBuilder":
-        """Factory to create PipelineBuilder from a PipelineConfig object.
-
-        Args:
-            config: PipelineConfig instance with stage settings
-            collect_sync: Sync collector for MatcherMetadataStage
-            collect_async: Async collector for MatcherMetadataStage
-            detector: NoveltyDetector instance
-            clusterer: ScalableClusterer instance
-            llm_proposer: LLMClassProposer instance
-            existing_classes_resolver: Callable returning list of existing classes
-        """
+        """Factory to create PipelineBuilder from a PipelineConfig object."""
         return cls(
             PipelineStageConfig(
                 collect_sync=collect_sync,
@@ -190,15 +221,37 @@ class PipelineBuilder:
                 clustering_backend=config.clustering_backend,
                 similarity_threshold=config.similarity_threshold,
                 min_cluster_size=config.min_cluster_size,
+                clustering_metric=getattr(config, "clustering_metric", "cosine"),
+                clustering_min_samples=getattr(config, "clustering_min_samples", None),
+                clustering_cluster_selection_epsilon=getattr(
+                    config, "clustering_cluster_selection_epsilon", 0.0
+                ),
                 evidence_enabled=config.evidence_enabled,
+                evidence_method=getattr(config, "evidence_method", "tfidf"),
                 max_keywords=config.max_keywords,
                 max_examples=config.max_examples,
                 token_budget=config.token_budget,
-                use_tfidf=config.use_tfidf,
+                use_tfidf=getattr(config, "use_tfidf", None),
                 run_llm_proposal=config.proposal_enabled,
                 existing_classes_resolver=existing_classes_resolver,
                 context_text=None,
                 max_retries=config.max_retries,
                 prefer_cluster_level=config.prefer_cluster_level,
+                ood_strategies=getattr(config, "ood_strategies", None),
+                ood_calibration_mode=getattr(config, "ood_calibration_mode", "none"),
+                ood_calibration_alpha=getattr(config, "ood_calibration_alpha", 0.1),
+                ood_mahalanobis_mode=getattr(
+                    config, "ood_mahalanobis_mode", "class_conditional"
+                ),
+                proposal_mode=getattr(config, "proposal_mode", "cluster"),
+                proposal_schema_discovery=getattr(
+                    config, "proposal_schema_discovery", False
+                ),
+                proposal_schema_max_attributes=getattr(
+                    config, "proposal_schema_max_attributes", 10
+                ),
+                proposal_hierarchical=getattr(
+                    config, "proposal_hierarchical", True
+                ),
             )
         )
