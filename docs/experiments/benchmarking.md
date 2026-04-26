@@ -211,6 +211,16 @@ Detection Rate at 1% False Positive — what fraction of novel samples are caugh
 
 Datasets are cached as parquet at `data/hf_benchmarks/`.
 
+### Benchmark Download Security
+
+Some entity-resolution benchmark sources currently resolve to legacy `http://` URLs.
+The benchmark loader now emits a warning when insecure transport is used.
+
+Migration guidance:
+- Prefer HTTPS mirrors for benchmark assets whenever available.
+- Update `download_url` values in dataset registry entries to trusted HTTPS sources.
+- Treat HTTP benchmark downloads as non-production and integrity-risky until migrated.
+
 ### Processed Sections (`bench-async`)
 
 Custom CSV sections in `data/processed/*/*.csv`:

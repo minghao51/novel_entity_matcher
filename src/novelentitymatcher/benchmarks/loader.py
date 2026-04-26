@@ -111,6 +111,7 @@ class DatasetLoader:
             raise ValueError(
                 f"Unknown dataset: {name}. Available: {list(DATASET_REGISTRY.keys())}"
             )
+        self._warn_if_insecure_transport(config)
 
         if not force_redownload and self._is_cache_valid(config):
             logger.info(f"Loading {name} from cache")
@@ -150,6 +151,20 @@ class DatasetLoader:
         self._save_metadata(config, metadata)
 
         return self._load_from_cache(config)
+
+    def _warn_if_insecure_transport(self, config: DatasetConfig) -> None:
+        """Warn when benchmark downloads use insecure HTTP transport."""
+        if not config.download_url:
+            return
+        if not config.download_url.lower().startswith("http://"):
+            return
+        logger.warning(
+            "Dataset '%s' uses insecure HTTP download URL (%s). "
+            "This can be tampered in transit. Prefer an HTTPS mirror and set "
+            "'download_url' to a trusted HTTPS source before production benchmarking.",
+            config.name,
+            config.download_url,
+        )
 
     async def _download_er_dataset(self, config: DatasetConfig) -> dict[str, Path]:
         from io import StringIO
