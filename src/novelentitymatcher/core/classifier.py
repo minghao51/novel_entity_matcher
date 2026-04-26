@@ -203,7 +203,7 @@ class SetFitClassifier:
         if self._use_sentence_transformer_fallback:
             self.model_head = model_head
         else:
-            self.model.model_head = model_head
+            self.model.model_head = model_head  # type: ignore[union-attr]
 
     def predict(self, texts: Union[str, List[str]]) -> Union[str, List[str]]:
         if not self.is_trained or self.model is None:

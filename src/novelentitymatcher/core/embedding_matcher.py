@@ -120,6 +120,7 @@ class EmbeddingMatcher:
 
         if (
             self.embedding_dim is not None
+            and self.embeddings is not None
             and self.embeddings.shape[1] > self.embedding_dim
         ):
             self.embeddings = self.embeddings[:, : self.embedding_dim]

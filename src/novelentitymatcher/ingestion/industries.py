@@ -125,7 +125,7 @@ def run(raw_dir=None, processed_dir=None):
     fetcher = IndustriesFetcher(raw_dir, processed_dir)
     fetcher.run("industries_naics.csv")
     fallback_sic = IndustriesFetcher(raw_dir, processed_dir)
-    fallback_sic.fetch = lambda: list(fallback_sic.FALLBACK_SIC)
+    fallback_sic.fetch = lambda: list(fallback_sic.FALLBACK_SIC)  # type: ignore[method-assign]
     fallback_sic.run("industries_sic.csv")
 
 

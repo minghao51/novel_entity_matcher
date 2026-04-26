@@ -6,11 +6,50 @@ and descriptions for clusters of novel samples.
 """
 
 import json
+import logging
 import os
 from collections import defaultdict
+from datetime import timedelta
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, ValidationError
+
+try:
+    from tenacity import (
+        retry,
+        wait_exponential_jitter,
+        retry_if_exception_type,
+        before_sleep_log,
+        RetryCallState,
+    )
+except ImportError:  # pragma: no cover - optional dependency
+    RetryCallState = Any
+
+    def retry(*_args: Any, **_kwargs: Any):
+        def _decorator(func: Any) -> Any:
+            return func
+
+        return _decorator
+
+    def wait_exponential_jitter(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    def retry_if_exception_type(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    def before_sleep_log(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+try:
+    from aiobreaker import CircuitBreaker
+except ImportError:  # pragma: no cover - optional dependency
+    class CircuitBreaker:  # type: ignore[no-redef]
+        def __init__(self, *args: Any, **kwargs: Any):
+            pass
+
+        def __call__(self, func: Any) -> Any:
+            return func
 
 from ..schemas import (
     ClassProposal,
@@ -24,12 +63,62 @@ from ...utils.logging_config import get_logger
 logger = get_logger(__name__)
 
 
+def _stop_after_configured_attempts(retry_state: RetryCallState) -> bool:
+    """Use configured max retry attempts from ``LLMConfig``."""
+    instance = retry_state.args[0] if retry_state.args else None
+    max_retries = getattr(getattr(instance, "config", None), "max_retries", 5)
+    return retry_state.attempt_number >= int(max_retries)
+
+
+# Retryable LLM API exceptions
+try:
+    from litellm import (
+        RateLimitError,
+        APITimeoutError,
+        InternalServerError,
+    )
+    RETRYABLE_EXCEPTIONS: tuple[type[Exception], ...] = (
+        RateLimitError,
+        APITimeoutError,
+        InternalServerError,
+        TimeoutError,
+    )
+except ImportError:
+    RETRYABLE_EXCEPTIONS = (TimeoutError,)
+
+
 class LLMProposalSchema(BaseModel):
     """Schema enforcing the exact JSON structure expected from LLM proposals."""
 
     proposed_classes: list[dict] = Field(
         default_factory=list,
         description="List of proposed classes, each with name, description, confidence, sample_count, example_samples, justification",
+    )
+    rejected_as_noise: list[str] = Field(
+        default_factory=list,
+        description="List of sample texts or cluster IDs to reject as noise",
+    )
+    analysis_summary: str = Field(
+        ...,
+        description="Brief summary of the analysis",
+    )
+    cluster_count: int = Field(
+        ...,
+        description="Number of distinct clusters found",
+    )
+
+    @classmethod
+    def get_schema_json(cls) -> str:
+        """Return the JSON Schema representation."""
+        return json.dumps(cls.model_json_schema(), indent=2)
+
+
+class LLMProposalWithSchemaSchema(BaseModel):
+    """Schema for proposals that include attribute/field discovery."""
+
+    proposed_classes: list[dict] = Field(
+        default_factory=list,
+        description="List of proposed classes with discovered attributes",
     )
     rejected_as_noise: list[str] = Field(
         default_factory=list,
@@ -123,6 +212,33 @@ class LLMClassProposer:
             if env_var and not os.getenv(env_var):
                 os.environ[env_var] = key
         self._api_keys = {}
+
+        # Load LLM configuration with environment variable support when available.
+        try:
+            from .config import get_llm_config
+
+            self.config = get_llm_config()
+        except ImportError:  # pragma: no cover - optional dependency
+            self.config = SimpleNamespace(  # type: ignore[assignment]
+                timeout=30,
+                max_retries=5,
+                circuit_fail_max=3,
+                circuit_reset_seconds=60,
+            )
+
+        # Create circuit breaker for LLM API calls
+        self.llm_circuit_breaker = CircuitBreaker(
+            fail_max=self.config.circuit_fail_max,
+            reset_timeout=timedelta(seconds=self.config.circuit_reset_seconds),
+            fallback_function=lambda: {"status": "degraded", "error": "circuit_open"},
+        )
+
+        logger.info(
+            f"LLMClassProposer initialized: timeout={self.config.timeout}s, "
+            f"max_retries={self.config.max_retries}, "
+            f"circuit_fail_max={self.config.circuit_fail_max}, "
+            f"circuit_reset={self.config.circuit_reset_seconds}s"
+        )
 
     def _default_model_for_provider(self, provider: Optional[str]) -> str:
         """Select a default model, optionally honoring a preferred provider."""
@@ -243,31 +359,209 @@ class LLMClassProposer:
             max_retries=max_retries,
         )
 
+    def propose_from_clusters_with_schema(
+        self,
+        discovery_clusters: List[DiscoveryCluster],
+        existing_classes: List[str],
+        context: Optional[str] = None,
+        max_retries: int = 2,
+        hierarchical: bool = True,
+        max_attributes: int = 10,
+    ) -> NovelClassAnalysis:
+        """Generate proposals with attribute/field discovery from cluster evidence.
+
+        Like ``propose_from_clusters`` but the LLM prompt requests discovery of
+        common attributes and data structures for each proposed class.
+
+        Args:
+            discovery_clusters: List of discovery clusters.
+            existing_classes: List of existing class names.
+            context: Optional domain context.
+            max_retries: Maximum retry attempts.
+            hierarchical: If True, use hierarchical summarization for large cluster sets.
+        """
+        if not discovery_clusters:
+            raise ValueError("discovery_clusters cannot be empty")
+
+        if hierarchical and len(discovery_clusters) > self.max_clusters_per_summary:
+            return self._propose_hierarchical(
+                discovery_clusters,
+                existing_classes,
+                context,
+                max_retries,
+                include_schema_discovery=True,
+                max_attributes=max_attributes,
+            )
+
+        prompt = self._build_cluster_prompt_with_schema(
+            discovery_clusters=discovery_clusters,
+            existing_classes=existing_classes,
+            context=context,
+            max_attributes=max_attributes,
+        )
+        analysis = self._run_structured_cluster_proposal(
+            prompt=prompt,
+            discovery_clusters=discovery_clusters,
+            max_retries=max_retries,
+            retry_schema_json=LLMProposalWithSchemaSchema.get_schema_json(),
+        )
+
+        if analysis.proposed_classes:
+            analysis = self._enrich_proposals_with_schema(analysis)
+
+        return analysis
+
+    def _build_cluster_prompt_with_schema(
+        self,
+        discovery_clusters: List[DiscoveryCluster],
+        existing_classes: List[str],
+        context: Optional[str],
+        max_attributes: int,
+    ) -> str:
+        """Build prompt requesting attribute discovery alongside class proposals."""
+        cluster_lines = []
+        for cluster in discovery_clusters:
+            keywords = ", ".join(cluster.keywords or [])
+            examples = "; ".join(
+                cluster.evidence.representative_examples
+                if cluster.evidence
+                else cluster.example_texts
+            )
+            cluster_lines.append(
+                f"- Cluster {cluster.cluster_id}: sample_count={cluster.sample_count}; "
+                f"keywords=[{keywords}]; examples=[{examples}]"
+            )
+
+        context_section = f"\nDomain Context: {context}" if context else ""
+        return f"""You are reviewing clusters of likely novel concepts and discovering their data structure.
+
+Existing Classes: {", ".join(existing_classes)}{context_section}
+
+Discovery Clusters:
+{chr(10).join(cluster_lines)}
+
+For each proposed class, also discover common attributes/fields that would describe
+entities of this type. Think about what properties these samples share.
+
+Return valid JSON with this schema:
+{{
+  "proposed_classes": [
+    {{
+      "name": "class name",
+      "description": "what the class represents",
+      "confidence": 0.0,
+      "sample_count": 0,
+      "example_samples": ["example"],
+      "justification": "why this cluster should become a class",
+      "suggested_parent": null,
+      "source_cluster_ids": [0],
+      "provenance": {{"keywords": ["keyword"]}},
+      "discovered_attributes": [
+        {{
+          "name": "attribute_name",
+          "description": "what this attribute represents",
+          "value_type": "string",
+          "example_values": ["value1", "value2"]
+        }}
+      ]
+    }}
+  ],
+  "rejected_as_noise": ["cluster ids or sample text"],
+  "analysis_summary": "brief summary",
+  "cluster_count": {len(discovery_clusters)}
+}}
+
+For discovered_attributes:
+- value_type must be one of: "string", "number", "boolean", "enum", "date"
+- Use "enum" when the attribute takes a fixed set of values (include enum_values)
+- Include 3-{max_attributes} attributes per class that best describe the entities
+- Only include attributes that are supported by the sample evidence
+
+Prefer one proposal per coherent cluster. Use source_cluster_ids for traceability."""
+
+    def _enrich_proposals_with_schema(
+        self, analysis: NovelClassAnalysis
+    ) -> NovelClassAnalysis:
+        """Parse and attach discovered attributes from proposal data."""
+        from ..schemas.models import DiscoveredAttribute
+
+        enriched_classes = []
+        for proposal in analysis.proposed_classes:
+            raw_attrs = proposal.discovered_attributes or []
+            if not raw_attrs:
+                provenance = proposal.provenance or {}
+                raw_attrs = provenance.get("discovered_attributes", [])
+            if raw_attrs:
+                parsed = []
+                for attr in raw_attrs:
+                    try:
+                        parsed.append(
+                            attr
+                            if isinstance(attr, DiscoveredAttribute)
+                            else DiscoveredAttribute(**attr)
+                        )
+                    except Exception:
+                        continue
+                if parsed:
+                    proposal.discovered_attributes = parsed
+                    proposal.attribute_schema = {
+                        attr.name: {
+                            "type": attr.value_type,
+                            "description": attr.description,
+                        }
+                        for attr in parsed
+                    }
+                    proposal.provenance.setdefault(
+                        "discovered_attributes",
+                        [attr.model_dump() for attr in parsed],
+                    )
+            enriched_classes.append(proposal)
+        analysis.proposed_classes = enriched_classes
+        return analysis
+
     def _propose_hierarchical(
         self,
         discovery_clusters: List[DiscoveryCluster],
         existing_classes: List[str],
         context: Optional[str],
         max_retries: int,
+        include_schema_discovery: bool = False,
+        max_attributes: int = 10,
     ) -> NovelClassAnalysis:
         """Generate proposals using hierarchical summarization for large cluster sets."""
         summaries = self._hierarchical_summarize_clusters(
             discovery_clusters, existing_classes, context
         )
-        prompt = self._build_hierarchical_prompt(summaries, existing_classes, context)
+        prompt = self._build_hierarchical_prompt(
+            summaries,
+            existing_classes,
+            context,
+            include_schema_discovery=include_schema_discovery,
+            max_attributes=max_attributes,
+        )
 
         top_clusters = discovery_clusters[: self.max_clusters_per_summary]
-        return self._run_structured_cluster_proposal(
+        analysis = self._run_structured_cluster_proposal(
             prompt=prompt,
             discovery_clusters=top_clusters,
             max_retries=max_retries,
+            retry_schema_json=(
+                LLMProposalWithSchemaSchema.get_schema_json()
+                if include_schema_discovery
+                else None
+            ),
         )
+        if include_schema_discovery and analysis.proposed_classes:
+            analysis = self._enrich_proposals_with_schema(analysis)
+        return analysis
 
     def _build_hierarchical_prompt(
         self,
         summaries: List[Dict[str, Any]],
         existing_classes: List[str],
         context: Optional[str],
+        include_schema_discovery: bool = False,
+        max_attributes: int = 10,
     ) -> str:
         """Build prompt from hierarchical cluster summaries."""
         summary_lines = []
@@ -279,6 +573,38 @@ class LLMClassProposer:
             )
 
         context_section = f"\nDomain Context: {context}" if context else ""
+        proposal_block = """{
+      "name": "class name",
+      "description": "what the class represents",
+      "confidence": 0.0,
+      "sample_count": 0,
+      "example_samples": ["example"],
+      "justification": "why this cluster group suggests a class",
+      "suggested_parent": null,
+      "source_cluster_ids": [0],
+      "provenance": {"keywords": ["keyword"]}"""
+        if include_schema_discovery:
+            proposal_block += """,
+    "discovered_attributes": [
+      {
+        "name": "attribute_name",
+        "description": "what this attribute represents",
+        "value_type": "string",
+        "example_values": ["value1", "value2"]
+      }
+    ]"""
+        proposal_block += "\n    }"
+
+        schema_guidance = ""
+        if include_schema_discovery:
+            schema_guidance = f"""
+
+For discovered_attributes:
+- value_type must be one of: "string", "number", "boolean", "enum", "date"
+- Use "enum" when the attribute takes a fixed set of values (include enum_values)
+- Include 3-{max_attributes} attributes per class that best describe the entities
+- Only include attributes that are supported by the summarized evidence"""
+
         return f"""You are reviewing summarized groups of likely novel concepts.
 
 Existing Classes: {", ".join(existing_classes)}{context_section}
@@ -289,24 +615,14 @@ Cluster Groups:
 Return valid JSON with this schema:
 {{
   "proposed_classes": [
-    {{
-      "name": "class name",
-      "description": "what the class represents",
-      "confidence": 0.0,
-      "sample_count": 0,
-      "example_samples": ["example"],
-      "justification": "why this cluster group suggests a class",
-      "suggested_parent": null,
-      "source_cluster_ids": [0],
-      "provenance": {{"keywords": ["keyword"]}}
-    }}
+{proposal_block}
   ],
   "rejected_as_noise": ["group ids or sample text"],
   "analysis_summary": "brief summary",
-  "cluster_count": {sum(s["total_samples"] for s in summaries)}
+  "cluster_count": {sum(len(s["cluster_ids"]) for s in summaries)}
 }}
 
-Prefer one proposal per coherent group. Use source_cluster_ids for traceability."""
+Prefer one proposal per coherent group. Use source_cluster_ids for traceability.{schema_guidance}"""
 
     def _group_by_cluster(
         self, samples: List[NovelSampleMetadata]
@@ -491,6 +807,7 @@ Prefer one proposal per coherent cluster. Use source_cluster_ids for traceabilit
         discovery_clusters: List[DiscoveryCluster],
         novel_samples: Optional[List[NovelSampleMetadata]] = None,
         max_retries: int = 2,
+        retry_schema_json: Optional[str] = None,
     ) -> NovelClassAnalysis:
         attempts = 0
         retry_prompt = prompt
@@ -514,7 +831,12 @@ Prefer one proposal per coherent cluster. Use source_cluster_ids for traceabilit
                 if attempts > max_retries:
                     break
                 field_errors = self._format_validation_errors(exc)
-                retry_prompt = self._build_retry_prompt(prompt, field_errors, exc)
+                retry_prompt = self._build_retry_prompt(
+                    prompt,
+                    field_errors,
+                    exc,
+                    retry_schema_json=retry_schema_json,
+                )
             except (ValueError, TypeError, ConnectionError, RuntimeError) as exc:
                 last_error = exc
                 attempts += 1
@@ -559,6 +881,7 @@ Prefer one proposal per coherent cluster. Use source_cluster_ids for traceabilit
         original_prompt: str,
         field_errors: list[dict[str, Any]],
         exc: ValidationError,
+        retry_schema_json: Optional[str] = None,
     ) -> str:
         """Build a structured retry prompt with schema and field-level errors."""
         error_lines = []
@@ -574,7 +897,7 @@ Your previous response failed validation with the following errors:
 {chr(10).join(error_lines)}
 
 --- REQUIRED JSON SCHEMA ---
-{LLMProposalSchema.get_schema_json()}
+{retry_schema_json or LLMProposalSchema.get_schema_json()}
 
 Please fix the errors above and return ONLY valid JSON matching the schema."""
 
@@ -669,8 +992,15 @@ Please fix the errors above and return ONLY valid JSON matching the schema."""
             attempted_models=models_to_try,
         ) from last_error
 
+    @retry(
+        stop=_stop_after_configured_attempts,
+        wait=wait_exponential_jitter(initial=2, max=60, jitter=2),
+        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True,
+    )
     def _call_litellm(self, model: str, prompt: str) -> str:
-        """Call litellm completion API."""
+        """Call litellm completion API with retry, timeout, and circuit breaker."""
         try:
             from litellm import completion
         except ImportError:
@@ -691,18 +1021,26 @@ Please fix the errors above and return ONLY valid JSON matching the schema."""
             else model_config["max_tokens"]
         )
 
-        response = completion(
-            model=model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are an expert at categorizing text samples and proposing meaningful class names.",
-                },
-                {"role": "user", "content": prompt},
-            ],
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
+        # Wrap LLM call with circuit breaker
+        @self.llm_circuit_breaker
+        def call_with_circuit_breaker():
+            return completion(
+                model=model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert at categorizing text samples and proposing meaningful class names.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout=self.config.timeout,  # CRITICAL: Use configured timeout
+            )
+
+        response = call_with_circuit_breaker()
+        if isinstance(response, dict) and response.get("error") == "circuit_open":
+            raise RuntimeError("LLM circuit breaker is open")
 
         return response.choices[0].message.content
 

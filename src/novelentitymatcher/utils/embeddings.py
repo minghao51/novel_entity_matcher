@@ -211,7 +211,8 @@ def compute_embeddings(
 ) -> np.ndarray:
     """Compute embeddings for a list of texts."""
     model = get_cached_sentence_transformer(model_name)
-    return model.encode(texts)
+    result = model.encode(texts)
+    return np.asarray(result)
 
 
 def cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
@@ -235,4 +236,4 @@ def batch_encode(
     model = get_cached_sentence_transformer(model_name)
     for i in range(0, len(texts), batch_size):
         batch = texts[i : i + batch_size]
-        yield model.encode(batch)
+        yield np.asarray(model.encode(batch))

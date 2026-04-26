@@ -1,6 +1,6 @@
 import os
 import platform
-from typing import Optional
+from typing import Any, Optional
 
 from .base import EmbeddingBackend
 import numpy as np
@@ -39,7 +39,8 @@ class StaticEmbeddingBackend(EmbeddingBackend):
         """
         self.model_name = model_name
         self.embedding_dim = embedding_dim
-        self.backend_type = None
+        self.backend_type: str | None = None
+        self.model: Any = None
 
         # Try to load with model2vec first (for minishlab models)
         try:

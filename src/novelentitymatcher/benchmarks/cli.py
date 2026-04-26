@@ -7,6 +7,8 @@ import logging
 import sys
 from pathlib import Path
 
+import numpy as np
+
 from .runner import BenchmarkRunner
 from .registry import DATASET_REGISTRY, get_datasets_by_task
 
@@ -109,11 +111,6 @@ def add_run_parser(subparsers) -> argparse.ArgumentParser:
         help="Disable auto-regularization (use old defaults)",
     )
     parser.add_argument(
-        "--no-regularize",
-        action="store_true",
-        help="Disable auto-regularization (use old defaults)",
-    )
-    parser.add_argument(
         "--output",
         type=Path,
         help="Output file path for results JSON",
@@ -171,7 +168,16 @@ def add_sweep_parser(subparsers) -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--param",
-        choices=["threshold", "k", "distance"],
+        choices=[
+            "threshold", "k", "distance",
+            "knn_k", "knn_metric",
+            "lof_neighbors", "lof_metric",
+            "svm_nu", "svm_kernel",
+            "mahalanobis_conformal", "mahalanobis_threshold",
+            "cluster_min_size", "cluster_persistence",
+            "centroid_percentile",
+            "self_knowledge_dim", "self_knowledge_epochs",
+        ],
         required=True,
         help="Parameter to sweep",
     )
@@ -181,6 +187,106 @@ def add_sweep_parser(subparsers) -> argparse.ArgumentParser:
         type=float,
         help="Values to sweep",
     )
+    parser.add_argument("--model", default="sentence-transformers/all-MiniLM-L6-v2")
+    parser.add_argument("--max-train", type=int, default=200)
+    parser.add_argument("--max-val", type=int, default=200)
+    parser.add_argument("--max-test", type=int, default=500)
+    parser.add_argument("--output", default=None)
+    return parser
+
+
+def add_bench_classifier_parser(subparsers) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser("bench-classifier", help="Benchmark classifiers")
+    parser.add_argument(
+        "--mode",
+        choices=["compare", "sweep-models", "sweep-setfit", "scale-test", "sweep-modes"],
+        default="compare",
+        help="'compare' BERT vs SetFit, 'sweep-models' BERT sweep, "
+             "'sweep-setfit' SetFit model sweep, 'scale-test' sample scaling, "
+             "'sweep-modes' mode comparison",
+    )
+    parser.add_argument("--num-entities", type=int, default=10)
+    parser.add_argument("--num-samples", type=int, default=50)
+    parser.add_argument("--num-epochs", type=int, default=3)
+    parser.add_argument("--models", nargs="+", default=["distilbert", "tinybert", "roberta-base"])
+    parser.add_argument("--output", type=Path)
+    return parser
+
+
+def add_bench_weights_parser(subparsers) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser("bench-weights", help="Bayesian optimization of ensemble weights")
+    parser.add_argument("--dataset", default="ag_news")
+    parser.add_argument("--model", default="sentence-transformers/all-MiniLM-L6-v2")
+    parser.add_argument("--trials", type=int, default=200)
+    parser.add_argument("--max-train", type=int, default=200)
+    parser.add_argument("--max-val", type=int, default=200)
+    parser.add_argument("--max-test", type=int, default=500)
+    parser.add_argument("--output", default=None, help="Output JSON path")
+    return parser
+
+
+def add_bench_ann_parser(subparsers) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser("bench-ann", help="Benchmark ANN backends (hnswlib vs faiss vs exact)")
+    parser.add_argument("--sizes", nargs="+", type=int, default=[1000, 5000, 10000])
+    parser.add_argument("--dim", type=int, default=384)
+    parser.add_argument("--k", type=int, default=10)
+    parser.add_argument("--queries", type=int, default=100)
+    parser.add_argument("--output", default=None)
+    return parser
+
+
+def add_bench_reranker_parser(subparsers) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser("bench-reranker", help="Benchmark reranker models")
+    parser.add_argument("--models", nargs="+", default=["bge-m3", "bge-large", "ms-marco"])
+    parser.add_argument("--queries", type=int, default=50)
+    parser.add_argument("--candidates", type=int, default=20)
+    parser.add_argument("--output", default=None)
+    return parser
+
+
+def add_bench_novelty_parser(subparsers) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser("bench-novelty", help="Benchmark novelty detection strategies")
+    parser.add_argument(
+        "--depth",
+        choices=["quick", "standard", "full"],
+        default="standard",
+        help="quick (basic), standard (+ ensembles), full (+ signal combiner)",
+    )
+    parser.add_argument("--datasets", nargs="+", default=["ag_news", "go_emotions"])
+    parser.add_argument("--max-train", type=int, default=200)
+    parser.add_argument("--max-val", type=int, default=200)
+    parser.add_argument("--max-test", type=int, default=500)
+    parser.add_argument("--model", default="sentence-transformers/all-MiniLM-L6-v2", help="Single model")
+    parser.add_argument("--models", nargs="+", default=None, help="Multiple models to sweep")
+    parser.add_argument("--output", default=None, help="Output CSV path")
+    return parser
+
+
+def add_bench_async_parser(subparsers) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser("bench-async", help="Benchmark sync vs async matcher APIs")
+    parser.add_argument("--multiplier", type=int, default=20)
+    parser.add_argument("--concurrency", type=int, default=8)
+    parser.add_argument("--section", default="languages/languages")
+    parser.add_argument("--model", default="default")
+    parser.add_argument("--modes", nargs="+", default=["zero-shot"])
+    parser.add_argument("--max-entities", type=int, default=50)
+    parser.add_argument("--max-queries", type=int, default=25)
+    parser.add_argument("--output", type=Path)
+    return parser
+
+
+def add_render_parser(subparsers) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser("render", help="Render benchmark JSON as markdown")
+    parser.add_argument("input", type=Path, help="Benchmark JSON file")
+    return parser
+
+
+def add_plot_parser(subparsers) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser("plot", help="Generate charts from benchmark JSON")
+    parser.add_argument("--embedding-results", required=True)
+    parser.add_argument("--training-results", required=True)
+    parser.add_argument("--bert-results", required=True)
+    parser.add_argument("--output-dir", default="docs/images/benchmarks")
     return parser
 
 
@@ -202,6 +308,14 @@ def create_parser() -> argparse.ArgumentParser:
     add_list_parser(subparsers)
     add_clear_parser(subparsers)
     add_sweep_parser(subparsers)
+    add_bench_classifier_parser(subparsers)
+    add_bench_novelty_parser(subparsers)
+    add_bench_async_parser(subparsers)
+    add_bench_weights_parser(subparsers)
+    add_bench_ann_parser(subparsers)
+    add_bench_reranker_parser(subparsers)
+    add_render_parser(subparsers)
+    add_plot_parser(subparsers)
 
     return parser
 
@@ -406,8 +520,203 @@ def main(argv: list[str] | None = None) -> int:
             clear_cache(dataset=args.dataset)
 
         elif args.command == "sweep":
-            logger.info(f"Sweep command: {args.task} {args.dataset} {args.param}")
-            logger.info("Note: Detailed sweep functionality coming soon")
+            from .novelty_bench import NoveltyBenchmark, load_and_split_data
+            from .shared import prepare_binary_labels, compute_ood_metrics
+
+            ds_name = args.dataset
+            split = load_and_split_data(
+                ds_name, args.max_train, args.max_val, args.max_test,
+            )
+            benchmark = NoveltyBenchmark(args.model)
+
+            param = args.param
+            values = args.values or []
+
+            if param == "knn_k":
+                values = values or [1, 3, 5, 7, 10, 15, 20, 30, 50]
+                results = benchmark.benchmark_knn(split, k_values=[int(v) for v in values])
+            elif param == "lof_neighbors":
+                values = values or [5, 10, 15, 20, 30, 50]
+                results = benchmark.benchmark_lof(split, n_neighbors_list=[int(v) for v in values])
+            elif param == "svm_nu":
+                values = values or [0.01, 0.05, 0.1, 0.15, 0.2, 0.3]
+                results = benchmark.benchmark_oneclass_svm(split, nu_values=values)
+            elif param == "mahalanobis_conformal":
+                from ..novelty.config.strategies import MahalanobisConfig
+                from ..novelty.strategies.mahalanobis import MahalanobisDistanceStrategy
+
+                train_emb = benchmark.encode_texts(split.train_texts)
+                val_emb = benchmark.encode_texts(split.val_texts)
+                test_emb = benchmark.encode_texts(split.test_texts)
+                val_true = prepare_binary_labels(split.val_labels, "__OOD__")
+                test_true = prepare_binary_labels(split.test_labels, "__OOD__")
+
+                results = []
+                for method in ["split", "mondrian"]:
+                    for alpha in [0.05, 0.1, 0.15, 0.2]:
+                        try:
+                            config = MahalanobisConfig(
+                                calibration_mode="conformal",
+                                calibration_method=method,  # type: ignore[arg-type]
+                                calibration_alpha=alpha,
+                            )
+                            s = MahalanobisDistanceStrategy()
+                            s.initialize(train_emb, split.train_labels, config)
+                            _, val_m = s.detect(
+                                split.val_texts, val_emb,
+                                ["unknown"] * len(split.val_texts),
+                                np.ones(len(split.val_texts)) * 0.5,
+                            )
+                            _, test_m = s.detect(
+                                split.test_texts, test_emb,
+                                ["unknown"] * len(split.test_texts),
+                                np.ones(len(split.test_texts)) * 0.5,
+                            )
+                            results.append(benchmark._make_result(
+                                "mahalanobis_conformal",
+                                {"method": method, "alpha": alpha},
+                                compute_ood_metrics(
+                                    val_true,
+                                    np.array([val_m[i].get("p_value", val_m[i].get("mahalanobis_novelty_score", 0.0)) for i in range(len(split.val_texts))]),
+                                ),
+                                compute_ood_metrics(
+                                    test_true,
+                                    np.array([test_m[i].get("p_value", test_m[i].get("mahalanobis_novelty_score", 0.0)) for i in range(len(split.test_texts))]),
+                                ),
+                            ))
+                        except (ValueError, RuntimeError) as e:
+                            logger.warning(f"mahalanobis_conformal {method}/{alpha} failed: {e}")
+            elif param == "centroid_percentile":
+                values = values or [90, 92, 95, 97, 99]
+                results = benchmark.benchmark_setfit_centroid(split, percentile_values=values)
+            elif param == "self_knowledge_dim":
+                values = values or [32, 64, 128, 256, 512]
+                results = benchmark.benchmark_self_knowledge(split, hidden_dims=[int(v) for v in values])
+            elif param == "self_knowledge_epochs":
+                values = values or [25, 50, 100, 150, 200]
+                results = benchmark.benchmark_self_knowledge(split, epoch_values=[int(v) for v in values])
+            else:
+                logger.info(f"Sweep for param '{param}' not yet implemented")
+                return 1
+
+            if results:
+                import pandas as pd
+                records = [
+                    {
+                        "strategy": r.strategy,
+                        "params": str(r.params),
+                        "val_auroc": r.val_auroc,
+                        "test_auroc": r.test_auroc,
+                        "test_dr_1fp": r.test_dr_1fp,
+                    }
+                    for r in results
+                ]
+                df = pd.DataFrame(records)
+                print(df.to_string(index=False))
+
+                if args.output:
+                    df.to_csv(args.output, index=False)
+                    logger.info(f"Results saved to {args.output}")
+
+        elif args.command == "bench-classifier":
+            from .classifier_bench import main as classifier_main
+
+            return classifier_main([
+                "--mode", args.mode,
+                "--num-entities", str(args.num_entities),
+                "--num-samples", str(args.num_samples),
+                "--num-epochs", str(args.num_epochs),
+                *(["--models"] + args.models if args.models else []),
+                *(["--output", str(args.output)] if args.output else []),
+            ])
+
+        elif args.command == "bench-novelty":
+            from .novelty_bench import main as novelty_main
+
+            argv_list = [
+                "--depth", args.depth,
+                "--datasets", *args.datasets,
+                "--max-train", str(args.max_train),
+                "--max-val", str(args.max_val),
+                "--max-test", str(args.max_test),
+                "--model", args.model,
+            ]
+            if args.models:
+                argv_list.extend(["--models", *args.models])
+            if args.output:
+                argv_list.extend(["--output", args.output])
+            return novelty_main(argv_list)
+
+        elif args.command == "bench-async":
+            from .async_bench import main as async_main
+
+            argv_list = [
+                "--multiplier", str(args.multiplier),
+                "--concurrency", str(args.concurrency),
+                "--section", args.section,
+                "--model", args.model,
+                "--modes", *args.modes,
+                "--max-entities", str(args.max_entities),
+                "--max-queries", str(args.max_queries),
+            ]
+            if args.output:
+                argv_list.extend(["--output", str(args.output)])
+            return async_main(argv_list)
+
+        elif args.command == "bench-weights":
+            from .weight_optimizer import main as weights_main
+
+            argv_list = [
+                "--dataset", args.dataset,
+                "--model", args.model,
+                "--trials", str(args.trials),
+                "--max-train", str(args.max_train),
+                "--max-val", str(args.max_val),
+                "--max-test", str(args.max_test),
+            ]
+            if args.output:
+                argv_list.extend(["--output", args.output])
+            return weights_main(argv_list)
+
+        elif args.command == "bench-ann":
+            from .infra_bench import main_ann
+
+            argv_list = [
+                "--sizes", *[str(s) for s in args.sizes],
+                "--dim", str(args.dim),
+                "--k", str(args.k),
+                "--queries", str(args.queries),
+            ]
+            if args.output:
+                argv_list.extend(["--output", args.output])
+            return main_ann(argv_list)
+
+        elif args.command == "bench-reranker":
+            from .infra_bench import main_reranker
+
+            argv_list = [
+                "--models", *args.models,
+                "--queries", str(args.queries),
+                "--candidates", str(args.candidates),
+            ]
+            if args.output:
+                argv_list.extend(["--output", args.output])
+            return main_reranker(argv_list)
+
+        elif args.command == "render":
+            from .visualization import render_main
+
+            return render_main([str(args.input)])
+
+        elif args.command == "plot":
+            from .visualization import plot_main
+
+            return plot_main([
+                "--embedding-results", args.embedding_results,
+                "--training-results", args.training_results,
+                "--bert-results", args.bert_results,
+                "--output-dir", args.output_dir,
+            ])
 
         return 0
 

@@ -47,7 +47,7 @@ class HierarchyIndex:
                      }
         """
         self.entities = {e["id"]: e for e in entities}
-        self.graph = nx.DiGraph()
+        self.graph: Any = nx.DiGraph()
         self._build_graph()
         self._cache: Dict[str, Any] = {}
 

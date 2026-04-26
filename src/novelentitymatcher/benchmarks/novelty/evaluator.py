@@ -98,22 +98,22 @@ class NoveltyEvaluator(BaseEvaluator[tuple[pd.DataFrame, pd.DataFrame]]):
             novelty_scores.append(score)
             true_labels.append(1)
 
-        novelty_scores = np.array(novelty_scores)
-        true_labels = np.array(true_labels)
+        novelty_scores_arr = np.array(novelty_scores)
+        true_labels_arr = np.array(true_labels)
 
         auroc = -1.0
         try:
-            auroc = roc_auc_score(true_labels, novelty_scores)
+            auroc = roc_auc_score(true_labels_arr, novelty_scores_arr)
         except ValueError:
             pass
 
         auprc = -1.0
         try:
-            auprc = average_precision_score(true_labels, novelty_scores)
+            auprc = average_precision_score(true_labels_arr, novelty_scores_arr)
         except ValueError:
             pass
 
-        detection_rates = self._compute_detection_rates(true_labels, novelty_scores)
+        detection_rates = self._compute_detection_rates(true_labels_arr, novelty_scores_arr)
 
         all_data = pd.concat([known_data, ood_data])
         per_sample_results = pd.DataFrame(

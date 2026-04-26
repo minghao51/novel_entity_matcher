@@ -36,7 +36,7 @@ try:
     from tqdm.auto import tqdm
 except ImportError:  # pragma: no cover - optional dependency
 
-    def tqdm(iterable, **_kwargs):
+    def tqdm(iterable, **_kwargs):  # type: ignore[no-redef]
         return iterable
 
 
@@ -254,7 +254,7 @@ def benchmark_embedding_models(
                 )
             except Exception as exc:  # pragma: no cover - exercised via monkeypatch
                 logger.warning("Trained benchmark skipped for %s: %s", alias, exc)
-                spec = get_model_spec(alias)
+                spec = get_model_spec(alias) or {}
                 records.append(
                     {
                         "track": "trained",

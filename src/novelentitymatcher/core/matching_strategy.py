@@ -104,7 +104,7 @@ class ZeroShotStrategy(MatchingStrategy):
         self._matcher.embedding_matcher.build_index()
 
     def get_reference_corpus(self) -> dict:
-        return self._matcher.embedding_matcher.get_reference_corpus()
+        return self._matcher.embedding_matcher.get_reference_corpus()  # type: ignore[attr-defined]
 
     def _resolve_threshold(self, override: Optional[float]) -> float:
         return self._matcher._resolve_threshold(override, self._matcher.threshold)
@@ -164,7 +164,7 @@ class BertStrategy(MatchingStrategy):
         **kwargs,
     ) -> Any:
         effective_threshold = self._resolve_threshold(threshold_override)
-        return self._matcher.bert_matcher.match(
+        return self._matcher.bert_matcher.match(  # type: ignore[attr-defined]
             texts,
             candidates=kwargs.get("candidates"),
             top_k=top_k,
@@ -179,7 +179,7 @@ class BertStrategy(MatchingStrategy):
         **kwargs,
     ) -> Any:
         effective_threshold = self._resolve_threshold(threshold_override)
-        return await self._matcher.bert_matcher.match_async(
+        return await self._matcher.bert_matcher.match_async(  # type: ignore[attr-defined]
             texts,
             candidates=kwargs.get("candidates"),
             top_k=top_k,
@@ -195,7 +195,7 @@ class BertStrategy(MatchingStrategy):
         encoder_matcher = self._matcher.embedding_matcher
         if encoder_matcher.model is None:
             encoder_matcher.build_index()
-        return self._matcher.bert_matcher.get_reference_corpus(
+        return self._matcher.bert_matcher.get_reference_corpus(  # type: ignore[attr-defined]
             encoder=encoder_matcher.model
         )
 
@@ -214,7 +214,7 @@ class HybridStrategy(MatchingStrategy):
         **kwargs,
     ) -> Any:
         effective_threshold = self._resolve_threshold(threshold_override)
-        return self._matcher._match_hybrid(
+        return self._matcher._match_hybrid(  # type: ignore[attr-defined]
             texts,
             top_k=top_k,
             threshold_override=effective_threshold,
@@ -229,7 +229,7 @@ class HybridStrategy(MatchingStrategy):
         **kwargs,
     ) -> Any:
         effective_threshold = self._resolve_threshold(threshold_override)
-        return await self._matcher._match_hybrid_async(
+        return await self._matcher._match_hybrid_async(  # type: ignore[attr-defined]
             texts,
             top_k=top_k,
             threshold_override=effective_threshold,
@@ -240,7 +240,7 @@ class HybridStrategy(MatchingStrategy):
         pass
 
     def get_reference_corpus(self) -> dict:
-        return self._matcher.embedding_matcher.get_reference_corpus()
+        return self._matcher.embedding_matcher.get_reference_corpus()  # type: ignore[attr-defined]
 
     def _resolve_threshold(self, override: Optional[float]) -> float:
         return self._matcher._resolve_threshold(override, self._matcher.threshold)
