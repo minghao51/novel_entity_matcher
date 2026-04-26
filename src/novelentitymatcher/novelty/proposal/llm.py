@@ -11,39 +11,41 @@ import os
 from collections import defaultdict
 from datetime import timedelta
 from types import SimpleNamespace
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field, ValidationError
 
 try:
     from tenacity import (
-        retry,
-        wait_exponential_jitter,
-        retry_if_exception_type,
-        before_sleep_log,
         RetryCallState,
+        before_sleep_log,
+        retry,
+        retry_if_exception_type,
+        wait_exponential_jitter,
     )
 except ImportError:  # pragma: no cover - optional dependency
-    RetryCallState = Any
+    RetryCallState = Any  # type: ignore[misc,assignment]
 
-    def retry(*_args: Any, **_kwargs: Any):
+    def retry(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[no-redef]
         def _decorator(func: Any) -> Any:
             return func
 
         return _decorator
 
-    def wait_exponential_jitter(*_args: Any, **_kwargs: Any) -> None:
+    def wait_exponential_jitter(*_args: Any, **_kwargs: Any) -> None:  # type: ignore[no-redef]
         return None
 
-    def retry_if_exception_type(*_args: Any, **_kwargs: Any) -> None:
+    def retry_if_exception_type(*_args: Any, **_kwargs: Any) -> None:  # type: ignore[no-redef]
         return None
 
-    def before_sleep_log(*_args: Any, **_kwargs: Any) -> None:
+    def before_sleep_log(*_args: Any, **_kwargs: Any) -> None:  # type: ignore[misc]
         return None
+
 
 try:
-    from aiobreaker import CircuitBreaker
+    from aiobreaker import CircuitBreaker, CircuitBreakerError
 except ImportError:  # pragma: no cover - optional dependency
+
     class CircuitBreaker:  # type: ignore[no-redef]
         def __init__(self, *args: Any, **kwargs: Any):
             pass
@@ -51,14 +53,18 @@ except ImportError:  # pragma: no cover - optional dependency
         def __call__(self, func: Any) -> Any:
             return func
 
+    class CircuitBreakerError(Exception):  # type: ignore[no-redef]
+        pass
+
+
+from ...exceptions import LLMError, _redact_api_keys
+from ...utils.logging_config import get_logger
 from ..schemas import (
     ClassProposal,
     DiscoveryCluster,
     NovelClassAnalysis,
     NovelSampleMetadata,
 )
-from ...exceptions import LLMError
-from ...utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -73,10 +79,11 @@ def _stop_after_configured_attempts(retry_state: RetryCallState) -> bool:
 # Retryable LLM API exceptions
 try:
     from litellm import (
-        RateLimitError,
         APITimeoutError,
         InternalServerError,
+        RateLimitError,
     )
+
     RETRYABLE_EXCEPTIONS: tuple[type[Exception], ...] = (
         RateLimitError,
         APITimeoutError,
@@ -173,10 +180,10 @@ class LLMClassProposer:
 
     def __init__(
         self,
-        primary_model: Optional[str] = None,
-        provider: Optional[str] = None,
-        fallback_models: Optional[List[str]] = None,
-        api_keys: Optional[Dict[str, str]] = None,
+        primary_model: str | None = None,
+        provider: str | None = None,
+        fallback_models: list[str] | None = None,
+        api_keys: dict[str, str] | None = None,
         temperature: float = 0.3,
         max_tokens: int = 4096,
         max_clusters_per_summary: int = 20,
@@ -206,13 +213,6 @@ class LLMClassProposer:
         self.max_tokens = max_tokens
         self.max_clusters_per_summary = max_clusters_per_summary
 
-        # Set API keys as environment variables for litellm, then discard from memory
-        for provider, key in self._api_keys.items():
-            env_var = self._provider_to_env_var(provider)
-            if env_var and not os.getenv(env_var):
-                os.environ[env_var] = key
-        self._api_keys = {}
-
         # Load LLM configuration with environment variable support when available.
         try:
             from .config import get_llm_config
@@ -229,8 +229,7 @@ class LLMClassProposer:
         # Create circuit breaker for LLM API calls
         self.llm_circuit_breaker = CircuitBreaker(
             fail_max=self.config.circuit_fail_max,
-            reset_timeout=timedelta(seconds=self.config.circuit_reset_seconds),
-            fallback_function=lambda: {"status": "degraded", "error": "circuit_open"},
+            timeout_duration=timedelta(seconds=self.config.circuit_reset_seconds),
         )
 
         logger.info(
@@ -240,7 +239,7 @@ class LLMClassProposer:
             f"circuit_reset={self.config.circuit_reset_seconds}s"
         )
 
-    def _default_model_for_provider(self, provider: Optional[str]) -> str:
+    def _default_model_for_provider(self, provider: str | None) -> str:
         """Select a default model, optionally honoring a preferred provider."""
         if not provider:
             return DEFAULT_PROVIDERS[0]
@@ -259,7 +258,7 @@ class LLMClassProposer:
                 return model
         return DEFAULT_PROVIDERS[0]
 
-    def _get_api_keys_from_env(self) -> Dict[str, str]:
+    def _get_api_keys_from_env(self) -> dict[str, str]:
         """Get API keys from environment variables."""
         keys = {}
         env_mappings = {
@@ -275,7 +274,7 @@ class LLMClassProposer:
 
         return keys
 
-    def _provider_to_env_var(self, provider: str) -> Optional[str]:
+    def _provider_to_env_var(self, provider: str) -> str | None:
         """Convert provider name to environment variable name."""
         mappings = {
             "openrouter": "OPENROUTER_API_KEY",
@@ -284,11 +283,18 @@ class LLMClassProposer:
         }
         return mappings.get(provider)
 
+    def _api_key_for_model(self, model: str) -> str | None:
+        """Resolve provider-specific API key for a model identifier."""
+        provider = (model.split("/", 1)[0] if model else "").lower()
+        if provider in self._api_keys:
+            return self._api_keys[provider]
+        return None
+
     def propose_classes(
         self,
-        novel_samples: List[NovelSampleMetadata],
-        existing_classes: List[str],
-        context: Optional[str] = None,
+        novel_samples: list[NovelSampleMetadata],
+        existing_classes: list[str],
+        context: str | None = None,
     ) -> NovelClassAnalysis:
         """
         Propose new classes based on novel samples.
@@ -325,9 +331,9 @@ class LLMClassProposer:
 
     def propose_from_clusters(
         self,
-        discovery_clusters: List[DiscoveryCluster],
-        existing_classes: List[str],
-        context: Optional[str] = None,
+        discovery_clusters: list[DiscoveryCluster],
+        existing_classes: list[str],
+        context: str | None = None,
         max_retries: int = 2,
         hierarchical: bool = True,
     ) -> NovelClassAnalysis:
@@ -361,9 +367,9 @@ class LLMClassProposer:
 
     def propose_from_clusters_with_schema(
         self,
-        discovery_clusters: List[DiscoveryCluster],
-        existing_classes: List[str],
-        context: Optional[str] = None,
+        discovery_clusters: list[DiscoveryCluster],
+        existing_classes: list[str],
+        context: str | None = None,
         max_retries: int = 2,
         hierarchical: bool = True,
         max_attributes: int = 10,
@@ -413,9 +419,9 @@ class LLMClassProposer:
 
     def _build_cluster_prompt_with_schema(
         self,
-        discovery_clusters: List[DiscoveryCluster],
-        existing_classes: List[str],
-        context: Optional[str],
+        discovery_clusters: list[DiscoveryCluster],
+        existing_classes: list[str],
+        context: str | None,
         max_attributes: int,
     ) -> str:
         """Build prompt requesting attribute discovery alongside class proposals."""
@@ -521,9 +527,9 @@ Prefer one proposal per coherent cluster. Use source_cluster_ids for traceabilit
 
     def _propose_hierarchical(
         self,
-        discovery_clusters: List[DiscoveryCluster],
-        existing_classes: List[str],
-        context: Optional[str],
+        discovery_clusters: list[DiscoveryCluster],
+        existing_classes: list[str],
+        context: str | None,
         max_retries: int,
         include_schema_discovery: bool = False,
         max_attributes: int = 10,
@@ -557,9 +563,9 @@ Prefer one proposal per coherent cluster. Use source_cluster_ids for traceabilit
 
     def _build_hierarchical_prompt(
         self,
-        summaries: List[Dict[str, Any]],
-        existing_classes: List[str],
-        context: Optional[str],
+        summaries: list[dict[str, Any]],
+        existing_classes: list[str],
+        context: str | None,
         include_schema_discovery: bool = False,
         max_attributes: int = 10,
     ) -> str:
@@ -625,20 +631,20 @@ Return valid JSON with this schema:
 Prefer one proposal per coherent group. Use source_cluster_ids for traceability.{schema_guidance}"""
 
     def _group_by_cluster(
-        self, samples: List[NovelSampleMetadata]
-    ) -> Dict[Optional[int], List[NovelSampleMetadata]]:
+        self, samples: list[NovelSampleMetadata]
+    ) -> dict[int | None, list[NovelSampleMetadata]]:
         """Group samples by cluster ID."""
-        clusters: Dict[Optional[int], List[NovelSampleMetadata]] = defaultdict(list)
+        clusters: dict[int | None, list[NovelSampleMetadata]] = defaultdict(list)
         for sample in samples:
             clusters[sample.cluster_id].append(sample)
         return dict(clusters)
 
     def _hierarchical_summarize_clusters(
         self,
-        discovery_clusters: List[DiscoveryCluster],
-        existing_classes: List[str],
-        context: Optional[str],
-    ) -> List[Dict[str, Any]]:
+        discovery_clusters: list[DiscoveryCluster],
+        existing_classes: list[str],
+        context: str | None,
+    ) -> list[dict[str, Any]]:
         """Create hierarchical summaries of clusters to manage token budget."""
         if len(discovery_clusters) <= self.max_clusters_per_summary:
             return [self._summarize_cluster_group(discovery_clusters)]
@@ -650,8 +656,8 @@ Prefer one proposal per coherent group. Use source_cluster_ids for traceability.
         return summaries
 
     def _summarize_cluster_group(
-        self, clusters: List[DiscoveryCluster]
-    ) -> Dict[str, Any]:
+        self, clusters: list[DiscoveryCluster]
+    ) -> dict[str, Any]:
         """Create a summary dict for a group of clusters."""
         return {
             "cluster_ids": [c.cluster_id for c in clusters],
@@ -670,10 +676,11 @@ Prefer one proposal per coherent group. Use source_cluster_ids for traceability.
 
     def _build_proposal_prompt(
         self,
-        novel_samples: List[NovelSampleMetadata],
-        existing_classes: List[str],
-        clustered_samples: Dict[Optional[int], List[NovelSampleMetadata]],
-        context: Optional[str],
+        novel_samples: list[NovelSampleMetadata],
+        existing_classes: list[str],
+        clustered_samples: dict[int | None, list[NovelSampleMetadata]],
+        context: str | None,
+        max_input_chars: int = 100_000,
     ) -> str:
         """Build the proposal prompt for the LLM."""
         # Format samples for the prompt
@@ -749,13 +756,16 @@ Guidelines:
 
 Provide your analysis as a JSON object:"""
 
+        if len(prompt) > max_input_chars:
+            prompt = prompt[:max_input_chars] + "\n\n[TRUNCATED: prompt exceeded maximum length]"
+
         return prompt
 
     def _build_cluster_prompt(
         self,
-        discovery_clusters: List[DiscoveryCluster],
-        existing_classes: List[str],
-        context: Optional[str],
+        discovery_clusters: list[DiscoveryCluster],
+        existing_classes: list[str],
+        context: str | None,
     ) -> str:
         cluster_lines = []
         for cluster in discovery_clusters:
@@ -804,10 +814,10 @@ Prefer one proposal per coherent cluster. Use source_cluster_ids for traceabilit
         self,
         *,
         prompt: str,
-        discovery_clusters: List[DiscoveryCluster],
-        novel_samples: Optional[List[NovelSampleMetadata]] = None,
+        discovery_clusters: list[DiscoveryCluster],
+        novel_samples: list[NovelSampleMetadata] | None = None,
         max_retries: int = 2,
-        retry_schema_json: Optional[str] = None,
+        retry_schema_json: str | None = None,
     ) -> NovelClassAnalysis:
         attempts = 0
         retry_prompt = prompt
@@ -847,7 +857,7 @@ Prefer one proposal per coherent cluster. Use source_cluster_ids for traceabilit
                     "Return only valid JSON matching the requested schema."
                 )
 
-        logger.error(f"Failed to generate LLM proposals: {last_error}")
+        logger.error(f"Failed to generate LLM proposals: {_redact_api_keys(str(last_error))}")
         if novel_samples is not None:
             return self._create_fallback_analysis(novel_samples, [])
         return NovelClassAnalysis(
@@ -881,7 +891,7 @@ Prefer one proposal per coherent cluster. Use source_cluster_ids for traceabilit
         original_prompt: str,
         field_errors: list[dict[str, Any]],
         exc: ValidationError,
-        retry_schema_json: Optional[str] = None,
+        retry_schema_json: str | None = None,
     ) -> str:
         """Build a structured retry prompt with schema and field-level errors."""
         error_lines = []
@@ -903,9 +913,9 @@ Please fix the errors above and return ONLY valid JSON matching the schema."""
 
     def _clusters_from_samples(
         self,
-        clustered_samples: Dict[Optional[int], List[NovelSampleMetadata]],
-    ) -> List[DiscoveryCluster]:
-        clusters: List[DiscoveryCluster] = []
+        clustered_samples: dict[int | None, list[NovelSampleMetadata]],
+    ) -> list[DiscoveryCluster]:
+        clusters: list[DiscoveryCluster] = []
         for cluster_id, samples in clustered_samples.items():
             resolved_cluster_id = (
                 int(cluster_id) if cluster_id is not None else len(clusters)
@@ -931,16 +941,20 @@ Please fix the errors above and return ONLY valid JSON matching the schema."""
             )
             from litellm.exceptions import (
                 AuthenticationError as LiteLLMAuthError,
+            )
+            from litellm.exceptions import (
                 RateLimitError as LiteLLMRateLimitError,
+            )
+            from litellm.exceptions import (
                 ServiceUnavailableError as LiteLLMServiceUnavailableError,
             )
         except ImportError:
-            AuthenticationError = type("AuthenticationError", (Exception,), {})
-            RateLimitError = type("RateLimitError", (Exception,), {})
-            ServiceUnavailableError = type("ServiceUnavailableError", (Exception,), {})
-            LiteLLMAuthError = AuthenticationError
-            LiteLLMRateLimitError = RateLimitError
-            LiteLLMServiceUnavailableError = ServiceUnavailableError
+            AuthenticationError = type("AuthenticationError", (Exception,), {})  # type: ignore[misc,assignment]
+            RateLimitError = type("RateLimitError", (Exception,), {})  # type: ignore[misc,assignment]
+            ServiceUnavailableError = type("ServiceUnavailableError", (Exception,), {})  # type: ignore[misc,assignment]
+            LiteLLMAuthError = AuthenticationError  # type: ignore[misc]
+            LiteLLMRateLimitError = RateLimitError  # type: ignore[misc]
+            LiteLLMServiceUnavailableError = ServiceUnavailableError  # type: ignore[misc]
 
         LLM_RETRYABLE_ERRORS = (
             RateLimitError,
@@ -955,36 +969,36 @@ Please fix the errors above and return ONLY valid JSON matching the schema."""
             LiteLLMAuthError,
         )
 
-        models_to_try = [m for m in ([self.primary_model] + self.fallback_models) if m]
+        models_to_try = [m for m in ([self.primary_model, *self.fallback_models]) if m]
 
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
         for model in models_to_try:
             try:
                 logger.info(f"Trying model: {model}")
                 response = self._call_litellm(model, prompt)
                 return response, model
             except LLM_AUTH_ERRORS as e:
-                logger.error(f"Authentication failed for model {model}: {e}")
+                logger.error(f"Authentication failed for model {model}: {_redact_api_keys(str(e))}")
                 raise LLMError(
                     f"LLM authentication failed for model {model}. Check your API key.",
                     last_error=e,
                     attempted_models=models_to_try,
                 ) from e
             except LLM_RETRYABLE_ERRORS as e:
-                logger.warning(f"Retryable error for model {model}: {e}")
+                logger.warning(f"Retryable error for model {model}: {_redact_api_keys(str(e))}")
                 last_error = e
                 continue
             except (ImportError, ValueError, TypeError, RuntimeError) as e:
-                logger.warning(f"Non-retryable error for model {model}: {e}")
+                logger.warning(f"Non-retryable error for model {model}: {_redact_api_keys(str(e))}")
                 last_error = e
                 continue
             except Exception as e:  # pragma: no cover - defensive fallback wrapper
-                logger.warning(f"Unexpected error for model {model}: {e}")
+                logger.warning(f"Unexpected error for model {model}: {_redact_api_keys(str(e))}")
                 last_error = e
                 continue
 
         # All models failed
-        error_msg = f"All LLM providers failed. Last error: {last_error}"
+        error_msg = f"All LLM providers failed. Last error: {_redact_api_keys(str(last_error))}"
         logger.error(error_msg)
         raise LLMError(
             error_msg,
@@ -1024,27 +1038,35 @@ Please fix the errors above and return ONLY valid JSON matching the schema."""
         # Wrap LLM call with circuit breaker
         @self.llm_circuit_breaker
         def call_with_circuit_breaker():
-            return completion(
-                model=model,
-                messages=[
+            kwargs: dict[str, Any] = {
+                "model": model,
+                "messages": [
                     {
                         "role": "system",
                         "content": "You are an expert at categorizing text samples and proposing meaningful class names.",
                     },
                     {"role": "user", "content": prompt},
                 ],
-                temperature=temperature,
-                max_tokens=max_tokens,
-                timeout=self.config.timeout,  # CRITICAL: Use configured timeout
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "timeout": self.config.timeout,  # CRITICAL: Use configured timeout
+            }
+            api_key = self._api_key_for_model(model)
+            if api_key:
+                kwargs["api_key"] = api_key
+
+            return completion(
+                **kwargs,
             )
 
-        response = call_with_circuit_breaker()
-        if isinstance(response, dict) and response.get("error") == "circuit_open":
-            raise RuntimeError("LLM circuit breaker is open")
+        try:
+            response = call_with_circuit_breaker()
+        except CircuitBreakerError as exc:
+            raise RuntimeError("LLM circuit breaker is open") from exc
 
         return response.choices[0].message.content
 
-    def _get_model_config(self, model: str) -> Dict[str, Any]:
+    def _get_model_config(self, model: str) -> dict[str, Any]:
         """Get configuration for a specific model."""
         # Determine model type from model name
         if "claude" in model.lower():
@@ -1057,8 +1079,8 @@ Please fix the errors above and return ONLY valid JSON matching the schema."""
     def _parse_response(
         self,
         response: str,
-        novel_samples: List[NovelSampleMetadata],
-        model_used: Optional[str] = None,
+        novel_samples: list[NovelSampleMetadata],
+        model_used: str | None = None,
     ) -> NovelClassAnalysis:
         """Parse structured LLM response into NovelClassAnalysis."""
         # Extract JSON from response (handle markdown code blocks)
@@ -1105,13 +1127,13 @@ Please fix the errors above and return ONLY valid JSON matching the schema."""
             raise ValueError(f"Response validation failed: {e}") from e
 
     def _create_fallback_analysis(
-        self, novel_samples: List[NovelSampleMetadata], existing_classes: List[str]
+        self, novel_samples: list[NovelSampleMetadata], existing_classes: list[str]
     ) -> NovelClassAnalysis:
         """Create fallback analysis when LLM fails."""
         logger.warning("Creating fallback analysis due to LLM failure")
 
         # Simple fallback: group by predicted class
-        predicted_groups: Dict[str, List[NovelSampleMetadata]] = {}
+        predicted_groups: dict[str, list[NovelSampleMetadata]] = {}
         for sample in novel_samples:
             pred_class = sample.predicted_class
             if pred_class not in predicted_groups:

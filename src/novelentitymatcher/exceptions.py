@@ -1,13 +1,12 @@
 """Custom exceptions for novel_entity_matcher with helpful context and suggestions."""
 
-from typing import Any, Dict, Optional
 import json
+import re
+from typing import Any
 
 
 class SemanticMatcherError(Exception):
     """Base exception for all novel_entity_matcher errors."""
-
-    pass
 
 
 class ValidationError(ValueError, SemanticMatcherError):
@@ -23,9 +22,9 @@ class ValidationError(ValueError, SemanticMatcherError):
         self,
         message: str,
         *,
-        entity: Optional[Dict[str, Any]] = None,
-        field: Optional[str] = None,
-        suggestion: Optional[str] = None,
+        entity: dict[str, Any] | None = None,
+        field: str | None = None,
+        suggestion: str | None = None,
     ):
         self.raw_message = message
         self.entity = entity
@@ -65,8 +64,8 @@ class TrainingError(RuntimeError, SemanticMatcherError):
         self,
         message: str,
         *,
-        training_mode: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None,
+        training_mode: str | None = None,
+        details: dict[str, Any] | None = None,
     ):
         self.raw_message = message
         self.training_mode = training_mode
@@ -91,8 +90,6 @@ class TrainingError(RuntimeError, SemanticMatcherError):
 class MatchingError(RuntimeError, SemanticMatcherError):
     """Raised when matching operations fail."""
 
-    pass
-
 
 class ModeError(ValueError, SemanticMatcherError):
     """Raised when matcher mode configuration is invalid.
@@ -106,8 +103,8 @@ class ModeError(ValueError, SemanticMatcherError):
         self,
         message: str,
         *,
-        invalid_mode: Optional[str] = None,
-        valid_modes: Optional[list[str]] = None,
+        invalid_mode: str | None = None,
+        valid_modes: list[str] | None = None,
     ):
         self.raw_message = message
         self.invalid_mode = invalid_mode
@@ -131,6 +128,15 @@ class ModeError(ValueError, SemanticMatcherError):
         return msg
 
 
+_API_KEY_PATTERN = re.compile(
+    r"(sk-or-v1-[A-Za-z0-9]+|sk-ant-[A-Za-z0-9]+|sk-[A-Za-z0-9]{20,}|hf_[A-Za-z0-9]+)"
+)
+
+
+def _redact_api_keys(text: str) -> str:
+    return _API_KEY_PATTERN.sub("...REDACTED...", text)
+
+
 class LLMError(SemanticMatcherError):
     """Raised when LLM operations fail after all retries.
 
@@ -143,8 +149,8 @@ class LLMError(SemanticMatcherError):
         self,
         message: str,
         *,
-        last_error: Optional[Exception] = None,
-        attempted_models: Optional[list[str]] = None,
+        last_error: Exception | None = None,
+        attempted_models: list[str] | None = None,
     ):
         self.raw_message = message
         self.last_error = last_error
@@ -153,12 +159,13 @@ class LLMError(SemanticMatcherError):
 
     def _format_message(self) -> str:
         """Format the error message with context."""
-        msg = self.raw_message
+        msg = _redact_api_keys(self.raw_message)
 
         if self.attempted_models:
             msg += f"\n  Attempted models: {', '.join(self.attempted_models)}"
 
         if self.last_error:
-            msg += f"\n  Last error: {self.last_error}"
+            last_error_str = _redact_api_keys(str(self.last_error))
+            msg += f"\n  Last error: {last_error_str}"
 
         return msg
