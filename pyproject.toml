@@ -84,7 +84,6 @@ viz = [
 # Development tools
 dev = [
     "beautifulsoup4>=4.14.3",
-    "black>=23.0.0",
     "build>=1.2.2",
     "html-to-markdown>=1.8.0",
     "ipywidgets>=8.0.0",
@@ -98,7 +97,6 @@ dev = [
 # Everything
 all = [
     "beautifulsoup4>=4.14.3",
-    "black>=23.0.0",
     "build>=1.2.2",
     "html-to-markdown>=1.8.0",
     "hdbscan>=0.8.33",
@@ -109,6 +107,7 @@ all = [
     "matplotlib>=3.9.4",
     "patchright>=1.58.0",
     "pydantic>=2.0.0",
+    "pre-commit>=3.6",
     "pytest>=8.4.2",
     "ruff>=0.1.0",
     "seaborn>=0.13.2",
@@ -129,10 +128,11 @@ full = [
 [dependency-groups]
 dev = [
     "beautifulsoup4>=4.14.3",
-    "black>=23.0.0",
     "build>=1.2.2",
     "html-to-markdown>=1.8.0",
     "mypy>=1.19.1",
+    "pip-audit>=2.7.0",
+    "pre-commit>=3.6",
     "types-networkx>=3.2",
     "patchright>=1.58.0",
     "pytest>=8.4.2",
@@ -156,6 +156,32 @@ include = [
     "pyproject.toml",
 ]
 
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "UP",
+    "B",
+    "C4",
+    "DTZ",
+    "T10",
+    "ISC",
+    "PIE",
+    "PT",
+    "RUF",
+]
+ignore = ["E501"]
+fixable = ["ALL"]
+
+[tool.ruff.format]
+quote-style = "double"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["--strict-markers", "-ra", "--durations=10", "--import-mode=importlib"]
@@ -175,7 +201,7 @@ asyncio_mode = "auto"
 
 [tool.mypy]
 # Python version to target
-python_version = "3.13"
+python_version = "3.11"
 
 # Warn about various issues
 warn_return_any = false
@@ -216,6 +242,14 @@ module = [
     "scipy.*",
     "joblib.*",
     "umap.*",
+    "pandas.*",
+    "nltk.*",
+    "rank_bm25.*",
+    "rapidfuzz.*",
+    "matplotlib.*",
+    "seaborn.*",
+    "aiobreaker.*",
+    "pydantic_settings.*",
     "novelentitymatcher.backends.*",
 ]
 ignore_missing_imports = true
