@@ -155,6 +155,34 @@ FAISS Index:
 
 ---
 
+## Configuration Options
+
+Options are set via `KNNConfig`:
+
+| Parameter | Type | Default | Range | Description |
+|-----------|------|---------|-------|-------------|
+| `k` | int | 5 | [1, 100] | Number of nearest neighbors to consider |
+| `distance_threshold` | float | 0.55 | [0.0, 1.0] | Mean distance threshold. Samples above this are flagged |
+| `strong_threshold` | float | 0.85 | [0.0, 1.0] | High-confidence novelty threshold (heuristic gate) |
+| `metric` | str | "cosine" | — | Distance metric: `cosine`, `euclidean`, etc. |
+
+```python
+from novelentitymatcher.novelty import DetectionConfig
+from novelentitymatcher.novelty.config.strategies import KNNConfig
+
+config = DetectionConfig(
+    strategies=["knn_distance"],
+    knn_distance=KNNConfig(
+        k=20,
+        distance_threshold=0.45,
+        strong_threshold=0.85,
+        metric="cosine",
+    ),
+)
+```
+
+---
+
 ## Findings
 
 ### Benchmark Performance

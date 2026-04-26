@@ -1,89 +1,88 @@
 # External Integrations
 
-**Analysis Date:** 2026-04-06
+**Analysis Date:** 2026-04-23
 
 ## APIs & External Services
 
-**LLM Providers:**
-- OpenRouter — Multi-provider LLM gateway (recommended)
-  - SDK/Client: litellm
-  - Auth: `OPENROUTER_API_KEY`
-- Anthropic — Claude models for class proposal
-  - SDK/Client: litellm
-  - Auth: `ANTHROPIC_API_KEY`
-- OpenAI — GPT models for class proposal
-  - SDK/Client: litellm
-  - Auth: `OPENAI_API_KEY`
+**Machine Learning Models:**
+- Hugging Face Model Hub - Pre-trained sentence transformer and BERT models
+- SDK/Client: sentence-transformers, transformers
+- Auth: None (public models), API key for private repos
 
-**Model Hub:**
-- Hugging Face — Model downloads (sentence-transformers, SetFit, BGE, etc.)
-  - SDK/Client: huggingface_hub, transformers, datasets
-  - Auth: `HF_TOKEN` (optional)
+**LLM Providers (via LiteLLM):**
+- OpenAI - GPT models for class proposal
+- Anthropic - Claude models for class proposal
+- Other providers supported via litellm abstraction
+- SDK/Client: litellm
+- Auth: Provider-specific API keys (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.)
+
+**Data Sources (Ingestion):**
+- DataHub - ISO language and currency codes
+- UNSD - UNSPSC product/service categories
+- IANA - Timezone database
+- O*NET - SOC occupation codes
+- GitHub - Industry codes (community datasets)
+- SDK/Client: requests
+- Auth: None (public APIs)
 
 ## Data Storage
 
 **Databases:**
-- None — In-memory and file-based storage only
-
-**Vector/ANN Indexes:**
-- FAISS (CPU) — Dense vector similarity search for novelty detection
-- HNSWLib — Approximate nearest neighbor indexing
-- Connection: In-memory, persisted via pickle/JSON
-- Client: faiss-cpu, hnswlib
+- None (local filesystem only)
 
 **File Storage:**
-- Local filesystem — Model weights, embeddings, benchmark data, review records
-- Formats: pickle, JSON, CSV
+- Local filesystem - Model checkpoints, embeddings, proposals, benchmarks
+- Paths: ./checkpoints/, ./proposals/, ./artifacts/, ./experiments/
 
 **Caching:**
-- None — No external caching layer
+- None (in-memory only during execution)
 
 ## Authentication & Identity
 
 **Auth Provider:**
-- None — Library/package, no user authentication
-
-**API Key Management:**
-- Environment variables via `.env` file
-- Keys passed directly to litellm backend calls
+- None (no user authentication)
 
 ## Monitoring & Observability
 
 **Error Tracking:**
-- None — Custom exception hierarchy (SemanticMatcherError, ValidationError, TrainingError, MatchingError, ModeError)
+- None (custom exception handling only)
 
 **Logs:**
-- Python logging via custom `logging_config` module
-- Configurable verbosity via `NOVEL_ENTITY_MATCHER_VERBOSE` env var
+- Custom logging via novelentitymatcher.utils.logging_config
+- Levels: DEBUG, INFO, WARNING, ERROR
+- Optional file handler for debugging
+- Verbosity controlled by NOVEL_ENTITY_MATCHER_VERBOSE environment variable
 
 ## CI/CD & Deployment
 
 **Hosting:**
-- PyPI — Package distribution via Trusted Publishing
+- PyPI (pypi.org) - Python package distribution
+- GitHub (github.com/minghao51/novel_entity_matcher) - Source code
 
 **CI Pipeline:**
-- GitHub Actions
-  - `lint.yml` — Ruff linting, Black formatting, build validation
-  - `test.yml` — pytest (fast PR checks + full matrix on main)
-  - `publish.yml` — Build and publish on version tags
+- GitHub Actions - Automated testing and linting
+- Workflows:
+  - lint.yml - Ruff, Black, build validation
+  - test.yml - Pytest (unit, integration, slow)
+  - publish.yml - PyPI publishing
+
+**Test Matrix:**
+- Python 3.9, 3.10, 3.11, 3.12 (main branch)
+- Python 3.11 (PRs and pushes to non-main branches)
 
 ## Environment Configuration
 
 **Required env vars:**
-- `OPENROUTER_API_KEY` — OpenRouter API key (recommended default)
-- `ANTHROPIC_API_KEY` — Anthropic API key (optional)
-- `OPENAI_API_KEY` — OpenAI API key (optional)
-- `LLM_CLASS_PROPOSER_PROVIDER` — LLM provider selection (default: openrouter)
-- `LLM_CLASS_PROPOSER_MODEL` — Model identifier (default: anthropic/claude-sonnet-4)
+- None for basic functionality
+- NOVEL_ENTITY_MATCHER_VERBOSE - Optional debug logging
 
-**Optional env vars:**
-- `HF_TOKEN` — Hugging Face token for gated model downloads
-- `NOVEL_ENTITY_MATCHER_VERBOSE` — Enable verbose logging
+**Optional env vars (LLM features):**
+- OPENAI_API_KEY - OpenAI API access
+- ANTHROPIC_API_KEY - Anthropic API access
+- [PROVIDER]_API_KEY - Other LLM provider keys
 
 **Secrets location:**
-- `.env` file (local development)
-- GitHub Actions secrets (CI/CD)
-- PyPI trusted publishing (no secrets needed)
+- Environment variables only (no secrets in code)
 
 ## Webhooks & Callbacks
 
@@ -91,22 +90,9 @@
 - None
 
 **Outgoing:**
-- None
-
-## Data Ingestion Sources
-
-Built-in entity data loaders (local, no external API):
-
-| Source | Module |
-|--------|--------|
-| Currencies | `ingestion/currencies.py` |
-| Industries | `ingestion/industries.py` |
-| Languages | `ingestion/languages.py` |
-| Occupations | `ingestion/occupations.py` |
-| Products | `ingestion/products.py` |
-| Timezones | `ingestion/timezones.py` |
-| Universities | `ingestion/universities.py` |
+- LLM API calls (via litellm) to providers like OpenAI/Anthropic
+- HTTP requests to public data sources during ingestion
 
 ---
 
-*Integration audit: 2026-04-06*
+*Integration audit: 2026-04-23*

@@ -88,6 +88,13 @@ class HDBSCANBackend(ClusteringBackend):
         info: Dict[str, Any] = {
             "backend": self.name,
             "persistences": persistences,
+            "n_clusters": len(set(labels)) - (1 if -1 in labels else 0),
+            "noise_ratio": float(np.sum(labels == -1)) / len(labels),
+            "mean_cluster_size": float(
+                np.mean([np.sum(labels == c) for c in set(labels) if c >= 0])
+            )
+            if any(labels >= 0)
+            else 0.0,
         }
         return labels, probabilities, info
 
@@ -199,6 +206,13 @@ class SOPTICSBackend(ClusteringBackend):
         info: Dict[str, Any] = {
             "backend": self.name,
             "persistences": np.ones(cluster_id),
+            "n_clusters": cluster_id,
+            "noise_ratio": float(np.sum(labels == -1)) / len(labels),
+            "mean_cluster_size": float(
+                np.mean([np.sum(labels == c) for c in range(cluster_id)])
+            )
+            if cluster_id > 0
+            else 0.0,
         }
         return labels, probabilities, info
 
@@ -285,5 +299,12 @@ class UMAPHDBSCANBackend(ClusteringBackend):
         info: Dict[str, Any] = {
             "backend": self.name,
             "persistences": persistences,
+            "n_clusters": len(set(labels)) - (1 if -1 in labels else 0),
+            "noise_ratio": float(np.sum(labels == -1)) / len(labels),
+            "mean_cluster_size": float(
+                np.mean([np.sum(labels == c) for c in set(labels) if c >= 0])
+            )
+            if any(labels >= 0)
+            else 0.0,
         }
         return labels, probabilities, info

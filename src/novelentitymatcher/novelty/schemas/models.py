@@ -80,6 +80,18 @@ class ClassProposal(BaseModel):
     suggested_parent: str | None = None
     source_cluster_ids: list[int] = Field(default_factory=list)
     provenance: dict[str, Any] = Field(default_factory=dict)
+    discovered_attributes: list[DiscoveredAttribute] | None = None
+    attribute_schema: dict[str, Any] | None = None
+
+
+class DiscoveredAttribute(BaseModel):
+    """A discovered attribute/field for a proposed class."""
+
+    name: str
+    description: str
+    value_type: Literal["string", "number", "boolean", "enum", "date"]
+    enum_values: list[str] | None = None
+    example_values: list[str] = Field(default_factory=list)
 
 
 class NovelClassAnalysis(BaseModel):

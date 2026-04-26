@@ -22,6 +22,7 @@ class ConfidenceStrategy(NoveltyStrategy):
     """
 
     strategy_id = "confidence"
+    maturity = "production"
 
     def __init__(self):
         self._config: ConfidenceConfig = None

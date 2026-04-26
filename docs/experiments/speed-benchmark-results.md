@@ -1,4 +1,6 @@
-# Route Speed Benchmark Results
+# Speed Benchmark Results
+
+Related docs: [`benchmarking.md`](./benchmarking.md) | [`benchmark-results.md`](./benchmark-results.md)
 
 This document captures a route-level speed comparison between the sync and async
 matcher APIs on the real `products/products_mcc` processed-data section.
@@ -16,7 +18,7 @@ This document was refreshed on March 14, 2026.
 ## Command
 
 ```bash
-uv run python scripts/benchmark_async.py \
+uv run novelentitymatcher-bench bench-async \
   --section products/products_mcc \
   --model default \
   --modes zero-shot head-only full \

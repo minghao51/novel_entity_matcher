@@ -1,109 +1,107 @@
 # Technology Stack
 
-**Analysis Date:** 2026-04-06
+**Analysis Date:** 2026-04-23
 
 ## Languages
 
 **Primary:**
-- Python 3.13 — Main application language (supports 3.9–3.12)
+- Python 3.10+ - Core application language
+- Python 3.11 - Primary development and CI target
+- Python 3.9, 3.10, 3.11, 3.12 - Supported runtime versions
+
+**Secondary:**
+- Markdown - Documentation (README, docs/)
+- YAML - Configuration files
 
 ## Runtime
 
 **Environment:**
-- CPython 3.13
+- Python 3.10+ (requires-python: ">=3.10")
 
 **Package Manager:**
-- uv — Fast Python package installer and resolver
-- Lockfile: uv.lock (present)
+- uv - Fast Python package manager
+- Lockfile: Not explicitly managed (uv sync uses pyproject.toml)
 
 ## Frameworks
 
 **Core:**
-- SetFit 1.0+ — Few-shot sentence transformer fine-tuning for entity matching
-- sentence-transformers 3.0+ — Embedding generation and semantic search
-- PyTorch 2.0+ — Deep learning backend for transformers
-- transformers 4.45+ — Hugging Face model loading and inference
-
-**ML/Scientific:**
-- scikit-learn 1.3+ — Classical ML utilities, metrics, preprocessing
-- pandas 2.0+ — Data manipulation and analysis
-- numpy 2.0+ — Numerical computing
-- networkx 3.0+ — Graph-based hierarchy structures
-- rank-bm25 0.2.2+ — BM25 text retrieval
-- rapidfuzz 3.0+ — Fast fuzzy string matching
-
-**Novelty Detection:**
-- hnswlib 0.8.0+ — Approximate nearest neighbor search
-- faiss-cpu 1.7.4+ — Dense vector similarity search
-- hdbscan 0.8.33+ — Density-based clustering for novel class discovery
-- umap-learn 0.5+ — Dimensionality reduction
-
-**LLM Integration:**
-- litellm 1.50.0+ — Unified LLM API (OpenAI, Anthropic, OpenRouter)
-- pydantic 2.0+ — Data validation and structured output
-
-**Static Embeddings:**
-- model2vec 0.1.0+ — Static model distillation
+- SetFit - Few-shot text classification
+- Sentence Transformers - Text embeddings
+- Transformers (Hugging Face) - Pre-trained models
+- PyTorch - Deep learning backend
 
 **Testing:**
-- pytest 8.4.2+ — Test framework with markers (integration, slow, hf, llm, e2e)
-- pytest-asyncio 1.2.0+ — Async test support
+- pytest 8.4.2+ - Test framework
+- pytest-asyncio 1.2.0+ - Async test support
 
 **Build/Dev:**
-- hatchling 1.27.0+ — Build backend
-- ruff 0.1.0+ — Fast Python linter
-- black 23.0+ — Code formatter
-- mypy 1.19.1+ — Static type checker
-- twine 5.1.1+ — PyPI package uploader
-- build 1.2.2+ — Package building
+- black 23.0.0+ - Code formatting
+- ruff 0.1.0+ - Linting and fast Python linter
+- mypy 1.19.1+ - Static type checking
+- build 1.2.2+ - Package building
+- twine 5.1.1+ - PyPI upload
 
-**Visualization:**
-- matplotlib 3.9.4+ — Plotting
-- seaborn 0.13.2+ — Statistical visualization
+## Key Dependencies
 
-**Web Scraping (dev):**
-- patchright 1.58.0+ — Browser automation
-- beautifulsoup4 4.14.3+ — HTML parsing
-- html-to-markdown 1.8.0+ — Content conversion
+**Critical:**
+- numpy 2.0.0+ - Array operations and numerical computing
+- pandas 2.0.0+ - Data manipulation
+- sentence-transformers 3.0.0+ - Text embeddings
+- setfit 1.0.0+ - Few-shot classification
+- torch 2.0.0+ - Deep learning framework
+- transformers 4.45.0+ - Pre-trained transformer models
+
+**Infrastructure:**
+- scikit-learn 1.3.0+ - ML utilities and metrics
+- sklearn - Clustering, pairwise distances, feature extraction
+- networkx 3.0+ - Graph operations
+- requests 2.31.0+ - HTTP client
+- pyyaml 6.0.0+ - YAML parsing
+
+**Novelty Detection:**
+- hnswlib 0.8.0+ - Approximate nearest neighbor search
+- faiss-cpu 1.7.4+ - Vector similarity search
+- hdbscan 0.8.33+ - Density-based clustering
+- umap-learn 0.5+ - Dimensionality reduction for clustering
+
+**LLM Integration:**
+- litellm 1.50.0+ - Multi-provider LLM API client
+- pydantic 2.0.0+ - Data validation
+
+**Embeddings & Retrieval:**
+- model2vec 0.1.0+ - Static embeddings
+- rank-bm25 0.2.2+ - BM25 text retrieval
+- rapidfuzz 3.0.0+ - Fuzzy string matching
+- nltk 3.9.2+ - NLP utilities
+
+**Benchmarks:**
+- matplotlib 3.9.4+ - Plotting
+- seaborn 0.13.2+ - Statistical visualization
+- tqdm 4.66.0+ - Progress bars
+- ipywidgets 8.0.0+ - Jupyter widgets
 
 ## Configuration
 
 **Environment:**
-- `.env` file for LLM API keys (OpenRouter, Anthropic, OpenAI)
-- `.env.example` — Template with documented variables
-- `config.yaml` for model and training defaults
-- `.python-version` pins Python 3.13
+- NOVEL_ENTITY_MATCHER_VERBOSE - Enable verbose debug logging
+- LLM_API_KEY(s) - For LLM providers (OpenAI, Anthropic, etc.)
 
 **Build:**
-- `pyproject.toml` — Project metadata, dependencies, tool configs
-- `uv.lock` — Frozen dependency resolution
-
-**Tool Configs:**
-- `[tool.pytest.ini_options]` — Test paths, markers (integration, slow, hf, llm, llm_mocked, e2e), async mode
-- `[tool.mypy]` — Type checking (python_version=3.13, strict_optional=true) with per-module overrides for ML libs
-- `[tool.hatch.build]` — Wheel and sdist build targets
-
-**Optional Dependency Groups:**
-- `jupyter` — tqdm, ipywidgets for notebook progress bars
-- `novelty` — pydantic, hnswlib, hdbscan, faiss-cpu for novel class detection
-- `llm` — litellm, pydantic for LLM-backed embedding/reranking
-- `clustering` — hdbscan, umap-learn for novelty discovery
-- `viz` — matplotlib, seaborn for benchmark visualization
-- `dev` — black, ruff, pytest, mypy, twine, patchright, bs4
-- `full` — pydantic, hnswlib, hdbscan, faiss-cpu, litellm, umap-learn
-- `all` — everything combined
+- pyproject.toml - Primary configuration (dependencies, scripts, tools)
+- hatchling - Build backend
 
 ## Platform Requirements
 
 **Development:**
-- Python 3.9–3.13
+- Python 3.9+
 - uv package manager
-- Optional: GPU for accelerated embedding/training
+- macOS MPS fallback enabled for arm64 (PyTorch)
 
 **Production:**
-- PyPI package distribution (`novel-entity-matcher`)
-- CLI entrypoints: `novelentitymatcher-ingest`, `novelentitymatcher-bench`, `novelentitymatcher-review`
+- Python 3.10+
+- 4GB+ RAM recommended for embedding models
+- Optional: GPU for faster training (CUDA/MPS)
 
 ---
 
-*Stack analysis: 2026-04-06*
+*Stack analysis: 2026-04-23*

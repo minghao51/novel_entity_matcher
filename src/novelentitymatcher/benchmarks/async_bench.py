@@ -1,16 +1,10 @@
-"""Route-level speed benchmark for zero-shot and trained matcher modes.
+"""Async/sync performance benchmark for matcher APIs.
 
-Benchmarks the same workload across sync and async matcher APIs while separating:
-- matcher construction time
-- fit/training time
-- first-query cold latency
-- steady-state route latency
-- end-to-end wall time
+Consolidated from: benchmark_async.py
 
-Supported modes:
-1. `zero-shot`
-2. `head-only`
-3. `full`
+Benchmarks sync vs async matcher APIs across zero-shot, head-only, and full modes,
+measuring construct time, fit time, cold-query latency, steady-state match latency,
+QPS, and end-to-end wall time.
 """
 
 from __future__ import annotations
@@ -22,8 +16,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-from novelentitymatcher import Matcher
-from novelentitymatcher.utils.benchmarks import load_processed_sections
+from .. import Matcher
+from ..utils.benchmarks import load_processed_sections
 
 
 def _build_queries(seed_queries: List[str], multiplier: int) -> List[str]:
@@ -65,12 +59,8 @@ def _metric(
         "end_to_end_seconds": round(end_to_end, 6),
         "queries": query_count,
         "qps": round(query_count / elapsed, 2) if elapsed > 0 else float("inf"),
-        "avg_ms_per_query": round((elapsed / query_count) * 1000, 4)
-        if query_count
-        else 0.0,
-        "end_to_end_ms_per_query": round((end_to_end / query_count) * 1000, 4)
-        if query_count
-        else 0.0,
+        "avg_ms_per_query": round((elapsed / query_count) * 1000, 4) if query_count else 0.0,
+        "end_to_end_ms_per_query": round((end_to_end / query_count) * 1000, 4) if query_count else 0.0,
         "concurrency": concurrency,
     }
 
@@ -218,54 +208,17 @@ def _iter_modes(raw_modes: Iterable[str]) -> List[str]:
     return valid
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--multiplier",
-        type=int,
-        default=20,
-        help="Repeat the section query set this many times.",
-    )
-    parser.add_argument(
-        "--concurrency",
-        type=int,
-        default=8,
-        help="Concurrency level for the async gather benchmark.",
-    )
-    parser.add_argument(
-        "--section",
-        default="languages/languages",
-        help="Processed-data section to benchmark, e.g. languages/languages.",
-    )
-    parser.add_argument(
-        "--model",
-        default="default",
-        help="Matcher model alias to benchmark.",
-    )
-    parser.add_argument(
-        "--modes",
-        nargs="+",
-        default=["zero-shot"],
-        help="Matcher modes to benchmark: zero-shot, head-only, full.",
-    )
-    parser.add_argument(
-        "--max-entities",
-        type=int,
-        default=50,
-        help="Maximum entities to load from the section.",
-    )
-    parser.add_argument(
-        "--max-queries",
-        type=int,
-        default=25,
-        help="Maximum seed queries to load from the section before applying multiplier.",
-    )
-    parser.add_argument(
-        "--output",
-        type=Path,
-        help="Optional JSON output path.",
-    )
-    args = parser.parse_args()
+    parser.add_argument("--multiplier", type=int, default=20)
+    parser.add_argument("--concurrency", type=int, default=8)
+    parser.add_argument("--section", default="languages/languages")
+    parser.add_argument("--model", default="default")
+    parser.add_argument("--modes", nargs="+", default=["zero-shot"])
+    parser.add_argument("--max-entities", type=int, default=50)
+    parser.add_argument("--max-queries", type=int, default=25)
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args(argv)
 
     sections = load_processed_sections(
         sections=[args.section],
@@ -288,24 +241,15 @@ def main() -> None:
 
         results.extend(
             benchmark_sync(
-                section_data["entities"],
-                queries,
-                training_data,
-                section_data["section"],
-                args.model,
-                mode,
+                section_data["entities"], queries, training_data,
+                section_data["section"], args.model, mode,
             )
         )
         results.extend(
             asyncio.run(
                 benchmark_async(
-                    section_data["entities"],
-                    queries,
-                    training_data,
-                    args.concurrency,
-                    section_data["section"],
-                    args.model,
-                    mode,
+                    section_data["entities"], queries, training_data,
+                    args.concurrency, section_data["section"], args.model, mode,
                 )
             )
         )
@@ -329,6 +273,4 @@ def main() -> None:
         args.output.write_text(json.dumps(results, indent=2), encoding="utf-8")
         print(f"Saved results to {args.output}")
 
-
-if __name__ == "__main__":
-    main()
+    return 0

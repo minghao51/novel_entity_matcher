@@ -21,10 +21,17 @@ class MatchRecord:
     candidates: List[Any] = field(default_factory=list)
     raw_result: Any = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+    match_method: Optional[str] = None
+    reference_embedding: Optional[np.ndarray] = None
+    distance: Optional[float] = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.embedding, np.ndarray):
             self.embedding = np.array(self.embedding)
+        if self.reference_embedding is not None and not isinstance(
+            self.reference_embedding, np.ndarray
+        ):
+            self.reference_embedding = np.array(self.reference_embedding)
 
 
 @dataclass
@@ -95,6 +102,13 @@ class MatchResultWithMetadata:
                     "candidates": record.candidates,
                     "raw_result": record.raw_result,
                     "metadata": record.metadata,
+                    "match_method": record.match_method,
+                    "reference_embedding": (
+                        record.reference_embedding.tolist()
+                        if record.reference_embedding is not None
+                        else None
+                    ),
+                    "distance": record.distance,
                 }
                 for record in self.records
             ],
@@ -118,6 +132,13 @@ class MatchResultWithMetadata:
                     candidates=record.get("candidates", []),
                     raw_result=record.get("raw_result"),
                     metadata=record.get("metadata", {}),
+                    match_method=record.get("match_method"),
+                    reference_embedding=(
+                        np.array(record["reference_embedding"])
+                        if record.get("reference_embedding") is not None
+                        else None
+                    ),
+                    distance=record.get("distance"),
                 )
                 for record in data.get("records", [])
             ],
@@ -164,6 +185,8 @@ def build_match_records(
     confidences: np.ndarray,
     embeddings: np.ndarray,
     candidate_results: Sequence[Sequence[Any]],
+    match_method: Optional[str] = None,
+    reference_embeddings: Optional[np.ndarray] = None,
 ) -> List[MatchRecord]:
     """Build normalized per-query records for downstream pipeline stages."""
     records: List[MatchRecord] = []
@@ -177,6 +200,14 @@ def build_match_records(
             if len(candidates) > 1
             else (candidates[0] if candidates else None)
         )
+        distance: Optional[float] = None
+        ref_emb: Optional[np.ndarray] = None
+        if reference_embeddings is not None and idx < len(reference_embeddings):
+            ref_emb = reference_embeddings[idx]
+            if ref_emb is not None and idx < len(embeddings):
+                norm_prod = np.linalg.norm(embeddings[idx]) * np.linalg.norm(ref_emb)
+                if norm_prod > 1e-12:
+                    distance = float(1.0 - np.dot(embeddings[idx], ref_emb) / norm_prod)
         records.append(
             MatchRecord(
                 text=text,
@@ -186,6 +217,9 @@ def build_match_records(
                 candidates=candidates,
                 raw_result=raw_result,
                 metadata={"index": idx},
+                match_method=match_method,
+                reference_embedding=ref_emb,
+                distance=distance,
             )
         )
     return records
@@ -199,6 +233,7 @@ def build_match_result_with_metadata(
     raw_match_results: Any,
     metadata: Optional[Dict[str, Any]] = None,
     scores: Optional[np.ndarray] = None,
+    match_method: Optional[str] = None,
 ) -> MatchResultWithMetadata:
     """Create a stable metadata result from matcher outputs."""
     candidate_results = normalize_candidate_results(raw_match_results, len(predictions))
@@ -206,6 +241,8 @@ def build_match_result_with_metadata(
     combined_metadata.setdefault("texts", list(texts))
     combined_metadata.setdefault("raw_match_results", raw_match_results)
     combined_metadata.setdefault("candidate_results", candidate_results)
+    if match_method is not None:
+        combined_metadata.setdefault("match_method", match_method)
 
     records = build_match_records(
         texts=texts,
@@ -213,6 +250,7 @@ def build_match_result_with_metadata(
         confidences=confidences,
         embeddings=embeddings,
         candidate_results=candidate_results,
+        match_method=match_method,
     )
 
     return MatchResultWithMetadata(

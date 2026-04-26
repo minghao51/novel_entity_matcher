@@ -170,6 +170,33 @@ is_novel = novelty_score > threshold
 
 ---
 
+## Configuration Options
+
+Options are set via `PatternConfig`:
+
+| Parameter | Type | Default | Range | Description |
+|-----------|------|---------|-------|-------------|
+| `threshold` | float | 0.5 | [0.0, 1.0] | Novelty score threshold for pattern-based detection |
+| `char_ngram_n` | int | 3 | [1, 5] | Character n-gram size for primary n-gram overlap |
+| `char_4gram_n` | int | 4 | [1, 5] | Character 4-gram size for secondary n-gram overlap |
+| `prefix_suffix_n` | int | 3 | [1, 5] | Prefix/suffix length for distribution analysis |
+
+```python
+from novelentitymatcher.novelty import DetectionConfig
+from novelentitymatcher.novelty.config.strategies import PatternConfig
+
+config = DetectionConfig(
+    strategies=["pattern"],
+    pattern=PatternConfig(
+        threshold=0.4,
+        char_ngram_n=3,
+        prefix_suffix_n=4,
+    ),
+)
+```
+
+---
+
 ## Findings
 
 ### Benchmark Performance

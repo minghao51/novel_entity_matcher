@@ -29,6 +29,8 @@ _SCORE_KEYS = [
     "prototypical_score",
     "setfit_score",
     "setfit_centroid_score",
+    "mahalanobis_novelty_score",
+    "lof_novelty_score",
 ]
 
 _FLAG_KEYS = [
@@ -42,6 +44,8 @@ _FLAG_KEYS = [
     "prototypical_is_novel",
     "setfit_is_novel",
     "setfit_centroid_is_novel",
+    "mahalanobis_is_novel",
+    "lof_is_outlier",
 ]
 
 
@@ -82,6 +86,8 @@ class SignalCombiner:
             "prototypical": self.weights.prototypical,
             "setfit": self.weights.setfit,
             "setfit_centroid": self.weights.setfit_centroid,
+            "mahalanobis": self.weights.mahalanobis,
+            "lof": self.weights.lof,
         }
         return weight_map.get(strategy_id, 0.0)
 
@@ -187,6 +193,8 @@ class SignalCombiner:
         self_knowledge = (
             1.0 if sample_metrics.get("self_knowledge_is_novel", False) else 0.0
         )
+        mahalanobis = sample_metrics.get("mahalanobis_novelty_score", 0.0)
+        lof = sample_metrics.get("lof_novelty_score", 0.0)
 
         # For strategies with continuous scores, use the score directly
         uncertainty = sample_metrics.get("uncertainty_score", 0.0)
@@ -219,6 +227,10 @@ class SignalCombiner:
             weighted_score += self.weights.setfit * setfit
         if "setfit_centroid" in active_strategies:
             weighted_score += self.weights.setfit_centroid * setfit_centroid
+        if "mahalanobis" in active_strategies:
+            weighted_score += self.weights.mahalanobis * mahalanobis
+        if "lof" in active_strategies:
+            weighted_score += self.weights.lof * lof
 
         return float(np.clip(weighted_score, 0.0, 1.0))
 
@@ -385,6 +397,8 @@ class SignalCombiner:
         features.append(1.0 if sample.get("prototypical_is_novel", False) else 0.0)
         features.append(1.0 if sample.get("setfit_is_novel", False) else 0.0)
         features.append(sample.get("setfit_centroid_novelty_score", 0.0))
+        features.append(sample.get("mahalanobis_novelty_score", 0.0))
+        features.append(sample.get("lof_novelty_score", 0.0))
 
         return features
 

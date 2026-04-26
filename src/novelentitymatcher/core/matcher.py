@@ -472,6 +472,7 @@ class Matcher:
                 "model_name": str(self.model_name),
                 "single_input": single_input,
             },
+            match_method=self._training_mode,
         )
 
     async def _match_with_metadata_async(
@@ -517,6 +518,7 @@ class Matcher:
                 "model_name": str(self.model_name),
                 "single_input": single_input,
             },
+            match_method=self._training_mode,
         )
 
     async def _match_async_impl(

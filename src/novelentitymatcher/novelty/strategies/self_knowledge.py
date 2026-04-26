@@ -24,6 +24,7 @@ class SelfKnowledgeStrategy(NoveltyStrategy):
     """
 
     strategy_id = "self_knowledge"
+    maturity = "internal"
 
     def __init__(self):
         self._config: SelfKnowledgeConfig = None

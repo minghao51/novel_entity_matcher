@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from novelentitymatcher.novelty.proposal.llm import LLMClassProposer
-from novelentitymatcher.novelty.schemas import NovelSampleMetadata
+from novelentitymatcher.novelty.schemas import DiscoveryCluster, NovelSampleMetadata
 
 
 class TestLLMClassProposer:
@@ -234,6 +234,102 @@ class TestLLMClassProposer:
 
         assert model_used == "working-model"
         assert '"analysis_summary":"ok"' in response
+
+    def test_enrich_proposals_with_schema_reads_top_level_attributes(self, proposer):
+        analysis = proposer._parse_response(
+            json.dumps(
+                {
+                    "proposed_classes": [
+                        {
+                            "name": "Quantum Biology",
+                            "description": "Intersection of quantum and biology",
+                            "confidence": 0.9,
+                            "sample_count": 2,
+                            "example_samples": ["a", "b"],
+                            "justification": "coherent cluster",
+                            "source_cluster_ids": [0],
+                            "discovered_attributes": [
+                                {
+                                    "name": "organism",
+                                    "description": "Biological system involved",
+                                    "value_type": "string",
+                                    "example_values": ["plant", "bacteria"],
+                                }
+                            ],
+                        }
+                    ],
+                    "rejected_as_noise": [],
+                    "analysis_summary": "ok",
+                    "cluster_count": 1,
+                }
+            ),
+            [],
+            "test-model",
+        )
+
+        enriched = proposer._enrich_proposals_with_schema(analysis)
+
+        proposal = enriched.proposed_classes[0]
+        assert proposal.discovered_attributes is not None
+        assert proposal.discovered_attributes[0].name == "organism"
+        assert proposal.attribute_schema == {
+            "organism": {
+                "type": "string",
+                "description": "Biological system involved",
+            }
+        }
+        assert proposal.provenance["discovered_attributes"][0]["name"] == "organism"
+
+    def test_schema_proposals_use_hierarchical_path_for_large_cluster_sets(self):
+        proposer = LLMClassProposer(
+            primary_model="test-model",
+            max_clusters_per_summary=1,
+        )
+        clusters = [
+            DiscoveryCluster(
+                cluster_id=i,
+                sample_indices=[i],
+                sample_count=1,
+                example_texts=[f"sample {i}"],
+            )
+            for i in range(2)
+        ]
+        expected = Mock()
+
+        with patch.object(proposer, "_propose_hierarchical", return_value=expected) as mock_h:
+            result = proposer.propose_from_clusters_with_schema(
+                discovery_clusters=clusters,
+                existing_classes=["known"],
+                hierarchical=True,
+                max_attributes=6,
+            )
+
+        assert result is expected
+        mock_h.assert_called_once()
+        assert mock_h.call_args.kwargs["include_schema_discovery"] is True
+        assert mock_h.call_args.kwargs["max_attributes"] == 6
+
+    def test_hierarchical_prompt_reports_cluster_count_not_sample_count(self, proposer):
+        prompt = proposer._build_hierarchical_prompt(
+            summaries=[
+                {
+                    "cluster_ids": [0, 1],
+                    "total_samples": 8,
+                    "keywords": "quantum, biology",
+                    "representative_examples": "sample a; sample b",
+                },
+                {
+                    "cluster_ids": [2],
+                    "total_samples": 5,
+                    "keywords": "genomics",
+                    "representative_examples": "sample c",
+                },
+            ],
+            existing_classes=["physics"],
+            context=None,
+        )
+
+        assert '"cluster_count": 3' in prompt
 
     def test_create_fallback_analysis(self, proposer):
         """Test fallback analysis creation."""

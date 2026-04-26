@@ -170,6 +170,31 @@ d(x) = min_{c, k} distance(e_x, prototype_c_k)
 
 ---
 
+## Configuration Options
+
+Options are set via `PrototypicalConfig`:
+
+| Parameter | Type | Default | Range | Description |
+|-----------|------|---------|-------|-------------|
+| `distance_threshold` | float | 0.5 | [0.0, 1.0] | Distance threshold for novelty detection |
+| `model_name` | str | "sentence-transformers/all-MiniLM-L6-v2" | — | Sentence transformer model for embeddings |
+| `support_samples_per_class` | int | 5 | ≥ 1 | Number of support samples per class for prototype computation |
+
+```python
+from novelentitymatcher.novelty import DetectionConfig
+from novelentitymatcher.novelty.config.strategies import PrototypicalConfig
+
+config = DetectionConfig(
+    strategies=["prototypical"],
+    prototypical=PrototypicalConfig(
+        distance_threshold=0.6,
+        support_samples_per_class=3,
+    ),
+)
+```
+
+---
+
 ## Findings
 
 ### Benchmark Performance

@@ -25,6 +25,7 @@ class ClusteringStrategy(NoveltyStrategy):
     """
 
     strategy_id = "clustering"
+    maturity = "experimental"
 
     def __init__(self):
         self._config: ClusteringConfig = None

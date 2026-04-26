@@ -6,7 +6,7 @@ with the NoveltyDetector.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Set, Any, Type
+from typing import Dict, List, Set, Any, Literal, Type
 import numpy as np
 
 
@@ -22,6 +22,7 @@ class NoveltyStrategy(ABC):
     """
 
     strategy_id: str
+    maturity: Literal["production", "experimental", "internal"] = "experimental"
 
     @abstractmethod
     def initialize(

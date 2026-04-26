@@ -22,6 +22,7 @@ class UncertaintyStrategy(NoveltyStrategy):
     """
 
     strategy_id = "uncertainty"
+    maturity = "internal"
 
     def __init__(self):
         self._config: UncertaintyConfig = None

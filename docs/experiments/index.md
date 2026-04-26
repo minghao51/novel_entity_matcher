@@ -1,25 +1,19 @@
 # Experiments Index
 
-Related docs: [`../index.md`](../index.md) | [`country-classifier-scripts.md`](./country-classifier-scripts.md) | [`benchmarking.md`](./benchmarking.md) | [`benchmark-results.md`](./benchmark-results.md) | [`speed-benchmark-results.md`](./speed-benchmark-results.md)
+Related docs: [`../index.md`](../index.md) | [`country-classifier-scripts.md`](./country-classifier-scripts.md) | [`benchmarking.md`](./benchmarking.md) | [`benchmark-results.md`](./benchmark-results.md) | [`novelty-detection-benchmark.md`](./novelty-detection-benchmark.md) | [`speed-benchmark-results.md`](./speed-benchmark-results.md)
 
-This section documents exploratory assets under `experiments/`.
+This section documents exploratory assets and benchmark results under `experiments/`.
 
-## Scope
+## Benchmark Docs
 
-- `experiments/` is for script-style exploratory work that is not part of the stable package API.
-- There are currently no tracked Jupyter notebooks in this repository.
+| File | Content |
+|------|---------|
+| [`benchmarking.md`](./benchmarking.md) | How to run benchmarks via `novelentitymatcher-bench` CLI |
+| [`benchmark-results.md`](./benchmark-results.md) | ER, classification, and novelty detection results |
+| [`novelty-detection-benchmark.md`](./novelty-detection-benchmark.md) | Novelty strategy results (traditional + SetFit-based) |
+| [`speed-benchmark-results.md`](./speed-benchmark-results.md) | Sync vs async route speed results |
 
-## How to Run
-
-Run from the repository root:
-
-```bash
-uv run python experiments/<path_to_script>.py
-```
-
-The current experiment scripts inject `src/` automatically, so `PYTHONPATH=.` is no longer required.
-
-## Script Inventory
+## Experiment Scripts
 
 | File | Purpose | Runtime | Notes |
 |---|---|---|---|
@@ -28,3 +22,11 @@ The current experiment scripts inject `src/` automatically, so `PYTHONPATH=.` is
 | `experiments/country_classifier/country_classifier_advanced.py` | Broader optimization search across models/heads | Longer (~10-15+ min) | Advanced tuning |
 
 For a deeper explanation of the country classifier scripts, see [`country-classifier-scripts.md`](./country-classifier-scripts.md).
+
+## How to Run
+
+```bash
+uv run python experiments/<path_to_script>.py
+```
+
+The current experiment scripts inject `src/` automatically, so `PYTHONPATH=.` is no longer required.

@@ -60,6 +60,19 @@ from ..novelty.entity_matcher import (
 
 from .base import BaseEvaluator, EvaluationResult
 
+from .shared import (
+    DEFAULT_MODEL_NAME,
+    DEFAULT_OOD_RATIO,
+    DEFAULT_RANDOM_SEED,
+    SplitData,
+    benchmark_inference,
+    benchmark_training,
+    compute_ood_metrics,
+    generate_synthetic_data,
+    prepare_binary_labels,
+    timer,
+)
+
 __all__ = [
     "DATASET_REGISTRY",
     "DatasetConfig",
@@ -71,6 +84,16 @@ __all__ = [
     "BenchmarkRunner",
     "BaseEvaluator",
     "EvaluationResult",
+    "DEFAULT_MODEL_NAME",
+    "DEFAULT_OOD_RATIO",
+    "DEFAULT_RANDOM_SEED",
+    "SplitData",
+    "timer",
+    "compute_ood_metrics",
+    "prepare_binary_labels",
+    "generate_synthetic_data",
+    "benchmark_training",
+    "benchmark_inference",
     "EntityResolutionEvaluator",
     "sweep_threshold",
     "find_optimal_threshold",

@@ -31,7 +31,7 @@ class WeightConfig(BaseModel):
     """Weight for clustering-based strategy."""
 
     # New strategy weights (lower weights as they're experimental)
-    self_knowledge: float = Field(default=0.15, ge=0.0, le=1.0)
+    self_knowledge: float = Field(default=0.08, ge=0.0, le=1.0)
     """Weight for sparse autoencoder strategy."""
 
     pattern: float = Field(default=0.2, ge=0.0, le=1.0)
@@ -40,14 +40,20 @@ class WeightConfig(BaseModel):
     oneclass: float = Field(default=0.1, ge=0.0, le=1.0)
     """Weight for One-Class SVM strategy."""
 
-    prototypical: float = Field(default=0.1, ge=0.0, le=1.0)
+    prototypical: float = Field(default=0.02, ge=0.0, le=1.0)
     """Weight for prototypical networks strategy."""
 
-    setfit: float = Field(default=0.1, ge=0.0, le=1.0)
+    setfit: float = Field(default=0.02, ge=0.0, le=1.0)
     """Weight for SetFit contrastive strategy."""
 
     setfit_centroid: float = Field(default=0.45, ge=0.0, le=1.0)
     """Weight for SetFit centroid distance strategy (recommended, highest weight)."""
+
+    mahalanobis: float = Field(default=0.35, ge=0.0, le=1.0)
+    """Weight for Mahalanobis distance strategy."""
+
+    lof: float = Field(default=0.15, ge=0.0, le=1.0)
+    """Weight for Local Outlier Factor strategy."""
 
     # Adaptive weight control
     adaptive: bool = Field(default=False)
@@ -74,6 +80,7 @@ class WeightConfig(BaseModel):
             A new WeightConfig with normalized weights
         """
         strategy_weights = [
+            self.confidence,
             self.uncertainty,
             self.knn,
             self.cluster,
@@ -83,6 +90,8 @@ class WeightConfig(BaseModel):
             self.prototypical,
             self.setfit,
             self.setfit_centroid,
+            self.mahalanobis,
+            self.lof,
         ]
 
         total = sum(strategy_weights)
@@ -92,6 +101,7 @@ class WeightConfig(BaseModel):
         factor = 1.0 / total
 
         return WeightConfig(
+            confidence=self.confidence * factor,
             uncertainty=self.uncertainty * factor,
             knn=self.knn * factor,
             cluster=self.cluster * factor,
@@ -101,7 +111,8 @@ class WeightConfig(BaseModel):
             prototypical=self.prototypical * factor,
             setfit=self.setfit * factor,
             setfit_centroid=self.setfit_centroid * factor,
-            # Keep thresholds unchanged
+            mahalanobis=self.mahalanobis * factor,
+            lof=self.lof * factor,
             novelty_threshold=self.novelty_threshold,
             knn_gate_threshold=self.knn_gate_threshold,
             strong_uncertainty_threshold=self.strong_uncertainty_threshold,

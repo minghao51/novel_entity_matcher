@@ -1,82 +1,137 @@
 # Benchmarking Guide
 
-Related docs: [`../index.md`](../index.md) | [`../models.md`](../models.md) | [`../static-embeddings.md`](../static-embeddings.md) | [`benchmark-results.md`](./benchmark-results.md) (accuracy/size results) | [`speed-benchmark-results.md`](./speed-benchmark-results.md) (route speed results)
+Related docs: [`../index.md`](../index.md) | [`../models.md`](../models.md) | [`../static-embeddings.md`](../static-embeddings.md) | [`benchmark-results.md`](./benchmark-results.md) | [`speed-benchmark-results.md`](./speed-benchmark-results.md) | [`novelty-detection-benchmark.md`](./novelty-detection-benchmark.md)
 
 ## Overview
 
-Novel Entity Matcher includes a comprehensive benchmarking suite for comparing model performance across accuracy, latency, and throughput.
+Novel Entity Matcher includes a comprehensive benchmarking suite accessed via the `novelentitymatcher-bench` CLI. It covers accuracy, latency, throughput, and novelty detection across multiple strategies and datasets.
 
-There are three benchmark entrypoints:
+All benchmarks live in `src/novelentitymatcher/benchmarks/` and are registered as the `novelentitymatcher-bench` entry point in `pyproject.toml`.
 
-- `scripts/benchmark_embeddings.py` for model-level retrieval/training comparisons
-- `scripts/benchmark_async.py` for route-level sync vs async API speed comparisons
-- `scripts/render_benchmark_report.py` for rendering JSON artifacts as markdown tables
+## CLI Subcommands
 
-The current published accuracy benchmark uses query splits instead of entity
-splits. That matters for retrieval: the full catalog stays indexed, while the
-query text is evaluated across exact-text and synthetic-holdout buckets. The
-named perturbation metrics such as `typo_accuracy` and
-`remove_parenthetical_accuracy` are more interpretable than the legacy
-positional `val` and `test` buckets.
+| Subcommand | Purpose |
+|------------|---------|
+| `run` | Run entity resolution, classification, and novelty benchmarks on HuggingFace datasets |
+| `bench-classifier` | Benchmark BERT vs SetFit classifiers head-to-head |
+| `bench-novelty` | Benchmark novelty detection strategies at quick/standard/full depth |
+| `bench-async` | Benchmark sync vs async matcher API throughput |
+| `render` | Render benchmark JSON as markdown tables |
+| `plot` | Generate charts from benchmark JSON |
+| `load` | Download/cache HuggingFace datasets |
+| `list` | List available datasets |
+| `clear` | Clear cached datasets |
+| `sweep` | Parameter sweep (threshold, k, distance) |
 
 ## Running Benchmarks
 
-### Basic Usage
+### HuggingFace Benchmark Suite (`run`)
 
 ```bash
-# Run all benchmarks
-uv run python scripts/benchmark_embeddings.py
+# Run all benchmarks (ER + classification + novelty)
+uv run novelentitymatcher-bench run --task all --models potion-8m
 
-# Run only embedding benchmarks
-uv run python scripts/benchmark_embeddings.py --track embeddings
+# Entity resolution only
+uv run novelentitymatcher-bench run --task er --models potion-8m --thresholds 0.5 0.7 0.9
 
-# Run only training benchmarks
-uv run python scripts/benchmark_embeddings.py --track trained
+# Classification with trained modes
+uv run novelentitymatcher-bench run \
+  --task classification \
+  --models all-MiniLM-L6-v2 \
+  --modes zero-shot head-only \
+  --class-counts 4 10 28 \
+  --max-train-samples 200
+
+# Novelty detection
+uv run novelentitymatcher-bench run --task novelty --ood-ratio 0.2
+
+# Save results to JSON
+uv run novelentitymatcher-bench run --task all --output data/hf_benchmarks/results.json
 ```
 
-### With Custom Options
+### Classifier Comparison (`bench-classifier`)
 
 ```bash
-# Benchmark specific models
-uv run python scripts/benchmark_embeddings.py \
-  --embedding-models potion-8m minilm bge-base
+# BERT vs SetFit head-to-head
+uv run novelentitymatcher-bench bench-classifier --mode compare
 
-# Benchmark specific sections
-uv run python scripts/benchmark_embeddings.py \
-  --sections languages/languages universities/universities
+# Multi-model BERT sweep
+uv run novelentitymatcher-bench bench-classifier \
+  --mode sweep-models \
+  --models distilbert tinybert roberta-base \
+  --num-entities 10 --num-samples 50
 
 # Save results
-uv run python scripts/benchmark_embeddings.py \
-  --output artifacts/benchmarks/benchmark-results.json
-
-# Limit data size (faster testing)
-uv run python scripts/benchmark_embeddings.py \
-  --max-entities-per-section 30 \
-  --max-queries-per-section 10
+uv run novelentitymatcher-bench bench-classifier --mode compare --output /tmp/clf_results.md
 ```
 
-### Route Speed Benchmark
+### Novelty Strategy Benchmark (`bench-novelty`)
+
+Three depth levels control strategy coverage:
+
+| Depth | Strategies |
+|-------|-----------|
+| `quick` | KNN, Mahalanobis, LOF, OneClassSVM, IsolationForest |
+| `standard` | quick + Pattern, SetFit Centroid, ensembles |
+| `full` | standard + SignalCombiner, meta-learner |
 
 ```bash
-uv run python scripts/benchmark_async.py \
+# Quick benchmark (fastest)
+uv run novelentitymatcher-bench bench-novelty --depth quick
+
+# Standard with specific datasets
+uv run novelentitymatcher-bench bench-novelty \
+  --depth standard \
+  --datasets ag_news go_emotions \
+  --max-train 200 --max-test 500
+
+# Full depth
+uv run novelentitymatcher-bench bench-novelty --depth full --output /tmp/novelty_results.csv
+```
+
+### Async Speed Benchmark (`bench-async`)
+
+```bash
+uv run novelentitymatcher-bench bench-async \
   --section languages/languages \
   --model default \
-  --modes zero-shot head-only full \
+  --modes zero-shot \
   --max-entities 50 \
   --max-queries 25 \
   --multiplier 20 \
   --concurrency 8 \
-  --output artifacts/benchmarks/speed-routes-languages.json
+  --output artifacts/benchmarks/speed-routes.json
 ```
 
-### Render a Markdown Report
+### Rendering and Plotting
 
 ```bash
-uv run python scripts/render_benchmark_report.py \
-  artifacts/benchmarks/benchmark-results.json
+# Render benchmark JSON as markdown
+uv run novelentitymatcher-bench render artifacts/benchmarks/results.json
 
-uv run python scripts/render_benchmark_report.py \
-  artifacts/benchmarks/speed-routes-languages.json
+# Generate charts from benchmark results
+uv run novelentitymatcher-bench plot \
+  --embedding-results results/embeddings.json \
+  --training-results results/training.json \
+  --bert-results results/bert.json \
+  --output-dir docs/images/benchmarks
+```
+
+### Dataset Management
+
+```bash
+# List available datasets
+uv run novelentitymatcher-bench list
+
+# Download/cache specific datasets
+uv run novelentitymatcher-bench load --datasets ag_news go_emotions
+
+# Force re-download
+uv run novelentitymatcher-bench load --datasets ag_news --force
+
+# Clear cache
+uv run novelentitymatcher-bench clear --dataset ag_news
+uv run novelentitymatcher-bench clear
 ```
 
 ## Understanding the Output
@@ -95,110 +150,70 @@ bge-base     dynamic      ok          41.23       val             0.9600        
 ```
 
 **Key metrics:**
-- `throughput_qps` - Queries per second (higher is better)
-- `accuracy` - Top-1 accuracy on the preferred populated split
-- `accuracy_split` - Which split that top-line accuracy came from
-- `base_accuracy`, `train_accuracy`, `val_accuracy`, `test_accuracy` - split-level accuracy
-- perturbation metrics such as `typo_accuracy` - robustness by transformation type
-- `speedup_vs_minilm` - Relative speed vs minilm baseline
-- `status` - "ok" or "skipped" (with skip_reason)
+- `throughput_qps` — Queries per second (higher is better)
+- `accuracy` — Top-1 accuracy on the preferred populated split
+- `accuracy_split` — Which split that top-line accuracy came from
+- Perturbation metrics such as `typo_accuracy` — robustness by transformation type
+- `speedup_vs_minilm` — Relative speed vs minilm baseline
+- `status` — "ok" or "skipped" (with skip_reason)
 
-### JSON Output
+### Novelty Benchmark Output
 
-```json
-[
-  {
-    "track": "embedding",
-    "section": "languages/languages",
-    "model": "potion-8m",
-    "resolved_model": "minishlab/potion-base-8M",
-    "backend": "static",
-    "status": "ok",
-    "throughput_qps": 4032.12,
-    "accuracy": 0.725,
-    "accuracy_split": "val",
-    "base_accuracy": 0.95,
-    "typo_accuracy": 0.68,
-    "avg_latency": 0.000248,
-    "p95_latency": 0.000312,
-    "build_time": 0.125
-  }
-]
+```
+Strategy                   Val AUROC   Test AUROC   Test DR@1%
+------------------------------------------------------------
+knn_distance                   0.875        0.851        0.160
+mahalanobis                    0.826        0.822        0.090
+lof                            0.817        0.799        0.250
+oneclass_svm                   0.830        0.825        0.290
+isolation_forest               0.644        0.539        0.050
 ```
 
 ## Benchmark Metrics Explained
 
 ### Throughput (QPS)
 
-**Queries per second** - How many matches the system can process.
+Queries per second — how many matches the system can process.
 
-- **Higher is better** - Means faster processing
+- **Higher is better**
 - **potion-8m**: ~4000 QPS (39x faster than minilm)
 - **minilm**: ~100 QPS (baseline)
 - **bge-base**: ~40 QPS (2.5x slower than minilm)
 
-**When to care:**
-- High-traffic APIs (>100 requests/second)
-- Batch processing of large datasets
-- Real-time applications with low latency requirements
-
 ### Accuracy
 
-**Top-1 match accuracy** - Percentage of queries that match the correct entity.
+Top-1 match accuracy — percentage of queries that match the correct entity.
 
-- **Higher is better** - Means more correct matches
-- Typical range: 0.80-0.95 (80-95%)
-- Depends on dataset difficulty
-- Use perturbation-specific metrics when you want to understand robustness.
-  `val` and `test` are legacy positional holdout buckets, not guaranteed
-  difficulty levels.
-
-**When to care:**
-- All applications - accuracy is always important
+- Typical range: 0.80–0.95 (80–95%)
 - Tradeoff with speed: static models trade slight accuracy for huge speed gains
 
 ### Latency
 
-**Time per query** - How long a single match takes.
+Time per query — `avg_latency`, `p95_latency`, `p99_latency`.
 
-- **Lower is better** - Means faster response time
-- **avg_latency** - Average query time
-- **p95_latency** - 95th percentile (worst 5% of queries)
-- **p99_latency** - 99th percentile (worst 1% of queries)
+### AUROC (Novelty)
 
-**When to care:**
-- User-facing applications (need <100ms response time)
-- Real-time systems (need <10ms response time)
-- SLA requirements (e.g., 99% of requests <50ms)
+Area Under ROC Curve — overall discrimination ability for novelty detection. 1.0 = perfect, 0.5 = random.
 
-### Build Time
+### DR@1% (Novelty)
 
-**Time to initialize** - Model loading and index building.
+Detection Rate at 1% False Positive — what fraction of novel samples are caught when only 1% of known samples are incorrectly flagged. Measures practical detection capability.
 
-- **Lower is better** - Means faster cold start
-- Static models: ~0.1-0.5 seconds
-- Dynamic models: ~0.5-2 seconds
+## Benchmark Datasets
 
-**When to care:**
-- Serverless functions (cold start matters)
-- Frequent restarts
-- Development iteration
+### HuggingFace Datasets (`run` command)
 
-### Route Timing Breakdown
+| Task | Datasets |
+|------|----------|
+| Entity Resolution | walmart_amazon, amazon_google, fodors_zagats, beer, dblp_acm, dblp_googlescholar, itunes_amazon |
+| Classification | ag_news, yahoo_answers, goemotions |
+| Novelty Detection | ag_news, goemotions (with 20% OOD class split) |
 
-The route speed benchmark now reports:
+Datasets are cached as parquet at `data/hf_benchmarks/`.
 
-- `construct_seconds` - Matcher object construction
-- `fit_seconds` - Zero-shot setup or supervised training time
-- `cold_query_seconds` - First query after fit
-- `match_seconds` - Steady-state route time for the benchmarked workload
-- `end_to_end_seconds` - Combined construct + fit + cold + steady-state time
+### Processed Sections (`bench-async`)
 
-## Benchmark Sections
-
-### What Are Sections?
-
-Sections are processed datasets in `data/processed/*/*.csv`:
+Custom CSV sections in `data/processed/*/*.csv`:
 
 ```
 data/processed/
@@ -210,267 +225,59 @@ data/processed/
     └── currencies.csv
 ```
 
-Each CSV becomes a benchmark section:
-- `languages/languages`
-- `universities/universities`
-- `currencies/currencies`
-
-### Section Format
-
-CSV columns:
-- `id` - Entity ID
-- `name` - Primary name
-- `aliases` - Pipe-separated aliases (optional)
-- `type` - Entity type (optional)
-
-### Custom Sections
-
-Add your own datasets for benchmarking:
-
-```bash
-mkdir -p data/processed/mydomain
-cat > data/processed/mydomain/entities.csv << EOF
-id,name,aliases
-DE,Germany,Deutschland|DE
-FR,France,frankreich|FR
-EOF
-
-# Benchmark your section
-uv run python scripts/benchmark_embeddings.py \
-  --sections mydomain/entities
-```
+CSV columns: `id`, `name`, `aliases` (pipe-separated), `type` (optional).
 
 ## Interpreting Results for Model Selection
 
-### Speed-Critical Applications
+### Speed-Critical: `potion-8m`
+- 39x faster than minilm, minimal accuracy tradeoff (~92% vs 93%)
+- Use for high-traffic APIs (>1000 req/s), tight latency budgets (<10ms)
 
-**Best choice:** `potion-8m`
+### Accuracy-Critical: `bge-base`
+- Highest accuracy (~94–95%), better contextual understanding
+- Use when accuracy is paramount, lower traffic volumes
 
-**Why:**
-- 39x faster than minilm
-- Minimal accuracy tradeoff (92% vs 93%)
-- Lowest latency (~0.25ms per query)
+### Balanced: `minilm`
+- Good accuracy (~93%), reasonable speed (~100 QPS)
+- Safe default for moderate traffic
 
-**Use when:**
-- High-traffic APIs (>1000 req/s)
-- Tight latency budgets (<10ms)
-- Resource-constrained environments
+### Multilingual: `mrl-multi` or `bge-m3`
+- Static (fast) or dynamic (accurate) multilingual options
 
-### Accuracy-Critical Applications
-
-**Best choice:** `bge-base`
-
-**Why:**
-- Highest accuracy (~94-95%)
-- Better contextual understanding
-- Still reasonable speed
-
-**Use when:**
-- Accuracy is paramount
-- Lower traffic volumes
-- Can tolerate higher latency
-
-### Balanced Approach
-
-**Best choice:** `minilm`
-
-**Why:**
-- Good accuracy (~93%)
-- Reasonable speed (~100 QPS)
-- Proven reliability
-
-**Use when:**
-- Uncertain about requirements
-- Want a safe default
-- Moderate traffic levels
-
-### Multilingual Applications
-
-**Best choices:**
-- `mrl-multi` (static, fast)
-- `bge-m3` (dynamic, accurate)
-
-**Use when:**
-- Supporting multiple languages
-- Need language flexibility
-- Trading off speed vs coverage
-
-## Advanced Benchmarking
-
-### Benchmarking Custom Models
+## Programmatic Usage
 
 ```python
-from novelentitymatcher.utils.benchmarks import benchmark_embedding_models
+from novelentitymatcher.benchmarks import BenchmarkRunner
 
-# Define your custom section
-custom_section = {
-    "section": "my-data",
-    "entities": [...],
-    "queries": [...],
-    "accuracy_pairs": [...]
-}
+runner = BenchmarkRunner()
 
-# Benchmark specific models
-results = benchmark_embedding_models(
-    model_names=["potion-8m", "my-custom-model"],
-    sections_data=[custom_section],
-    iterations=3
-)
+# Load datasets
+runner.load_all()
 
-print(results)
-```
+# Run specific benchmarks
+er_results = runner.run_entity_resolution_benchmark(model="potion-8m")
+clf_results = runner.run_classification(model="potion-8m", mode="zero-shot")
+novelty_results = runner.run_novelty(model="potion-8m", ood_ratio=0.2)
 
-### Benchmarking Training Modes
-
-```python
-from novelentitymatcher.utils.benchmarks import benchmark_trained_modes
-
-results = benchmark_trained_modes(
-    model_names=["mpnet", "bge-base"],
-    modes=["head-only", "full"],
-    num_epochs=1,
-    sections_data=[custom_section]
-)
-
-print(results)
-```
-
-### Custom Metrics
-
-```python
-import pandas as pd
-
-results = pd.read_json("artifacts/benchmarks/benchmark-results.json")
-
-# Your custom analysis
-avg_accuracy = results.groupby("model")["typo_accuracy"].mean()
-speedup = results.set_index("model")["throughput_qps"] / results.loc[results["model"] == "minilm", "throughput_qps"].values[0]
-
-print(f"Average typo accuracy by model:\n{avg_accuracy}")
-print(f"\nSpeedup vs minilm:\n{speedup}")
-```
-
-## Reproducing Published Results
-
-To reproduce the results in [`benchmark-results.md`](./benchmark-results.md):
-
-```bash
-uv run python scripts/benchmark_embeddings.py \
-  --track embeddings \
-  --sections languages/languages universities/universities \
-  --embedding-models potion-8m potion-32m mrl-en mrl-multi minilm \
-  --max-entities-per-section 30 \
-  --max-queries-per-section 10 \
-  --output my-benchmark.json
-```
-
-Compare your results with [`benchmark-results.md`](./benchmark-results.md):
-
-```bash
-# View published results
-cat docs/experiments/benchmark-results.md
-
-# Compare with your results
-echo "Your results:"
-cat my-benchmark.json | jq '.[] | {model, throughput_qps, accuracy}'
+# Run everything
+all_results = runner.run_all()
 ```
 
 ## Troubleshooting
 
 ### "No benchmark sections found"
-
-**Cause:** No processed data in `data/processed/`.
-
-**Solution:**
-```bash
-# Check for processed data
-ls data/processed/*/*.csv
-
-# Or specify sections explicitly if they exist
-uv run python scripts/benchmark_embeddings.py --sections languages/languages
-```
+No processed data in `data/processed/`. Check with `ls data/processed/*/*.csv` or specify datasets explicitly.
 
 ### Model loading errors
+Test model loading: `from novelentitymatcher import Matcher; m = Matcher(model="your-model", entities=[{"id":"1","name":"test"}]); m.fit()`
 
-**Cause:** Model not downloaded or incompatible.
-
-**Solution:**
-```python
-# Test model loading first
-from novelentitymatcher import Matcher
-test = Matcher(model="your-model", entities=[{"id": "1", "name": "test"}])
-test.fit()
-```
-
-### Out of memory errors
-
-**Cause:** Too many models or sections loaded simultaneously.
-
-**Solution:**
-```bash
-# Benchmark one model at a time
-uv run python scripts/benchmark_embeddings.py --embedding-models potion-8m
-
-# Reduce data size
-uv run python scripts/benchmark_embeddings.py \
-  --max-entities-per-section 10 \
-  --max-queries-per-section 5
-```
-
-### Slow benchmark execution
-
-**Cause:** Large datasets or too many iterations.
-
-**Solution:**
-```bash
-# Reduce iterations
-uv run python scripts/benchmark_embeddings.py \
-  --sections languages/languages \
-  --max-entities-per-section 20
-
-# Use fewer models
-uv run python scripts/benchmark_embeddings.py \
-  --embedding-models potion-8m minilm
-```
-
-## Performance Tips
-
-### For Fastest Benchmarks
-
-```bash
-# Small dataset, few models, one section
-uv run python scripts/benchmark_embeddings.py \
-  --embedding-models potion-8m \
-  --sections languages/languages \
-  --max-entities-per-section 10 \
-  --max-queries-per-section 5
-```
-
-### For Most Representative Results
-
-```bash
-# Real-world dataset sizes, multiple iterations
-uv run python scripts/benchmark_embeddings.py \
-  --sections languages/languages universities/universities \
-  --max-entities-per-section 100 \
-  --max-queries-per-section 50
-```
-
-### For Production Validation
-
-```bash
-# Use your actual data
-cp /path/to/your/data.csv data/processed/yourdomain/entities.csv
-
-# Benchmark against your data
-uv run python scripts/benchmark_embeddings.py \
-  --sections yourdomain/entities \
-  --embedding-models potion-8m minilm bge-base
-```
+### Out of memory
+Benchmark one model at a time or reduce data: `--max-train-samples 100`.
 
 ## Next Steps
 
 - See [`benchmark-results.md`](./benchmark-results.md) for latest published results
-- See [`models.md`](./models.md) for model selection guidance
-- See [`static-embeddings.md`](./static-embeddings.md) for static embedding details
-- See [`matcher-modes.md`](./matcher-modes.md) for mode selection
+- See [`speed-benchmark-results.md`](./speed-benchmark-results.md) for route speed results
+- See [`novelty-detection-benchmark.md`](./novelty-detection-benchmark.md) for novelty detection strategy results
+- See [`../models.md`](../models.md) for model selection guidance
+- See [`../matcher-modes.md`](../matcher-modes.md) for mode selection

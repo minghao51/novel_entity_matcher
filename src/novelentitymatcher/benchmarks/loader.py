@@ -44,10 +44,10 @@ class DatasetLoader:
         if not HF_AVAILABLE:
             return None
         try:
-            import huggingface_hub
+            from huggingface_hub import dataset_info
 
-            info = huggingface_hub.get_dataset_config_info(config.hf_path)
-            return info.version if hasattr(info, "version") else str(hash(info.sha))
+            info = dataset_info(config.hf_path)
+            return info.sha
         except (ConnectionError, ValueError, OSError, RuntimeError):
             return None
 

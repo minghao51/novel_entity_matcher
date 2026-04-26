@@ -238,10 +238,10 @@ if result.is_novel and result.novel_score > 0.7:
 ## Benchmark Command
 
 ```bash
-uv run python scripts/benchmark_full_pipeline.py
+uv run scripts/benchmark_full_pipeline.py
 ```
 
-Results saved to: `novelty_entity_matcher_benchmark_results.csv`
+Results are emitted as benchmark CSV artifacts in the project root (for example: `*_benchmark_results.csv` / `*_benchmark.csv`).
 
 ---
 

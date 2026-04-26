@@ -259,6 +259,51 @@ class TestSignalCombinerWeighted:
         assert 1 in novel_indices
         assert 0 not in novel_indices
 
+    def test_weighted_combination_includes_mahalanobis_and_lof_scores(self):
+        detector = NoveltyDetector(
+            config=DetectionConfig(
+                strategies=["mahalanobis", "lof"],
+                combine_method="weighted",
+                weights=WeightConfig(
+                    confidence=0.0,
+                    uncertainty=0.0,
+                    knn=0.0,
+                    cluster=0.0,
+                    self_knowledge=0.0,
+                    pattern=0.0,
+                    oneclass=0.0,
+                    prototypical=0.0,
+                    setfit=0.0,
+                    setfit_centroid=0.0,
+                    mahalanobis=0.7,
+                    lof=0.3,
+                    novelty_threshold=0.6,
+                    knn_gate_threshold=1.0,
+                    strong_knn_threshold=1.0,
+                    strong_uncertainty_threshold=1.0,
+                ),
+                allowed_maturities=["production", "experimental"],
+            )
+        )
+
+        strategy_outputs = {
+            "mahalanobis": ({0}, {0: {"mahalanobis_novelty_score": 0.9}}),
+            "lof": ({0}, {0: {"lof_novelty_score": 0.5}}),
+        }
+        all_metrics = {
+            0: {
+                "mahalanobis_novelty_score": 0.9,
+                "lof_novelty_score": 0.5,
+            }
+        }
+
+        novel_indices, novelty_scores = detector._combiner.combine(
+            strategy_outputs, all_metrics
+        )
+
+        assert 0 in novel_indices
+        assert novelty_scores[0] == pytest.approx(0.78)
+
 
 class TestSignalCombinerEdgeCases:
     """Tests for edge cases in signal combining."""

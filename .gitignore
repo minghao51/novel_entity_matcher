@@ -23,6 +23,7 @@ pip-wheel-metadata/
 venv/
 .env
 .env.*
+!.env.example
 
 # Jupyter / notebooks
 .ipynb_checkpoints/
@@ -53,6 +54,10 @@ artifacts/
 proposals/
 .claude/
 .opencode/
+
+# Benchmark results
+*_benchmark_results.csv
+*_benchmark.csv
 
 # Scripts
 scripts/__pycache__/

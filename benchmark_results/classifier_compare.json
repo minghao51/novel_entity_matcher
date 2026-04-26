@@ -1,0 +1,16 @@
+{
+  "setfit": {
+    "training_time": 41.262827332997404,
+    "memory_peak_mb": 32.06447792053223,
+    "inference_time": 0.029919041000539437,
+    "throughput_samples_per_sec": 1671.1765594057144,
+    "accuracy": 1.0
+  },
+  "bert": {
+    "training_time": 13.199419083997782,
+    "memory_peak_mb": 545.1089658737183,
+    "inference_time": 0.05011545799789019,
+    "throughput_samples_per_sec": 997.6961599773258,
+    "accuracy": 0.88
+  }
+}

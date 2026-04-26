@@ -16,6 +16,7 @@ from .pattern_impl import PatternScorer
 @StrategyRegistry.register
 class PatternStrategy(NoveltyStrategy):
     strategy_id = "pattern"
+    maturity = "internal"
 
     def __init__(self):
         self._config: PatternConfig = None

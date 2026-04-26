@@ -170,6 +170,28 @@ Novel samples fall outside all known clusters, resulting in high minimum distanc
 
 ---
 
+## Configuration Options
+
+Options are set via `SetFitCentroidConfig`:
+
+| Parameter | Type | Default | Range | Description |
+|-----------|------|---------|-------|-------------|
+| `threshold` | float | None | [0.0, 1.0] or None | Cosine distance threshold. If `None`, auto-calibrated from reference set at 95th percentile of known-sample distances |
+
+```python
+from novelentitymatcher.novelty import DetectionConfig
+from novelentitymatcher.novelty.config.strategies import SetFitCentroidConfig
+
+config = DetectionConfig(
+    strategies=["setfit_centroid"],
+    setfit_centroid=SetFitCentroidConfig(
+        threshold=None,  # auto-calibrate at 95th percentile
+    ),
+)
+```
+
+---
+
 ## Findings
 
 ### Benchmark Performance (ag_news, 20% OOD)

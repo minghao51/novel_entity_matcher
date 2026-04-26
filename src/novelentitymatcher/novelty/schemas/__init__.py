@@ -9,6 +9,7 @@ from .models import (
     NovelClassAnalysis,
     NovelClassDiscoveryReport,
     ProposalReviewRecord,
+    DiscoveredAttribute,
 )
 from .results import EvaluationReport
 from ..storage.review import PromotionResult
@@ -22,6 +23,7 @@ __all__ = [
     "NovelClassAnalysis",
     "NovelClassDiscoveryReport",
     "ProposalReviewRecord",
+    "DiscoveredAttribute",
     "EvaluationReport",
     "PromotionResult",
 ]

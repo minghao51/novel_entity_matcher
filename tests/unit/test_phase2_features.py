@@ -206,10 +206,10 @@ class TestMetaLearnerSignalCombiner:
 
         features = np.array(
             [
-                [1.0, 0.8, 0.7, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.6],
-                [0.0, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1],
-                [1.0, 0.9, 0.8, 0.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.7],
-                [0.0, 0.05, 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.05],
+                [1.0, 0.8, 0.7, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.6, 0.5, 0.3],
+                [0.0, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.2, 0.1],
+                [1.0, 0.9, 0.8, 0.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.7, 0.6, 0.4],
+                [0.0, 0.05, 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.05, 0.1, 0.05],
             ]
         )
         labels = np.array([1, 0, 1, 0])
@@ -230,6 +230,8 @@ class TestMetaLearnerSignalCombiner:
                 "prototypical_is_novel": False,
                 "setfit_is_novel": False,
                 "setfit_centroid_novelty_score": 0.6,
+                "mahalanobis_novelty_score": 0.5,
+                "lof_novelty_score": 0.3,
             },
             1: {
                 "confidence_is_novel": True,
@@ -242,6 +244,8 @@ class TestMetaLearnerSignalCombiner:
                 "prototypical_is_novel": False,
                 "setfit_is_novel": False,
                 "setfit_centroid_novelty_score": 0.05,
+                "mahalanobis_novelty_score": 0.2,
+                "lof_novelty_score": 0.1,
             },
         }
 
@@ -255,8 +259,8 @@ class TestMetaLearnerSignalCombiner:
 
         features = np.array(
             [
-                [1.0, 0.8, 0.7, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.6],
-                [0.0, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1],
+                [1.0, 0.8, 0.7, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.6, 0.5, 0.3],
+                [0.0, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.2, 0.1],
             ]
         )
         labels = np.array([1, 0])
@@ -352,7 +356,8 @@ class TestAdaptiveWeights:
         normalized = weights.normalize_weights()
 
         total = (
-            normalized.uncertainty
+            normalized.confidence
+            + normalized.uncertainty
             + normalized.knn
             + normalized.cluster
             + normalized.self_knowledge
@@ -361,5 +366,7 @@ class TestAdaptiveWeights:
             + normalized.prototypical
             + normalized.setfit
             + normalized.setfit_centroid
+            + normalized.mahalanobis
+            + normalized.lof
         )
         assert abs(total - 1.0) < 0.01

@@ -173,6 +173,36 @@ Known support:
 
 ---
 
+## Configuration Options
+
+Options are set via `ClusteringConfig`:
+
+| Parameter | Type | Default | Range | Description |
+|-----------|------|---------|-------|-------------|
+| `min_cluster_size` | int | 5 | ≥ 1 | Minimum cluster size to be considered valid |
+| `persistence_threshold` | float | 0.1 | [0.0, 1.0] | Persistence threshold for cluster stability |
+| `cohesion_threshold` | float | 0.45 | [0.0, 1.0] | Cohesion threshold for cluster compactness |
+| `hdbscan_min_cluster_size` | int | 5 | ≥ 1 | HDBSCAN `min_cluster_size` parameter |
+| `hdbscan_min_samples` | int | 1 | ≥ 1 | HDBSCAN `min_samples` parameter (higher = more conservative) |
+| `cluster_selection_epsilon` | float | 0.0 | ≥ 0.0 | HDBSCAN cluster selection epsilon (0 = auto) |
+
+```python
+from novelentitymatcher.novelty import DetectionConfig
+from novelentitymatcher.novelty.config.strategies import ClusteringConfig
+
+config = DetectionConfig(
+    strategies=["clustering"],
+    clustering=ClusteringConfig(
+        min_cluster_size=3,
+        hdbscan_min_cluster_size=5,
+        hdbscan_min_samples=2,
+        cohesion_threshold=0.5,
+    ),
+)
+```
+
+---
+
 ## Findings
 
 ### Benchmark Performance

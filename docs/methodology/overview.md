@@ -274,7 +274,7 @@ No training data → zero-shot
 
 Novelty detection determines whether a query belongs to an unknown (novel) class. The system uses a multi-signal approach where individual strategy scores are fused into a final novelty decision.
 
-**Benchmark Reference**: See [novelty-detection-benchmark.md](../novelty-detection-benchmark.md) for comprehensive benchmark results.
+**Benchmark Reference**: See [Novelty Detection Benchmark](../experiments/novelty-detection-benchmark.md) for comprehensive benchmark results.
 
 ### 2.1 Signal Fusion Architecture
 
@@ -567,6 +567,7 @@ is_novel = novelty_score > threshold
 | **union** | `novel = any(flags)` | High recall needed (catch everything) |
 | **intersection** | `novel = all(flags)` | High precision needed (few false positives) |
 | **voting** | `novel = count(flags) > n/2` | Balanced, robust to individual strategy failures |
+| **meta_learner** | Logistic regression on strategy outputs | Learned combination (requires training data) |
 
 #### Heuristic Override Gates (Weighted Mode)
 
@@ -696,6 +697,56 @@ Do you have training data?
 
 ---
 
+## Model Registry
+
+The system maintains a registry of embedding models across three backends.
+
+### Static Embedding Models (no training, fastest)
+
+| Alias | Model | Language | Use Case |
+|-------|-------|----------|----------|
+| `potion-8m` | minishlab/potion-base-8M | en | Ultra-fast, smallest |
+| `potion-32m` | minishlab/potion-base-32M | en | Fast, good quality (default retrieval) |
+| `mrl-en` | RikkaBotan/stable-static-embedding-fast-retrieval-mrl-en | en | English retrieval |
+| `mrl-multi` | sentence-transformers/static-similarity-mrl-multilingual-v1 | multilingual | Multilingual retrieval |
+
+### Sentence-Transformer Models (trainable with SetFit)
+
+| Alias | Model | Language | Params |
+|-------|-------|----------|--------|
+| `bge-base` | BAAI/bge-base-en-v1.5 | en | 109M |
+| `bge-m3` | BAAI/bge-m3 | multilingual | 568M |
+| `nomic` | nomic-ai/nomic-embed-text-v1 | en | 137M |
+| `mpnet` | sentence-transformers/all-mpnet-base-v2 | en | 110M (default training) |
+| `minilm` | sentence-transformers/all-MiniLM-L6-v2 | en | 22M |
+
+### BERT Models (for BERT classification mode)
+
+| Alias | Model | Language | Params | Speed | Accuracy |
+|-------|-------|----------|--------|-------|----------|
+| `distilbert` | distilbert-base-uncased | en | 66M | fast | high (default BERT) |
+| `tinybert` | huawei-noah/TinyBERT_General_4L_312D | en | 4.4M | very fast | medium |
+| `roberta-base` | roberta-base | en | 125M | medium | very high |
+| `deberta-v3` | microsoft/deberta-v3-base | en | 184M | slow | state of the art |
+| `bert-multilingual` | bert-base-multilingual-cased | multilingual | 179M | slow | high |
+
+### Reranker Models (for Hybrid mode)
+
+| Alias | Model | Use Case |
+|-------|-------|----------|
+| `bge-m3` | BAAI/bge-reranker-v2-m3 | Default, multilingual |
+| `bge-large` | BAAI/bge-reranker-large | English, high accuracy |
+| `ms-marco` | cross-encoder/ms-marco-MiniLM-L-6-v2 | Fast, lightweight |
+
+### ANN Index Backends
+
+| Backend | Config Options | Use Case |
+|---------|---------------|----------|
+| `hnswlib` | `ef_construction=200`, `M=16` | Default, fast queries |
+| `faiss` | `index_type=IndexFlatIP` | GPU-accelerated, very large scale |
+
+---
+
 ## Implementation Reference
 
 ```python
@@ -744,4 +795,4 @@ report = await novel_matcher.discover_novel_classes(
 
 ---
 
-*See [novelty-detection-benchmark.md](../novelty-detection-benchmark.md) for detailed benchmark methodology and configuration.*
+*See [Novelty Detection Benchmark](../experiments/novelty-detection-benchmark.md) for detailed benchmark methodology and configuration.*

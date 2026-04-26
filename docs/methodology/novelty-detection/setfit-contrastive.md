@@ -163,6 +163,35 @@ For query x:
 
 ---
 
+## Configuration Options
+
+Options are set via `SetFitConfig`:
+
+| Parameter | Type | Default | Range | Description |
+|-----------|------|---------|-------|-------------|
+| `margin` | float | 0.5 | ≥ 0.0 | Contrastive loss margin |
+| `model_name` | str | "sentence-transformers/all-MiniLM-L6-v2" | — | Sentence transformer model |
+| `epochs` | int | 10 | ≥ 1 | Number of training epochs |
+| `batch_size` | int | 16 | ≥ 1 | Training batch size |
+| `learning_rate` | float | 2e-5 | > 0.0 | Learning rate for fine-tuning |
+| `threshold` | float | 0.7 | [0.0, 1.0] | Similarity threshold for novelty detection |
+
+```python
+from novelentitymatcher.novelty import DetectionConfig
+from novelentitymatcher.novelty.config.strategies import SetFitConfig
+
+config = DetectionConfig(
+    strategies=["setfit"],
+    setfit=SetFitConfig(
+        margin=0.3,
+        epochs=15,
+        threshold=0.65,
+    ),
+)
+```
+
+---
+
 ## Findings
 
 ### Benchmark Performance

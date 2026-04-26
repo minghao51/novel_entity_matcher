@@ -159,6 +159,32 @@ Optional class proposal generation
 Result (entity match, novelty report, and optional proposals)
 ```
 
+## Discovery Pipeline
+
+`DiscoveryPipeline` is the pipeline-first public discovery entry point. It owns and wires together:
+
+- a fitted `Matcher` for top-k match metadata and embeddings
+- a `NoveltyDetector` built from `PipelineConfig`
+- a `ScalableClusterer` configured from pipeline clustering settings
+- an optional `LLMClassProposer` for class proposal generation
+
+The internal stage sequence is:
+
+1. `MatcherMetadataStage`
+2. `OODDetectionStage`
+3. `CommunityDetectionStage`
+4. `ClusterEvidenceStage`
+5. `ProposalStage`
+
+Key stage-level behaviors:
+
+- OOD strategy and calibration settings are resolved before stage execution and applied through the owned `DetectionConfig`
+- clustering metric / density parameters are applied both to the owned `ScalableClusterer` and the cluster stage runtime call
+- proposal generation can run in cluster mode or sample mode
+- schema discovery augments proposals with discovered attributes and a normalized `attribute_schema`
+
+This keeps `DiscoveryPipeline` as the richest configuration surface for discovery workflows, while `NovelEntityMatcher` remains the simpler novelty-aware classification entry point.
+
 ## Backends
 
 ### Static Embeddings

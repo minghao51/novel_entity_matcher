@@ -16,6 +16,7 @@ from .prototypical_impl import PrototypicalDetector
 @StrategyRegistry.register
 class PrototypicalStrategy(NoveltyStrategy):
     strategy_id = "prototypical"
+    maturity = "experimental"
 
     def __init__(self):
         self._config: PrototypicalConfig = None

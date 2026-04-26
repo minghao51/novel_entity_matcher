@@ -14,13 +14,16 @@ This folder is split into active guides, experiment docs, architecture notes, an
 - [`configuration.md`](./configuration.md): configuration system and model registries
 - [`novel-class-detection.md`](./novel-class-detection.md): current novelty-aware matching and class discovery workflow
 
-## Experiments
+## Benchmarks & Experiments
 
-- [`experiments/index.md`](./experiments/index.md): experiment inventory and execution conventions
+All benchmark docs are in [`experiments/`](./experiments/):
+
+- [`experiments/benchmarking.md`](./experiments/benchmarking.md): how to run benchmarks via `novelentitymatcher-bench` CLI
+- [`experiments/benchmark-results.md`](./experiments/benchmark-results.md): ER, classification, and novelty results
+- [`experiments/novelty-detection-benchmark.md`](./experiments/novelty-detection-benchmark.md): novelty strategy results (traditional + SetFit-based)
+- [`experiments/speed-benchmark-results.md`](./experiments/speed-benchmark-results.md): sync vs async route speed results
 - [`experiments/country-classifier-scripts.md`](./experiments/country-classifier-scripts.md): country classifier experiment walkthrough
-- [`experiments/benchmarking.md`](./experiments/benchmarking.md): how to run and interpret benchmarks
-- [`experiments/benchmark-results.md`](./experiments/benchmark-results.md): latest published benchmark summary
-- [`experiments/speed-benchmark-results.md`](./experiments/speed-benchmark-results.md): sync vs async route benchmark summary
+- [`experiments/index.md`](./experiments/index.md): experiment inventory and execution conventions
 
 ## Internals
 
@@ -42,6 +45,9 @@ This folder is split into active guides, experiment docs, architecture notes, an
 - [`archive/novelty-methods-research.md`](./archive/novelty-methods-research.md): archived novelty-method proposals
 - [`archive/implementation/2026-03-26-mypy-fixes.md`](./archive/implementation/2026-03-26-mypy-fixes.md): archived maintenance note
 - [`archive/pypi-trusted-publishing.md`](./archive/pypi-trusted-publishing.md): archived release setup note
+- [`archive/2026-04-25-benchmark-comprehensive-analysis.md`](./archive/2026-04-25-benchmark-comprehensive-analysis.md): merged into `experiments/benchmark-results.md`
+- [`archive/2026-04-25-phase2-benchmark-results.md`](./archive/2026-04-25-phase2-benchmark-results.md): merged into `experiments/novelty-detection-benchmark.md`
+- [`archive/2026-04-25-novelty-detection-benchmark-root.md`](./archive/2026-04-25-novelty-detection-benchmark-root.md): moved to `experiments/novelty-detection-benchmark.md`
 
 ### I want to use the library
 

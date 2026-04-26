@@ -1,5 +1,7 @@
 # Benchmark Results
 
+Related docs: [`benchmarking.md`](./benchmarking.md) | [`speed-benchmark-results.md`](./speed-benchmark-results.md) | [`novelty-detection-benchmark.md`](./novelty-detection-benchmark.md)
+
 ## Latest Results: Zero-Shot vs Head-Only vs Full SetFit (April 2, 2026)
 
 **Model:** sentence-transformers/all-MiniLM-L6-v2  
@@ -38,21 +40,6 @@
 3. **Head-only with PCA** works well for ag_news (83.1% with 375 samples) but struggles with yahoo_answers (49.3%)
 4. **Overfitting gap** is much smaller with head-only+PCA (1-2%) vs full SetFit (7-17%)
 5. **More training data helps** but with diminishing returns
-
-### Configuration
-
-**Head-Only Mode:**
-- `skip_body_training=True`
-- `pca_dims`: 5 (≤100 samples), 10 (≤200), 20 (>200)
-- `head_c`: 0.001 (≤100), 0.01 (≤200), 0.1 (>200)
-- `class_weight="balanced"`
-
-**Full SetFit Mode:**
-- `skip_body_training=False`
-- `num_iterations`: max(1, min(5, n // (n_classes * 2)))
-- `weight_decay`: 0.1 (≤100), 0.01 (>100)
-- `head_c`: 1.0
-- `num_epochs`: 1
 
 ---
 
@@ -120,32 +107,68 @@ each threshold is shown; the overall best F1 per dataset is **bold**.
 | walmart_amazon | **0.349** | 0.344 | potion-8m |
 | amazon_google | 0.320 | **0.377** | MiniLM |
 
+### Detailed Results by Dataset
+
+#### walmart_amazon (2,049 pairs, 9.4% match rate)
+
+| Threshold | all-MiniLM-L6-v2 | potion-8m |
+|-----------|------------------|-----------|
+| | F1 / Precision / Recall | F1 / Precision / Recall |
+| 0.5 | 0.173 / 0.095 / 1.000 | 0.174 / 0.095 / 1.000 |
+| 0.6 | 0.174 / 0.096 / 0.969 | 0.179 / 0.099 / 0.979 |
+| 0.7 | 0.194 / 0.109 / 0.896 | 0.211 / 0.120 / 0.902 |
+| 0.8 | 0.267 / 0.164 / 0.715 | 0.309 / 0.201 / 0.668 |
+| 0.9 | **0.344 / 0.364 / 0.326** | **0.349 / 0.438 / 0.290** |
+
+#### amazon_google (2,293 pairs, 10.2% match rate)
+
+| Threshold | all-MiniLM-L6-v2 | potion-8m |
+|-----------|------------------|-----------|
+| | F1 / Precision / Recall | F1 / Precision / Recall |
+| 0.5 | 0.251 / 0.144 / 0.949 | 0.218 / 0.123 / 0.932 |
+| 0.6 | 0.298 / 0.181 / 0.855 | 0.254 / 0.150 / 0.838 |
+| 0.7 | 0.377 / 0.259 / 0.697 | 0.320 / 0.211 / 0.662 |
+| 0.8 | **0.474 / 0.450 / 0.500** | 0.387 / 0.363 / 0.415 |
+| 0.9 | 0.309 / 0.556 / 0.214 | **0.284 / 0.511 / 0.197** |
+
+#### fodors_zagats (189 pairs, 11.6% match rate)
+
+| Threshold | all-MiniLM-L6-v2 | potion-8m |
+|-----------|------------------|-----------|
+| | F1 / Precision / Recall | F1 / Precision / Recall |
+| 0.5 | 0.857 / 0.778 / 0.955 | 0.917 / 0.846 / 1.000 |
+| 0.6 | 0.870 / 0.833 / 0.909 | 0.894 / 0.840 / 0.955 |
+| 0.7 | 0.870 / 0.833 / 0.909 | 0.889 / 0.870 / 0.909 |
+| 0.8 | 0.857 / 0.900 / 0.818 | **0.905 / 0.950 / 0.864** |
+| 0.9 | **0.900 / 1.000 / 0.818** | 0.878 / 0.947 / 0.818 |
+
 ### Interpretation
 
-- potion-8m (static MRL embedding) wins on 4/7 datasets and is significantly
-  faster. It is the preferred choice for entity resolution.
-- all-MiniLM-L6-v2 wins on 3/7 datasets with notably better recall on
-  amazon_google (0.70 vs 0.20 at threshold 0.9).
+- **potion-8m** wins on 4/7 datasets and is significantly faster. Preferred for entity resolution.
+- **all-MiniLM-L6-v2** wins on 3/7 datasets with notably better recall on amazon_google.
 - Higher thresholds (0.7–0.9) are generally better for F1 across both models.
-- Both models struggle on amazon_google and walmart_amazon, which have higher
-  entity heterogeneity and structural variation.
+- Both models struggle on amazon_google and walmart_amazon (higher entity heterogeneity).
 
 ## Classification Results — Zero-shot (Auto-tuned Threshold)
-
-Zero-shot multi-class classification with auto-tuned confidence thresholds.
-The threshold is swept on the test split to find the optimal cutoff, then
-applied consistently across all splits for fair comparison.
 
 | Dataset | Classes | MiniLM Acc (test) | MiniLM Macro F1 (test) |
 |---------|---------|-------------------|------------------------|
 | ag_news | 4 | **0.642** | 0.630 |
 | yahoo_answers | 10 | 0.373 | 0.337 |
 
-## Classification Results — Head-Only vs Zero-Shot (Per-Split Analysis)
+### Classification Strengths & Weaknesses
 
-This section compares head-only (trained linear probe on frozen embeddings)
-against zero-shot classification across train/validation/test splits.
-Results reveal that head-only does **not** universally outperform zero-shot.
+**Strengths:**
+- Zero-shot works well for semantically distinct classes (ag_news: 56–64%)
+- Auto-tuned thresholds significantly improve over fixed thresholds
+- No training data needed for baseline performance
+
+**Weaknesses:**
+- Fails on fine-grained classification (goemotions 28 classes: 11%)
+- Head-only training requires much more data to outperform zero-shot
+- Zero-shot classification accuracy depends heavily on semantic distance between class names
+
+## Classification Results — Head-Only vs Zero-Shot (Per-Split Analysis)
 
 ### ag_news (4 classes: World, Sports, Business, Sci/Tech)
 
@@ -164,7 +187,7 @@ Results reveal that head-only does **not** universally outperform zero-shot.
 | head-only-500 | validation | 125 | 0.384 | 0.154 |
 | head-only-500 | test | 1000 | 0.336 | 0.234 |
 
-**Winner: Zero-shot by a large margin (64.2% vs 33.6-36.6% test accuracy)**
+**Winner: Zero-shot by a large margin (64.2% vs 33.6–36.6% test accuracy)**
 
 ### yahoo_answers_topics (10 classes)
 
@@ -177,7 +200,6 @@ Results reveal that head-only does **not** universally outperform zero-shot.
 | head-only-100 | validation | 125 | 0.568 | 0.539 |
 | head-only-100 | test | 1000 | 0.437 | 0.440 |
 | head-only-200 | train | 193 | 0.974 | 0.975 |
-| head-only-200 | validation | 125 | 0.568 | 0.537 |
 | **head-only-200** | **test** | **1000** | **0.525** | **0.526** |
 | head-only-500 | train | 296 | 0.902 | 0.898 |
 | head-only-500 | validation | 125 | 0.616 | 0.542 |
@@ -198,27 +220,10 @@ Results reveal that head-only does **not** universally outperform zero-shot.
 
 ### Interpretation
 
-1. **Zero-shot excels when class names are semantically meaningful.**
-   ag_news classes ("World", "Sports", "Business", "Sci/Tech") are well-separated
-   in MiniLM's embedding space, making zero-shot classification effective without
-   any training data.
-
-2. **Head-only wins when class names are abstract.**
-   yahoo_answers classes ("Society", "Entertainment", "Family") are less
-   semantically distinct, so training helps learn finer decision boundaries.
-
-3. **Head-only severely overfits with small datasets.**
-   The train/test accuracy gap of 38-63% indicates the linear probe memorizes
-   training examples rather than learning generalizable patterns. This is
-   expected with 384-dim embeddings and only 50-300 training samples.
-
-4. **More training data doesn't always help.**
-   On ag_news, head-only performance *decreases* with more training samples
-   (36.6% → 33.6%) because the model has more capacity to memorize noise.
-
-5. **Optimal training size: ~200 samples for 10-class problems.**
-   yahoo_answers peaks at 200 training samples; additional data provides
-   diminishing returns while increasing overfitting risk.
+1. **Zero-shot excels when class names are semantically meaningful.** ag_news classes ("World", "Sports", "Business", "Sci/Tech") are well-separated in embedding space.
+2. **Head-only wins when class names are abstract.** yahoo_answers classes ("Society", "Entertainment", "Family") need training to learn decision boundaries.
+3. **Head-only severely overfits with small datasets.** Train/test gap of 38–63% indicates memorization.
+4. **Optimal training size: ~200 samples for 10-class problems.**
 
 ### Recommendations
 
@@ -226,35 +231,6 @@ Results reveal that head-only does **not** universally outperform zero-shot.
 - **For datasets with abstract classes**: Use head-only with ~200 samples
 - **Always monitor train/test gap**: A gap >20% indicates severe overfitting
 - **Consider regularization**: L2 penalty, dropout, or early stopping for head-only
-- **Validate on held-out data**: Never trust train accuracy alone
-
-## Classification Results — head-only Mode (MiniLM, 100 samples/class)
-
-*Historical results — see per-split analysis above for updated findings.*
-
-With `head-only` training mode, classification accuracy improves dramatically
-on simpler tasks but remains limited on complex ones.
-
-| Dataset | Classes | Accuracy | Macro F1 | vs Zero-shot |
-|---------|---------|----------|----------|--------------|
-| ag_news | 4 | **0.264** | 0.217 | +26.4% |
-| yahoo_answers | 10 | 0.009 | 0.013 | +0.8% |
-| goemotions | 28 | 0.007 | 0.002 | +0.7% |
-
-### Interpretation
-
-- **ag_news (4 classes)** shows a dramatic improvement from near-zero to 26.4%
-  accuracy. This is because ag_news topics ("World", "Sports", "Business",
-  "Sci/Tech") are semantically distinct and SetFit learns them well with
-  even 100 samples/class.
-- **yahoo_answers and goemotions** remain near-random. These have 10 and 28
-  classes respectively with significant semantic overlap, and 100 samples/class
-  is insufficient to learn fine-grained distinctions.
-- `head-only` mode with more training data would improve results further.
-  Use `--max-train-samples` to control training data size.
-- `potion-8m` does not support training — it falls back to `mpnet` (via
-  `sentence-transformers/all-mpnet-base-v2`) for trained modes, which is
-  significantly slower.
 
 ## Novelty Detection Results
 
@@ -276,51 +252,24 @@ With `head-only` training, there is a small but real improvement on goemotions.
 
 ### Interpretation
 
-- Zero-shot novelty detection is fundamentally limited — AUROC near 0.50 means
-  the model cannot distinguish known from novel classes using embedding proximity
-  alone.
-- With `head-only` training, goemotions_novelty improves to AUROC 0.558, a small
-  but real improvement. More training samples would likely improve further.
+- Zero-shot novelty detection is fundamentally limited — AUROC near 0.50.
 - For production novelty detection, use `head-only` or `full` training modes.
-- ag_news_novelty does not have a train split so `head-only` mode was skipped.
+- See [`novelty-detection-benchmark.md`](./novelty-detection-benchmark.md) for detailed strategy-level results with multiple novelty detection methods.
 
-### `_sentence_transformer_cls()` in `embedding_matcher.py`
+## Model Comparison Summary
 
-The function tried to access `matcher_module.SentenceTransformer`, but
-`SentenceTransformer` was never exported from `novelentitymatcher.core.matcher`.
-Fixed to import directly from `sentence_transformers`:
+| Task | Metric | all-MiniLM-L6-v2 | potion-8m | Winner |
+|------|--------|------------------|-----------|--------|
+| Classification (ag_news ZS) | Accuracy | 64.2% | N/A* | MiniLM |
+| ER (walmart_amazon) | Best F1 | 0.344 | 0.349 | potion-8m |
+| ER (amazon_google) | Best F1 | 0.474 | 0.387 | MiniLM |
+| ER (fodors_zagats) | Best F1 | 0.900 | 0.905 | potion-8m |
+| Novelty (goemotions ZS) | AUROC | 0.499 | 0.509 | potion-8m |
 
-```python
-# Before (broken)
-def _sentence_transformer_cls():
-    from . import matcher as matcher_module
-    return matcher_module.SentenceTransformer
-
-# After (fixed)
-def _sentence_transformer_cls():
-    from sentence_transformers import SentenceTransformer
-    return SentenceTransformer
-```
-
-### `_create_er_embedding_similarity_fn()` in `runner.py`
-
-The function passed raw model strings (e.g., `"potion-8m"`) directly to
-`SentenceTransformer()`, bypassing alias resolution. Since `potion-8m` resolves
-to `minishlab/potion-base-8M` which uses the static `StaticEmbeddingBackend`,
-this caused a model-not-found error. Fixed to:
-
-1. Resolve model alias before deciding on backend.
-2. Route to `StaticEmbeddingBackend` for static models, `SentenceTransformer`
-   for dynamic models.
-3. Only pass `show_progress_bar=False` to `SentenceTransformer.encode()` since
-   `StaticEmbeddingBackend.encode()` does not accept it.
+**Overall:** potion-8m wins 3/5 comparisons, but margins are small. Both models are competitive.
 
 ## Known Limitations
 
-- **Classification and novelty detection in zero-shot mode produce near-random
-  results.** These tasks require `head-only` or `full` training mode to be
-  meaningful.
-- **Large HuggingFace datasets (yahoo_answers, sentiment140) are slow** with
-  non-indexed models. The static `potion-8m` backend is dramatically faster.
-- **`all-MiniLM-L6-v2` times out** the default 10-minute benchmark window on
-  large datasets; use `potion-8m` for full-suite runs or increase the timeout.
+- **Classification and novelty detection in zero-shot mode produce near-random results.** These tasks require `head-only` or `full` training mode.
+- **Large HuggingFace datasets (yahoo_answers) are slow** with non-indexed models. The static `potion-8m` backend is dramatically faster.
+- **`all-MiniLM-L6-v2` times out** the default 10-minute benchmark window on large datasets; use `potion-8m` for full-suite runs.

@@ -27,6 +27,9 @@ from .config.strategies import (
     OneClassConfig,
     PrototypicalConfig,
     SetFitConfig,
+    MahalanobisConfig,
+    LOFConfig,
+    SetFitCentroidConfig,
 )
 from .config.weights import WeightConfig
 
@@ -70,6 +73,10 @@ from .clustering.validation import ClusterValidator
 # Proposers
 from .proposal.llm import LLMClassProposer
 from .proposal.retrieval import RetrievalAugmentedProposer
+from .proposal.schema_enforcement import SchemaEnforcer
+
+# Extraction
+from .extraction import ClusterEvidenceExtractor
 
 from .strategies import _register_all
 
@@ -90,6 +97,9 @@ __all__ = [
     "OneClassConfig",
     "PrototypicalConfig",
     "SetFitConfig",
+    "SetFitCentroidConfig",
+    "MahalanobisConfig",
+    "LOFConfig",
     "WeightConfig",
     # Evaluation
     "NoveltyEvaluator",
@@ -123,4 +133,7 @@ __all__ = [
     # Proposers
     "LLMClassProposer",
     "RetrievalAugmentedProposer",
+    "SchemaEnforcer",
+    # Extraction
+    "ClusterEvidenceExtractor",
 ]

@@ -20,6 +20,8 @@ from .strategies import (
     PrototypicalConfig,
     SetFitConfig,
     SetFitCentroidConfig,
+    MahalanobisConfig,
+    LOFConfig,
 )
 from .weights import WeightConfig
 
@@ -36,7 +38,7 @@ class DetectionConfig(BaseModel):
 
     # Strategy selection
     strategies: List[str] = Field(
-        default_factory=lambda: ["confidence", "knn_distance"]
+        default_factory=lambda: ["confidence", "knn_distance", "setfit_centroid"]
     )
     """
     List of strategy IDs to use for novelty detection.
@@ -97,6 +99,12 @@ class DetectionConfig(BaseModel):
     setfit_centroid: Optional[SetFitCentroidConfig] = None
     """Configuration for SetFit centroid distance strategy."""
 
+    mahalanobis: Optional[MahalanobisConfig] = None
+    """Configuration for Mahalanobis distance strategy."""
+
+    lof: Optional[LOFConfig] = None
+    """Configuration for Local Outlier Factor strategy."""
+
     # Signal combination weights
     weights: Optional[WeightConfig] = None
     """Weights for signal combination."""
@@ -110,6 +118,11 @@ class DetectionConfig(BaseModel):
 
     candidate_top_k: int = Field(default=5, ge=1)
     """How many matcher candidates to request when collecting metadata."""
+
+    allowed_maturities: List[str] = Field(
+        default_factory=lambda: ["production", "experimental", "internal"]
+    )
+    """Allowed strategy maturity levels. Strategies outside these levels are rejected during validation."""
 
     def get_strategy_config(self, strategy_id: str) -> Any:
         """
@@ -134,6 +147,9 @@ class DetectionConfig(BaseModel):
             "oneclass": self.oneclass or OneClassConfig(),
             "prototypical": self.prototypical or PrototypicalConfig(),
             "setfit": self.setfit or SetFitConfig(),
+            "setfit_centroid": self.setfit_centroid or SetFitCentroidConfig(),
+            "mahalanobis": self.mahalanobis or MahalanobisConfig(),
+            "lof": self.lof or LOFConfig(),
         }
 
         return config_map.get(strategy_id)
@@ -151,13 +167,13 @@ class DetectionConfig(BaseModel):
 
     def validate_strategies(self) -> None:
         """
-        Validate that all configured strategies are available.
+        Validate that all configured strategies are available and allowed by maturity.
 
         Strategies are registered at module load time via decorators.
         This method only validates — it does not trigger imports.
 
         Raises:
-            ValueError: If an unknown strategy is configured
+            ValueError: If an unknown strategy is configured or maturity not allowed
         """
         from ..core.strategies import StrategyRegistry
 
@@ -166,4 +182,11 @@ class DetectionConfig(BaseModel):
                 available = ", ".join(StrategyRegistry.list_strategies())
                 raise ValueError(
                     f"Unknown strategy: '{strategy_id}'. Available: {available}"
+                )
+            strategy_cls = StrategyRegistry.get(strategy_id)
+            strategy_maturity = getattr(strategy_cls, "maturity", "experimental")
+            if strategy_maturity not in self.allowed_maturities:
+                raise ValueError(
+                    f"Strategy '{strategy_id}' has maturity '{strategy_maturity}' "
+                    f"which is not in allowed_maturities={self.allowed_maturities}"
                 )

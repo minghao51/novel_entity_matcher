@@ -29,6 +29,7 @@ class LOFStrategy(NoveltyStrategy):
     """
 
     strategy_id = "lof"
+    maturity = "experimental"
 
     def __init__(self):
         self._config: Optional[LOFConfig] = None

@@ -16,6 +16,7 @@ from .oneclass_impl import OneClassSVMDetector
 @StrategyRegistry.register
 class OneClassStrategy(NoveltyStrategy):
     strategy_id = "oneclass"
+    maturity = "experimental"
 
     def __init__(self):
         self._config: OneClassConfig = None

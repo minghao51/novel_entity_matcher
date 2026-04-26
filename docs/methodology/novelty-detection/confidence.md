@@ -99,6 +99,26 @@ is_novel = confidence < 0.7
 
 ---
 
+## Configuration Options
+
+Options are set via `ConfidenceConfig`:
+
+| Parameter | Type | Default | Range | Description |
+|-----------|------|---------|-------|-------------|
+| `threshold` | float | 0.7 | [0.0, 1.0] | Minimum confidence. Samples below this are flagged as novel |
+
+```python
+from novelentitymatcher.novelty import DetectionConfig
+from novelentitymatcher.novelty.config.strategies import ConfidenceConfig
+
+config = DetectionConfig(
+    strategies=["confidence"],
+    confidence=ConfidenceConfig(threshold=0.65),
+)
+```
+
+---
+
 ## Findings
 
 ### Benchmark Performance

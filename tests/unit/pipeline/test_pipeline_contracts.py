@@ -10,7 +10,11 @@ from novelentitymatcher.pipeline import (
     ProposalStage,
     StageContext,
 )
-from novelentitymatcher.novelty.schemas import NovelSampleMetadata, NovelSampleReport
+from novelentitymatcher.novelty.schemas import (
+    DiscoveryCluster,
+    NovelSampleMetadata,
+    NovelSampleReport,
+)
 
 
 def test_internal_pipeline_runs_stages_in_order():
@@ -158,21 +162,75 @@ def test_community_detection_auto_backend_does_not_crash():
 
 
 def test_cluster_evidence_tfidf_is_batch_safe_across_calls():
-    stage = ClusterEvidenceStage(enabled=True, use_tfidf=True, max_keywords=3)
+    from novelentitymatcher.novelty.extraction import ClusterEvidenceExtractor
 
-    first_keywords = stage._compute_tfidf_keywords(
-        [
-            "quantum biology proteins",
-            "quantum biology enzymes",
-        ]
+    extractor = ClusterEvidenceExtractor(method="tfidf", max_keywords=3)
+
+    first_keywords = list(
+        extractor.extract(
+            cluster_texts=["quantum biology proteins", "quantum biology enzymes"]
+        ).keywords
     )
-    second_keywords = stage._compute_tfidf_keywords(
-        [
-            "graph neural routing",
-            "graph transformers routing",
-            "routing with graph memory",
-        ]
+    second_keywords = list(
+        extractor.extract(
+            cluster_texts=[
+                "graph neural routing",
+                "graph transformers routing",
+                "routing with graph memory",
+            ]
+        ).keywords
     )
 
     assert "quantum" in first_keywords
     assert "graph" in second_keywords
+
+
+def test_proposal_stage_sample_mode_uses_sample_level_proposals():
+    proposer = SimpleNamespace()
+    proposer.calls = []
+
+    def propose_from_clusters(**kwargs):
+        proposer.calls.append("cluster")
+        return {"mode": "cluster"}
+
+    def propose_classes(**kwargs):
+        proposer.calls.append("sample")
+        return {"mode": "sample"}
+
+    proposer.propose_from_clusters = propose_from_clusters
+    proposer.propose_classes = propose_classes
+
+    report = NovelSampleReport(
+        novel_samples=[
+            NovelSampleMetadata(
+                text="quantum biology pathway",
+                index=0,
+                confidence=0.4,
+                predicted_class="physics",
+                novelty_score=0.9,
+            )
+        ]
+    )
+    context = StageContext(
+        inputs=["quantum biology pathway"],
+        artifacts={
+            "novel_sample_report": report,
+            "discovery_clusters": [
+                DiscoveryCluster(
+                    cluster_id=0,
+                    sample_indices=[0],
+                    sample_count=1,
+                    example_texts=["quantum biology pathway"],
+                )
+            ],
+        },
+    )
+
+    result = ProposalStage(
+        proposer=proposer,
+        existing_classes_resolver=lambda: ["physics"],
+        proposal_mode="sample",
+    ).run(context)
+
+    assert result.artifacts["class_proposals"] == {"mode": "sample"}
+    assert proposer.calls == ["sample"]

@@ -155,6 +155,34 @@ is_novel = novelty_score < score_threshold  # threshold typically 0.0
 
 ---
 
+## Configuration Options
+
+Options are set via `LOFConfig`:
+
+| Parameter | Type | Default | Range | Description |
+|-----------|------|---------|-------|-------------|
+| `n_neighbors` | int | 20 | ≥ 2 | Number of neighbors for LOF computation |
+| `contamination` | float | 0.1 | (0.0, 0.5] | Expected proportion of outliers in reference set |
+| `metric` | str | "cosine" | "cosine", "euclidean", "manhattan", etc. | Distance metric |
+| `score_threshold` | float | 0.0 | — | LOF score threshold. Samples below this are flagged as novel |
+
+```python
+from novelentitymatcher.novelty import DetectionConfig
+from novelentitymatcher.novelty.config.strategies import LOFConfig
+
+config = DetectionConfig(
+    strategies=["lof"],
+    lof=LOFConfig(
+        n_neighbors=30,
+        contamination=0.05,
+        metric="cosine",
+        score_threshold=-0.5,
+    ),
+)
+```
+
+---
+
 ## Findings
 
 ### Benchmark Performance

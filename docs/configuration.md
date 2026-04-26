@@ -244,6 +244,57 @@ print(f"Threshold: {stats['threshold']}")
 print(f"Model: {stats['model_name']}")
 ```
 
+## Discovery Pipeline Configuration
+
+`DiscoveryPipeline` uses [`PipelineConfig`](../src/novelentitymatcher/pipeline/config.py) to control the internal five-stage discovery flow: match, OOD detection, clustering, evidence extraction, and proposal generation.
+
+```python
+from novelentitymatcher import DiscoveryPipeline, PipelineConfig
+
+config = PipelineConfig(
+    ood_strategies=["confidence", "mahalanobis"],
+    ood_calibration_mode="conformal",
+    ood_calibration_alpha=0.1,
+    ood_mahalanobis_mode="class_conditional",
+    clustering_backend="hdbscan",
+    clustering_metric="cosine",
+    clustering_min_samples=5,
+    clustering_cluster_selection_epsilon=0.0,
+    evidence_method="combined",
+    proposal_mode="cluster",
+    proposal_schema_discovery=True,
+    proposal_schema_max_attributes=8,
+)
+
+pipeline = DiscoveryPipeline(entities=entities, config=config)
+```
+
+### Runtime-effective Discovery Knobs
+
+These `PipelineConfig` fields now affect execution rather than only diagnostics:
+
+- `ood_strategies`: selects the novelty strategies used to build the internal `DetectionConfig`
+- `ood_calibration_mode`, `ood_calibration_alpha`, `ood_mahalanobis_mode`: configure Mahalanobis calibration behavior when that strategy is active
+- `clustering_backend`, `clustering_metric`, `clustering_min_samples`, `clustering_cluster_selection_epsilon`: configure the owned `ScalableClusterer` and cluster stage
+- `evidence_method`: chooses keyword extraction mode for cluster evidence (`"tfidf"`, `"centroid"`, or `"combined"`)
+- `proposal_mode`: chooses how proposals are generated
+- `proposal_schema_discovery`, `proposal_schema_max_attributes`, `proposal_hierarchical`: control schema-enriched proposal generation and large-cluster summarization behavior
+
+### Proposal Modes
+
+- `proposal_mode="cluster"`: generate proposals from discovery clusters
+- `proposal_mode="sample"`: bypass cluster-level prompting and propose directly from novel samples
+- `proposal_mode="rag_cluster"`: prefer cluster-based proposals, with retriever-backed proposers able to layer retrieval on top of cluster evidence
+
+### Schema Discovery
+
+When `proposal_schema_discovery=True`, class proposals can include:
+
+- `discovered_attributes`: structured fields inferred from the cluster evidence
+- `attribute_schema`: a normalized attribute-name-to-type/description mapping derived from those attributes
+
+This is useful when discovery should produce not just a class name, but also a first-pass data model for review and downstream ingestion.
+
 ## Model Selection Configuration
 
 ### Default Models

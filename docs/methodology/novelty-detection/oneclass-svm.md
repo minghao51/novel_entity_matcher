@@ -159,6 +159,33 @@ where:
 
 ---
 
+## Configuration Options
+
+Options are set via `OneClassConfig`:
+
+| Parameter | Type | Default | Options | Description |
+|-----------|------|---------|---------|-------------|
+| `nu` | float | 0.1 | [0.0, 1.0] | Expected outlier fraction. Lower = stricter boundary |
+| `kernel` | str | "rbf" | "rbf", "linear", "poly", "sigmoid" | SVM kernel type |
+| `gamma` | str | "scale" | "scale", "auto", or float | Kernel coefficient |
+| `model_name` | str | "sentence-transformers/all-MiniLM-L6-v2" | — | Sentence transformer model for embeddings |
+
+```python
+from novelentitymatcher.novelty import DetectionConfig
+from novelentitymatcher.novelty.config.strategies import OneClassConfig
+
+config = DetectionConfig(
+    strategies=["oneclass"],
+    oneclass=OneClassConfig(
+        nu=0.05,
+        kernel="rbf",
+        gamma="scale",
+    ),
+)
+```
+
+---
+
 ## Findings
 
 ### Benchmark Performance

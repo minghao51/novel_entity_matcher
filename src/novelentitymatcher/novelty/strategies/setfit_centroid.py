@@ -29,6 +29,7 @@ class SetFitCentroidStrategy(NoveltyStrategy):
     """
 
     strategy_id = "setfit_centroid"
+    maturity = "experimental"
 
     def __init__(self) -> None:
         self._config: SetFitCentroidConfig | None = None

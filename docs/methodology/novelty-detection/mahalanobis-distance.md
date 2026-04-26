@@ -163,6 +163,50 @@ The exponential transformation maps the distance to [0, 1] range.
 
 ---
 
+## Configuration Options
+
+Options are set via `MahalanobisConfig`:
+
+| Parameter | Type | Default | Range | Description |
+|-----------|------|---------|-------|-------------|
+| `threshold` | float | 3.0 | > 0.0 | Mahalanobis distance threshold. Samples above this are flagged |
+| `regularization` | float | 1e-4 | > 0.0 | Covariance matrix ridge regularization for numerical stability |
+| `use_class_conditional` | bool | True | — | Use per-class distributions (True) or single global distribution (False) |
+| `calibration_mode` | str | "none" | "none", "conformal" | Enable conformal calibration for p-value-based detection |
+| `calibration_alpha` | float | 0.1 | (0.0, 1.0] | Significance level for conformal prediction (lower = stricter) |
+| `calibration_method` | str | "split" | "split", "mondrian" | Conformal method: `split` (global) or `mondrian` (class-conditional) |
+| `calibration_set_fraction` | float | 0.2 | (0.0, 0.5] | Fraction of reference data held out for calibration |
+
+**Conformal calibration variants** (see [Conformal Calibration](conformal-calibration.md)):
+
+```python
+from novelentitymatcher.novelty import DetectionConfig
+from novelentitymatcher.novelty.config.strategies import MahalanobisConfig
+
+# Standard threshold-based detection
+config = DetectionConfig(
+    strategies=["mahalanobis"],
+    mahalanobis=MahalanobisConfig(
+        threshold=3.0,
+        regularization=1e-4,
+        use_class_conditional=True,
+    ),
+)
+
+# With conformal calibration (p-value based)
+config_conformal = DetectionConfig(
+    strategies=["mahalanobis"],
+    mahalanobis=MahalanobisConfig(
+        calibration_mode="conformal",
+        calibration_alpha=0.05,
+        calibration_method="mondrian",
+        calibration_set_fraction=0.2,
+    ),
+)
+```
+
+---
+
 ## Findings
 
 ### Benchmark Performance

@@ -147,6 +147,30 @@ entropy_threshold = 1.5     # Flag if normalized entropy > 1.5
 
 ---
 
+## Configuration Options
+
+Options are set via `UncertaintyConfig`:
+
+| Parameter | Type | Default | Range | Description |
+|-----------|------|---------|-------|-------------|
+| `margin_threshold` | float | 0.3 | [0.0, 1.0] | Margin between top-1 and top-2 predictions. Small margin = high uncertainty → novel |
+| `entropy_threshold` | float | 1.5 | ≥ 0.0 | Entropy threshold. High entropy = classifier confusion → novel |
+
+```python
+from novelentitymatcher.novelty import DetectionConfig
+from novelentitymatcher.novelty.config.strategies import UncertaintyConfig
+
+config = DetectionConfig(
+    strategies=["uncertainty"],
+    uncertainty=UncertaintyConfig(
+        margin_threshold=0.25,
+        entropy_threshold=1.2,
+    ),
+)
+```
+
+---
+
 ## Findings
 
 ### Benchmark Performance

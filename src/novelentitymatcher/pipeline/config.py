@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -17,6 +17,9 @@ _VALID_OOD_STRATEGIES = {
     "oneclass",
     "prototypical",
     "setfit",
+    "mahalanobis",
+    "lof",
+    "setfit_centroid",
 }
 
 _VALID_CLUSTERING_BACKENDS = {"auto", "hdbscan", "soptics", "umap_hdbscan"}
@@ -37,26 +40,42 @@ class PipelineConfig(BaseModel):
         default_factory=lambda: ["confidence", "knn_distance"]
     )
     confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    ood_calibration_mode: Literal["none", "conformal"] = Field(default="none")
+    ood_calibration_alpha: float = Field(default=0.1, gt=0.0, le=1.0)
+    ood_calibration_method: Literal["mondrian", "split"] = Field(default="mondrian")
+    ood_mahalanobis_mode: Literal["global", "class_conditional"] = Field(
+        default="class_conditional"
+    )
 
     # --- Clustering ---
     clustering_enabled: bool = Field(default=True)
     clustering_backend: str = Field(default="auto")
     min_cluster_size: int = Field(default=5, ge=1)
     similarity_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
+    clustering_metric: Literal["cosine", "euclidean"] = Field(default="cosine")
+    clustering_min_samples: Optional[int] = Field(default=None, ge=1)
+    clustering_cluster_selection_epsilon: float = Field(default=0.0, ge=0.0)
 
     # --- Evidence extraction ---
     evidence_enabled: bool = Field(default=True)
+    evidence_method: Literal["tfidf", "centroid", "combined"] = Field(default="tfidf")
+    use_tfidf: Optional[bool] = Field(default=None)
     max_keywords: int = Field(default=8, ge=1)
     max_examples: int = Field(default=4, ge=1)
     token_budget: int = Field(default=256, ge=1)
-    use_tfidf: bool = Field(default=True)
 
     # --- Proposal generation ---
     proposal_enabled: bool = Field(default=True)
+    proposal_mode: Literal["cluster", "sample", "rag_cluster"] = Field(
+        default="cluster"
+    )
+    proposal_schema_discovery: bool = Field(default=False)
+    proposal_schema_max_attributes: int = Field(default=10, ge=1)
     llm_provider: Optional[str] = Field(default=None)
     llm_model: Optional[str] = Field(default=None)
     max_retries: int = Field(default=2, ge=0)
     prefer_cluster_level: bool = Field(default=True)
+    proposal_hierarchical: bool = Field(default=True)
 
     # --- HITL ---
     auto_create_review_records: bool = Field(default=True)

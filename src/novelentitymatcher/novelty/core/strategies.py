@@ -88,14 +88,23 @@ class StrategyRegistry:
         return strategy_cls()
 
     @classmethod
-    def list_strategies(cls) -> List[str]:
+    def list_strategies(cls, maturity: str | None = None) -> List[str]:
         """
-        List all registered strategy IDs.
+        List all registered strategy IDs, optionally filtered by maturity.
+
+        Args:
+            maturity: Optional maturity filter ("production", "experimental", "internal").
 
         Returns:
             List of strategy IDs in registration order
         """
-        return list(cls._strategies.keys())
+        if maturity is None:
+            return list(cls._strategies.keys())
+        return [
+            sid
+            for sid, scls in cls._strategies.items()
+            if getattr(scls, "maturity", "experimental") == maturity
+        ]
 
     @classmethod
     def is_registered(cls, strategy_id: str) -> bool:

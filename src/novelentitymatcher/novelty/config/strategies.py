@@ -4,7 +4,7 @@ Strategy-specific configuration classes.
 Each strategy has its own configuration with sensible defaults.
 """
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -19,7 +19,7 @@ class ConfidenceConfig(BaseModel):
 class KNNConfig(BaseModel):
     """Configuration for kNN distance-based strategy."""
 
-    k: int = Field(default=5, ge=1, le=100)
+    k: int = Field(default=20, ge=1, le=100)
     """Number of nearest neighbors to consider."""
 
     distance_threshold: float = Field(default=0.55, ge=0.0, le=1.0)
@@ -139,6 +139,18 @@ class MahalanobisConfig(BaseModel):
 
     use_class_conditional: bool = Field(default=True)
     """Whether to use per-class distributions (True) or a single global distribution (False)."""
+
+    calibration_mode: Literal["none", "conformal"] = Field(default="none")
+    """Calibration mode: 'none' for raw threshold, 'conformal' for p-value calibration."""
+
+    calibration_alpha: float = Field(default=0.1, gt=0.0, le=1.0)
+    """Significance level for conformal prediction. Lower = stricter."""
+
+    calibration_method: Literal["split", "mondrian"] = Field(default="split")
+    """Conformal calibration method: 'split' or 'mondrian' (class-conditional)."""
+
+    calibration_set_fraction: float = Field(default=0.2, gt=0.0, le=0.5)
+    """Fraction of reference data held out for conformal calibration."""
 
 
 class LOFConfig(BaseModel):

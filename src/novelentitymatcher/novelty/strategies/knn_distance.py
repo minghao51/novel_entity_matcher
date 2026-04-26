@@ -24,6 +24,7 @@ class KNNDistanceStrategy(NoveltyStrategy):
     """
 
     strategy_id = "knn_distance"
+    maturity = "production"
 
     def __init__(self):
         self._config: KNNConfig = None

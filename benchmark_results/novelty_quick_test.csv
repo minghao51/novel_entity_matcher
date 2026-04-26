@@ -1,0 +1,44 @@
+strategy,dataset,model,params,val_auroc,val_auprc,val_dr_1fp,test_auroc,test_auprc,test_dr_1fp,test_dr_5fp,test_dr_10fp,train_time
+knn_distance,ag_news,sentence-transformers/all-MiniLM-L6-v2,{'k': 3},0.8688,0.8485842919153261,0.16,0.867225,0.8174556441151956,0.025,0.3,0.655,0.0
+knn_distance,ag_news,sentence-transformers/all-MiniLM-L6-v2,{'k': 5},0.8785,0.8527829381757153,0.16,0.8769,0.8271510774299132,0.035,0.31,0.705,0.0
+knn_distance,ag_news,sentence-transformers/all-MiniLM-L6-v2,{'k': 10},0.8808999999999999,0.8609359727518603,0.26,0.8825999999999999,0.8343844333244115,0.05,0.255,0.76,0.0
+knn_distance,ag_news,sentence-transformers/all-MiniLM-L6-v2,{'k': 20},0.8816,0.8719545410885181,0.29,0.8815,0.83937176710855,0.075,0.28,0.665,0.0
+knn_distance,ag_news,sentence-transformers/all-MiniLM-L6-v2,{'k': 30},0.8738,0.8699643579281018,0.31,0.876875,0.8396672205262128,0.065,0.295,0.59,0.0
+mahalanobis,ag_news,sentence-transformers/all-MiniLM-L6-v2,{},0.7463,0.671149192570643,0.0,0.7790500000000001,0.7288220145161134,0.015,0.14,0.395,0.0
+lof,ag_news,sentence-transformers/all-MiniLM-L6-v2,{'n_neighbors': 10},0.8398,0.7934626069726404,0.09,0.8598250000000001,0.8096125213925776,0.06,0.245,0.495,0.0
+lof,ag_news,sentence-transformers/all-MiniLM-L6-v2,{'n_neighbors': 20},0.8616,0.837075317727332,0.07,0.8678625,0.825851064575617,0.09,0.32,0.61,0.0
+lof,ag_news,sentence-transformers/all-MiniLM-L6-v2,{'n_neighbors': 30},0.8435,0.8382459795234602,0.16,0.8478875,0.8198864903998058,0.095,0.38,0.515,0.0
+oneclass_svm,ag_news,sentence-transformers/all-MiniLM-L6-v2,{'nu': 0.05},0.8305,0.8392961995691077,0.29,0.82805,0.7979769840424126,0.085,0.3,0.47,0.002551917001255788
+oneclass_svm,ag_news,sentence-transformers/all-MiniLM-L6-v2,{'nu': 0.1},0.8305,0.8391150394745113,0.29,0.8282499999999999,0.7984324150204896,0.09,0.3,0.475,0.0008238750015152618
+oneclass_svm,ag_news,sentence-transformers/all-MiniLM-L6-v2,{'nu': 0.2},0.8306,0.8392158336077593,0.29,0.8284,0.7985208007116562,0.09,0.3,0.48,0.0007472079960280098
+isolation_forest,ag_news,sentence-transformers/all-MiniLM-L6-v2,{'n_estimators': 50},0.5756,0.5298566656060414,0.01,0.515875,0.5043380681495617,0.005,0.02,0.075,0.021868000003451016
+isolation_forest,ag_news,sentence-transformers/all-MiniLM-L6-v2,{'n_estimators': 100},0.6253,0.5968388993438811,0.03,0.54165,0.5529806940046447,0.025,0.075,0.165,0.03507404200354358
+uncertainty,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'margin_threshold': 0.1, 'entropy_threshold': 0.5}",0.5,0.5,0.01,0.5,0.5,0.005,0.005,0.01,0.0
+uncertainty,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'margin_threshold': 0.1, 'entropy_threshold': 1.0}",0.5,0.5,0.01,0.5,0.5,0.005,0.005,0.01,0.0
+uncertainty,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'margin_threshold': 0.1, 'entropy_threshold': 1.5}",0.5,0.5,0.01,0.5,0.5,0.005,0.005,0.01,0.0
+uncertainty,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'margin_threshold': 0.1, 'entropy_threshold': 2.0}",0.5,0.5,0.01,0.5,0.5,0.005,0.005,0.01,0.0
+uncertainty,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'margin_threshold': 0.2, 'entropy_threshold': 0.5}",0.5,0.5,0.01,0.5,0.5,0.005,0.005,0.01,0.0
+uncertainty,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'margin_threshold': 0.2, 'entropy_threshold': 1.0}",0.5,0.5,0.01,0.5,0.5,0.005,0.005,0.01,0.0
+uncertainty,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'margin_threshold': 0.2, 'entropy_threshold': 1.5}",0.5,0.5,0.01,0.5,0.5,0.005,0.005,0.01,0.0
+uncertainty,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'margin_threshold': 0.2, 'entropy_threshold': 2.0}",0.5,0.5,0.01,0.5,0.5,0.005,0.005,0.01,0.0
+uncertainty,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'margin_threshold': 0.3, 'entropy_threshold': 0.5}",0.5,0.5,0.01,0.5,0.5,0.005,0.005,0.01,0.0
+uncertainty,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'margin_threshold': 0.3, 'entropy_threshold': 1.0}",0.5,0.5,0.01,0.5,0.5,0.005,0.005,0.01,0.0
+uncertainty,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'margin_threshold': 0.3, 'entropy_threshold': 1.5}",0.5,0.5,0.01,0.5,0.5,0.005,0.005,0.01,0.0
+uncertainty,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'margin_threshold': 0.3, 'entropy_threshold': 2.0}",0.5,0.5,0.01,0.5,0.5,0.005,0.005,0.01,0.0
+uncertainty,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'margin_threshold': 0.4, 'entropy_threshold': 0.5}",0.5,0.5,0.01,0.5,0.5,0.005,0.005,0.01,0.0
+uncertainty,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'margin_threshold': 0.4, 'entropy_threshold': 1.0}",0.5,0.5,0.01,0.5,0.5,0.005,0.005,0.01,0.0
+uncertainty,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'margin_threshold': 0.4, 'entropy_threshold': 1.5}",0.5,0.5,0.01,0.5,0.5,0.005,0.005,0.01,0.0
+uncertainty,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'margin_threshold': 0.4, 'entropy_threshold': 2.0}",0.5,0.5,0.01,0.5,0.5,0.005,0.005,0.01,0.0
+uncertainty,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'margin_threshold': 0.5, 'entropy_threshold': 0.5}",0.5,0.5,0.01,0.5,0.5,0.005,0.005,0.01,0.0
+uncertainty,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'margin_threshold': 0.5, 'entropy_threshold': 1.0}",0.5,0.5,0.01,0.5,0.5,0.005,0.005,0.01,0.0
+uncertainty,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'margin_threshold': 0.5, 'entropy_threshold': 1.5}",0.5,0.5,0.01,0.5,0.5,0.005,0.005,0.01,0.0
+uncertainty,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'margin_threshold': 0.5, 'entropy_threshold': 2.0}",0.5,0.5,0.01,0.5,0.5,0.005,0.005,0.01,0.0
+self_knowledge,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'hidden_dim': 64, 'epochs': 50}",0.5321,0.5510976929919242,0.03,0.5493,0.5438645334448403,0.03,0.07,0.12,0.032978499999444466
+self_knowledge,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'hidden_dim': 64, 'epochs': 100}",0.5321,0.5510976929919242,0.03,0.5493,0.5438645334448403,0.03,0.07,0.12,0.03154987499874551
+self_knowledge,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'hidden_dim': 64, 'epochs': 200}",0.5321,0.5510976929919242,0.03,0.5493,0.5438645334448403,0.03,0.07,0.12,0.03139562499563908
+self_knowledge,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'hidden_dim': 128, 'epochs': 50}",0.43119999999999997,0.4704292440209168,0.03,0.44475,0.4542870366982072,0.01,0.025,0.045,0.0427515829942422
+self_knowledge,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'hidden_dim': 128, 'epochs': 100}",0.43119999999999997,0.4704292440209168,0.03,0.44475,0.4542870366982072,0.01,0.025,0.045,0.04217995799990604
+self_knowledge,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'hidden_dim': 128, 'epochs': 200}",0.43119999999999997,0.4704292440209168,0.03,0.44475,0.4542870366982072,0.01,0.025,0.045,0.04216333300428232
+self_knowledge,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'hidden_dim': 256, 'epochs': 50}",0.5691999999999999,0.5346245574564576,0.0,0.538825,0.5473293664171541,0.025,0.075,0.115,0.0648377090037684
+self_knowledge,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'hidden_dim': 256, 'epochs': 100}",0.5691999999999999,0.5346245574564576,0.0,0.538825,0.5473293664171541,0.025,0.075,0.115,0.06514400000014575
+self_knowledge,ag_news,sentence-transformers/all-MiniLM-L6-v2,"{'hidden_dim': 256, 'epochs': 200}",0.5691999999999999,0.5346245574564576,0.0,0.538825,0.5473293664171541,0.025,0.075,0.115,0.06545341699529672

@@ -16,6 +16,7 @@ from .setfit_impl import SetFitDetector
 @StrategyRegistry.register
 class SetFitStrategy(NoveltyStrategy):
     strategy_id = "setfit"
+    maturity = "internal"
 
     def __init__(self):
         self._config: SetFitConfig = None
