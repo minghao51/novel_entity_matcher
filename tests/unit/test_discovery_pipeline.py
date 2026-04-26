@@ -1,12 +1,12 @@
 from pathlib import Path
 
 from novelentitymatcher import DiscoveryPipeline, Matcher, NovelEntityMatcher
-from novelentitymatcher.pipeline.config import PipelineConfig
 from novelentitymatcher.novelty.schemas import (
     ClassProposal,
     DiscoveredAttribute,
     NovelClassAnalysis,
 )
+from novelentitymatcher.pipeline.config import PipelineConfig
 
 
 def _build_trained_matcher() -> Matcher:
@@ -363,7 +363,17 @@ def test_discovery_pipeline_end_to_end_respects_schema_and_runtime_config():
     }
     assert captured["max_attributes"] == 6
     assert captured["hierarchical"] is True
-    assert report.diagnostics["stage_metadata"]["ood"]["ood_calibration_mode"] == "conformal"
-    assert report.diagnostics["stage_metadata"]["ood"]["ood_mahalanobis_mode"] == "global"
-    assert report.diagnostics["stage_metadata"]["proposal"]["proposal_schema_discovery"] is True
-    assert report.diagnostics["stage_metadata"]["proposal"]["proposal_mode"] == "cluster"
+    assert (
+        report.diagnostics["stage_metadata"]["ood"]["ood_calibration_mode"]
+        == "conformal"
+    )
+    assert (
+        report.diagnostics["stage_metadata"]["ood"]["ood_mahalanobis_mode"] == "global"
+    )
+    assert (
+        report.diagnostics["stage_metadata"]["proposal"]["proposal_schema_discovery"]
+        is True
+    )
+    assert (
+        report.diagnostics["stage_metadata"]["proposal"]["proposal_mode"] == "cluster"
+    )

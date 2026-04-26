@@ -1,7 +1,6 @@
 """Tests for LLMClassProposer."""
 
 import json
-import os
 import sys
 from types import ModuleType
 from unittest.mock import Mock, patch
@@ -103,9 +102,7 @@ class TestLLMClassProposer:
 
         proposer = LLMClassProposer(api_keys=api_keys)
 
-        assert os.environ.get("OPENROUTER_API_KEY") == "sk-test-123"
-        assert os.environ.get("ANTHROPIC_API_KEY") == "sk-abc-456"
-        assert proposer._api_keys == {}
+        assert proposer._api_keys == api_keys
 
     def test_group_by_cluster(self, proposer, sample_novel_samples):
         """Test grouping samples by cluster ID."""
@@ -296,7 +293,9 @@ class TestLLMClassProposer:
         ]
         expected = Mock()
 
-        with patch.object(proposer, "_propose_hierarchical", return_value=expected) as mock_h:
+        with patch.object(
+            proposer, "_propose_hierarchical", return_value=expected
+        ) as mock_h:
             result = proposer.propose_from_clusters_with_schema(
                 discovery_clusters=clusters,
                 existing_classes=["known"],

@@ -1,9 +1,10 @@
 """Tests for the promoted NovelEntityMatcher orchestration API."""
 
-import novelentitymatcher
-import pytest
 from types import SimpleNamespace
 
+import pytest
+
+import novelentitymatcher
 from novelentitymatcher import Matcher, NovelEntityMatcher
 from novelentitymatcher.novelty import DetectionConfig
 from novelentitymatcher.novelty.config.strategies import ConfidenceConfig

@@ -1,6 +1,11 @@
 from types import SimpleNamespace
 
 from novelentitymatcher.novelty.clustering.scalable import ScalableClusterer
+from novelentitymatcher.novelty.schemas import (
+    DiscoveryCluster,
+    NovelSampleMetadata,
+    NovelSampleReport,
+)
 from novelentitymatcher.pipeline import (
     ClusterEvidenceStage,
     CommunityDetectionStage,
@@ -9,11 +14,6 @@ from novelentitymatcher.pipeline import (
     PipelineOrchestrator,
     ProposalStage,
     StageContext,
-)
-from novelentitymatcher.novelty.schemas import (
-    DiscoveryCluster,
-    NovelSampleMetadata,
-    NovelSampleReport,
 )
 
 

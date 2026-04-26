@@ -1,4 +1,5 @@
 import pytest
+
 from novelentitymatcher.core.classifier import SetFitClassifier
 from novelentitymatcher.exceptions import TrainingError
 

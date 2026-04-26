@@ -1,8 +1,10 @@
-import pytest
 import asyncio
 import threading
 import time
 from types import MethodType
+
+import pytest
+
 from novelentitymatcher.core.matcher import Matcher
 
 

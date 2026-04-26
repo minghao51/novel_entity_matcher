@@ -1,10 +1,11 @@
 import pytest
+
 from novelentitymatcher.exceptions import ValidationError
 from novelentitymatcher.utils.validation import (
-    validate_entity,
     validate_entities,
-    validate_threshold,
+    validate_entity,
     validate_model_name,
+    validate_threshold,
 )
 
 

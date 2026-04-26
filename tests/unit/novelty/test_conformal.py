@@ -4,10 +4,10 @@ import numpy as np
 import pytest
 
 from novelentitymatcher.novelty.config.strategies import MahalanobisConfig
+from novelentitymatcher.novelty.strategies.conformal import ConformalCalibrator
 from novelentitymatcher.novelty.strategies.mahalanobis import (
     MahalanobisDistanceStrategy,
 )
-from novelentitymatcher.novelty.strategies.conformal import ConformalCalibrator
 
 
 class TestConformalCalibrator:
@@ -34,14 +34,18 @@ class TestConformalCalibrator:
 
         def test_calibrate_split(self, calibration_scores):
             calibrator = ConformalCalibrator(alpha=0.1, method="split")
-            calibrator.calibrate(calibration_scores, np.array(["label"] * len(calibration_scores)))
+            calibrator.calibrate(
+                calibration_scores, np.array(["label"] * len(calibration_scores))
+            )
 
             assert calibrator.is_calibrated
             assert calibrator._n_calibration == len(calibration_scores)
 
         def test_predict_pvalues_split(self, calibration_scores):
             calibrator = ConformalCalibrator(alpha=0.1, method="split")
-            calibrator.calibrate(calibration_scores, np.array(["label"] * len(calibration_scores)))
+            calibrator.calibrate(
+                calibration_scores, np.array(["label"] * len(calibration_scores))
+            )
 
             test = np.array([0.15, 0.5, 1.5])
             pvals = calibrator.predict_pvalues(test)
@@ -54,7 +58,9 @@ class TestConformalCalibrator:
 
         def test_low_score_high_pvalue(self, calibration_scores):
             calibrator = ConformalCalibrator(alpha=0.1, method="split")
-            calibrator.calibrate(calibration_scores, np.array(["label"] * len(calibration_scores)))
+            calibrator.calibrate(
+                calibration_scores, np.array(["label"] * len(calibration_scores))
+            )
 
             low_score = np.array([0.05])
             pval = calibrator.predict_pvalues(low_score)[0]
@@ -62,7 +68,9 @@ class TestConformalCalibrator:
 
         def test_high_score_low_pvalue(self, calibration_scores):
             calibrator = ConformalCalibrator(alpha=0.1, method="split")
-            calibrator.calibrate(calibration_scores, np.array(["label"] * len(calibration_scores)))
+            calibrator.calibrate(
+                calibration_scores, np.array(["label"] * len(calibration_scores))
+            )
 
             high_score = np.array([2.0])
             pval = calibrator.predict_pvalues(high_score)[0]
@@ -93,7 +101,9 @@ class TestConformalCalibrator:
             assert len(calibrator._class_scores["A"]) == 5
             assert len(calibrator._class_scores["B"]) == 5
 
-        def test_predict_pvalues_for_class_known_class(self, calibration_scores, calibration_labels):
+        def test_predict_pvalues_for_class_known_class(
+            self, calibration_scores, calibration_labels
+        ):
             calibrator = ConformalCalibrator(alpha=0.1, method="mondrian")
             calibrator.calibrate(calibration_scores, calibration_labels)
 
@@ -144,7 +154,9 @@ class TestConformalCalibrator:
             preds = np.array(["A", "B"])
 
             split_pvals = split_calibrator.predict_pvalues(scores)
-            mondrian_pvals = mondrian_calibrator.predict_pvalues_for_class(scores, preds)
+            mondrian_pvals = mondrian_calibrator.predict_pvalues_for_class(
+                scores, preds
+            )
 
             assert not np.allclose(split_pvals, mondrian_pvals)
 
@@ -155,7 +167,9 @@ class TestConformalCalibrator:
             calibrator = ConformalCalibrator()
             assert not calibrator.is_calibrated
 
-        def test_calibration_metadata_after_calibrate(self, calibration_scores, calibration_labels):
+        def test_calibration_metadata_after_calibrate(
+            self, calibration_scores, calibration_labels
+        ):
             calibrator = ConformalCalibrator(alpha=0.05, method="mondrian")
             calibrator.calibrate(calibration_scores, calibration_labels)
 
@@ -198,7 +212,9 @@ class TestConformalCalibrator:
 
         def test_calibrator_chain(self):
             calibrator = ConformalCalibrator(alpha=0.1, method="split")
-            result = calibrator.calibrate(np.array([0.1, 0.2, 0.3]), np.array(["x", "x", "x"]))
+            result = calibrator.calibrate(
+                np.array([0.1, 0.2, 0.3]), np.array(["x", "x", "x"])
+            )
 
             assert result is calibrator
             assert calibrator.is_calibrated

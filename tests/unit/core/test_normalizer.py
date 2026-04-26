@@ -51,7 +51,8 @@ class TestTextNormalizer:
     def test_normalizer_unicode_normalization(self):
         normalizer = TextNormalizer()
         result = normalizer.normalize("Ångström")
-        assert "a" in result and "ngstr" in result
+        assert "a" in result
+        assert "ngstr" in result
 
     def test_normalize_entity_name(self):
         normalizer = TextNormalizer()

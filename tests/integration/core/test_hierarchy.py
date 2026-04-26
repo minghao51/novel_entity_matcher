@@ -3,10 +3,11 @@ Tests for hierarchical entity matching.
 """
 
 import numpy as np
+
 from novelentitymatcher.core.hierarchy import (
-    HierarchyIndex,
-    HierarchicalScoring,
     HierarchicalMatcher,
+    HierarchicalScoring,
+    HierarchyIndex,
 )
 
 # Test fixtures

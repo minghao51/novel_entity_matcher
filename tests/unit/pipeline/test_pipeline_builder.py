@@ -1,3 +1,5 @@
+import pytest
+
 from novelentitymatcher.pipeline.adapters import (
     ClusterEvidenceStage,
     CommunityDetectionStage,
@@ -94,3 +96,19 @@ def test_pipeline_builder_propagates_runtime_knobs():
     assert ood_stage.ood_calibration_mode == "conformal"
     assert ood_stage.ood_calibration_alpha == 0.2
     assert ood_stage.ood_mahalanobis_mode == "global"
+
+
+def test_pipeline_builder_rejects_disabled_match_stage():
+    config = PipelineConfig(match_enabled=False)
+    builder = PipelineBuilder.from_pipeline_config(
+        config,
+        collect_sync=lambda inputs: (None, {}),
+        collect_async=lambda inputs: (None, {}),
+        detector=object(),
+        clusterer=None,
+        llm_proposer=object(),
+        existing_classes_resolver=lambda: ["known"],
+    )
+
+    with pytest.raises(ValueError, match="match_enabled=False is not supported"):
+        builder.build()

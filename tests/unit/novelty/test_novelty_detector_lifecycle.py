@@ -6,8 +6,8 @@ import pytest
 from novelentitymatcher.novelty import DetectionConfig
 from novelentitymatcher.novelty.config.strategies import ConfidenceConfig, KNNConfig
 from novelentitymatcher.novelty.core.detector import NoveltyDetector
-from novelentitymatcher.novelty.strategies.base import NoveltyStrategy
 from novelentitymatcher.novelty.core.strategies import StrategyRegistry
+from novelentitymatcher.novelty.strategies.base import NoveltyStrategy
 
 
 class TestNoveltyDetectorStrategyManagement:

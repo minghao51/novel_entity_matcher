@@ -1,4 +1,5 @@
 import pytest
+
 from novelentitymatcher.core.async_utils import AsyncExecutor
 
 

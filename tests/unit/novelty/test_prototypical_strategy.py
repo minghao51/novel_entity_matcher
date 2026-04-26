@@ -1,7 +1,7 @@
 """Tests for PrototypicalNoveltyDetector."""
 
-import pytest
 import numpy as np
+import pytest
 
 from novelentitymatcher.novelty.strategies.prototypical_impl import (
     PrototypicalDetector,
@@ -70,7 +70,7 @@ class TestPrototypicalDetector:
         detector.train(training_data, show_progress=False)
 
         # Entity from different domain
-        is_novel, distance, label = detector.is_novel("organic farming techniques")
+        is_novel, distance, _label = detector.is_novel("organic farming techniques")
 
         assert isinstance(is_novel, bool)
         assert isinstance(distance, float)
@@ -101,7 +101,7 @@ class TestPrototypicalDetector:
         )
         detector.train(training_data, show_progress=False)
 
-        is_novel, distance, label = detector.is_novel("test")
+        is_novel, distance, _label = detector.is_novel("test")
 
         assert isinstance(is_novel, bool)
         assert isinstance(distance, float)
@@ -114,7 +114,7 @@ class TestPrototypicalDetector:
         )
         detector.train(training_data, show_progress=False)
 
-        is_novel, distance, label = detector.is_novel("test")
+        is_novel, distance, _label = detector.is_novel("test")
 
         assert isinstance(is_novel, bool)
         assert isinstance(distance, float)
@@ -136,7 +136,7 @@ class TestPrototypicalDetector:
         detector.train(training_data, show_progress=False)
 
         # Test is_novel before saving
-        is_novel_before, dist_before, label_before = detector.is_novel("test entity")
+        is_novel_before, dist_before, _label_before = detector.is_novel("test entity")
 
         # Save
         save_path = tmp_path / "prototypical_model"
@@ -150,7 +150,7 @@ class TestPrototypicalDetector:
         assert len(loaded_detector.prototypes) == len(detector.prototypes)
 
         # Test that predictions are consistent
-        is_novel_after, dist_after, label_after = loaded_detector.is_novel(
+        is_novel_after, dist_after, _label_after = loaded_detector.is_novel(
             "test entity"
         )
         assert is_novel_before == is_novel_after

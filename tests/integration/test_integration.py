@@ -1,10 +1,11 @@
 """Integration tests for novel class detection system."""
 
-import numpy as np
-import pytest
-from pathlib import Path
 import tempfile
 from datetime import datetime
+from pathlib import Path
+
+import numpy as np
+import pytest
 
 from novelentitymatcher import Matcher, NovelEntityMatcher
 from novelentitymatcher.novelty import DetectionConfig

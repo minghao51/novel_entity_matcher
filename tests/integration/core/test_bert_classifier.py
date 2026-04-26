@@ -1,8 +1,9 @@
 """Tests for BERTClassifier - BERT-based classification using transformers."""
 
-import pytest
 import numpy as np
+import pytest
 import torch
+
 from novelentitymatcher.core.bert_classifier import BERTClassifier
 from novelentitymatcher.exceptions import TrainingError
 

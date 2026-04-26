@@ -41,7 +41,7 @@ def test_matcher_sync_async_parity():
 
     assert len(sync_result) == len(async_result)
 
-    for sync_match, async_match in zip(sync_result, async_result):
+    for sync_match, async_match in zip(sync_result, async_result, strict=False):
         assert sync_match["id"] == async_match["id"]
         assert abs(sync_match["score"] - async_match["score"]) < 1e-9
 
@@ -162,7 +162,7 @@ def test_pipeline_orchestrator_sync_async_parity():
 
     assert len(sync_result.stage_results) == len(async_result.stage_results)
 
-    for sync_sr, async_sr in zip(sync_result.stage_results, async_result.stage_results):
+    for sync_sr, async_sr in zip(sync_result.stage_results, async_result.stage_results, strict=False):
         assert sync_sr.stage_name == async_sr.stage_name
         assert sync_sr.artifacts == async_sr.artifacts
 

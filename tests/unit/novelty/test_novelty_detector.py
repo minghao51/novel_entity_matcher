@@ -4,15 +4,15 @@ import numpy as np
 import pytest
 
 from novelentitymatcher.novelty import DetectionConfig
-from novelentitymatcher.novelty.config.weights import WeightConfig
 from novelentitymatcher.novelty.config.strategies import (
     ClusteringConfig,
     ConfidenceConfig,
     KNNConfig,
 )
+from novelentitymatcher.novelty.config.weights import WeightConfig
 from novelentitymatcher.novelty.core.detector import NoveltyDetector
-from novelentitymatcher.novelty.strategies.base import NoveltyStrategy
 from novelentitymatcher.novelty.core.strategies import StrategyRegistry
+from novelentitymatcher.novelty.strategies.base import NoveltyStrategy
 
 
 def _hdbscan_available() -> bool:

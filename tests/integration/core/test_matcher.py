@@ -1,6 +1,8 @@
-import pytest
-import numpy as np
 import warnings
+
+import numpy as np
+import pytest
+
 from novelentitymatcher.core.embedding_matcher import EmbeddingMatcher
 from novelentitymatcher.core.matcher import Matcher, _EntityMatcher
 from novelentitymatcher.exceptions import ModeError, TrainingError

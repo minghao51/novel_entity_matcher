@@ -3,7 +3,6 @@
 from types import SimpleNamespace
 
 import numpy as np
-import pytest
 
 from novelentitymatcher.pipeline.discovery_support import build_novel_match_result
 from novelentitymatcher.pipeline.match_result import (
@@ -33,10 +32,14 @@ def _make_match_result(
 
 
 def _mock_detector(is_novel: bool = False, novelty_score: float = 0.1):
-    sample = SimpleNamespace(
-        novelty_score=novelty_score,
-        signals={"confidence": is_novel, "knn": is_novel},
-    ) if is_novel else None
+    sample = (
+        SimpleNamespace(
+            novelty_score=novelty_score,
+            signals={"confidence": is_novel, "knn": is_novel},
+        )
+        if is_novel
+        else None
+    )
 
     report = SimpleNamespace(novel_samples=[sample] if sample else [])
     return SimpleNamespace(detect_novel_samples=lambda **kwargs: report)

@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 
 from novelentitymatcher.benchmarks.shared import (
     DEFAULT_MODEL_NAME,
@@ -94,10 +93,12 @@ class TestComputeOodMetrics:
 
     def test_detection_rates(self):
         labels = ["known"] * 100 + ["__NOVEL__"] * 10
-        scores = np.concatenate([
-            np.random.uniform(0, 0.3, 100),
-            np.random.uniform(0.7, 1.0, 10),
-        ])
+        scores = np.concatenate(
+            [
+                np.random.uniform(0, 0.3, 100),
+                np.random.uniform(0.7, 1.0, 10),
+            ]
+        )
         result = compute_ood_metrics(labels, scores)
         assert 0.0 <= result["dr_1fp"] <= 1.0
         assert 0.0 <= result["dr_5fp"] <= 1.0
@@ -146,7 +147,13 @@ class TestGenerateSyntheticData:
     def test_labels_match_entities(self):
         train, _ = generate_synthetic_data(num_entities=5, samples_per_entity=4)
         unique_labels = {item["label"] for item in train}
-        assert unique_labels == {"ENTITY_0", "ENTITY_1", "ENTITY_2", "ENTITY_3", "ENTITY_4"}
+        assert unique_labels == {
+            "ENTITY_0",
+            "ENTITY_1",
+            "ENTITY_2",
+            "ENTITY_3",
+            "ENTITY_4",
+        }
 
 
 class TestDefaults:

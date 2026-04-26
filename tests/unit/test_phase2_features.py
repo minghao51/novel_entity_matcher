@@ -126,7 +126,7 @@ class TestSetFitCentroidStrategy:
         strategy.initialize(embeddings, labels, SetFitCentroidConfig())
 
         query = self._make_embeddings(1, dim=64, seed=99)
-        flags, metrics = strategy.detect(
+        _flags, metrics = strategy.detect(
             texts=[""],
             embeddings=query,
             predicted_classes=["A"],
@@ -196,7 +196,7 @@ class TestMetaLearnerSignalCombiner:
         strategy_outputs = {"confidence": ({0}, {})}
         all_metrics = {0: {"confidence_is_novel": True}}
 
-        novel_indices, scores = combiner.combine(strategy_outputs, all_metrics)
+        _novel_indices, scores = combiner.combine(strategy_outputs, all_metrics)
 
         assert 0 in scores
 
@@ -249,7 +249,7 @@ class TestMetaLearnerSignalCombiner:
             },
         }
 
-        novel_indices, scores = combiner.combine(strategy_outputs, all_metrics)
+        _novel_indices, scores = combiner.combine(strategy_outputs, all_metrics)
         assert 0 in scores
         assert 1 in scores
 

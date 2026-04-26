@@ -1,7 +1,7 @@
 """Tests for OneClassNoveltyDetector."""
 
-import pytest
 import numpy as np
+import pytest
 
 from novelentitymatcher.novelty.strategies.oneclass_impl import OneClassSVMDetector
 

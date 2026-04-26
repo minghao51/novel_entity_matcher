@@ -4,8 +4,8 @@ from types import SimpleNamespace
 import pandas as pd
 
 from novelentitymatcher.benchmarks.runner import BenchmarkRunner
-from novelentitymatcher.utils.benchmark_dataset import build_processed_ood_sections
 from novelentitymatcher.utils import benchmarks
+from novelentitymatcher.utils.benchmark_dataset import build_processed_ood_sections
 
 
 def test_load_processed_sections_reads_csv_sections(tmp_path):

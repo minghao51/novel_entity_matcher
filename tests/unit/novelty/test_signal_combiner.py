@@ -54,7 +54,7 @@ class TestSignalCombinerUnion:
             )
         )
 
-        novel_indices, novelty_scores = detector._combiner.combine(
+        novel_indices, _novelty_scores = detector._combiner.combine(
             {"confidence": ({0, 1, 2}, {})},
             {},
         )
@@ -185,7 +185,7 @@ class TestSignalCombinerVoting:
             "oneclass": ({1}, {}),
         }
 
-        novel_indices, novelty_scores = detector._combiner.combine(strategy_outputs, {})
+        _novel_indices, novelty_scores = detector._combiner.combine(strategy_outputs, {})
 
         assert novelty_scores[0] == 3 / 4
         assert novelty_scores[1] == 1 / 4
@@ -252,7 +252,7 @@ class TestSignalCombinerWeighted:
             1: {"knn_novelty_score": 0.8},
         }
 
-        novel_indices, novelty_scores = detector._combiner.combine(
+        novel_indices, _novelty_scores = detector._combiner.combine(
             strategy_outputs, all_metrics
         )
 

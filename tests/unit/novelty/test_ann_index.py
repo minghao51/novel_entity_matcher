@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from novelentitymatcher.novelty.storage.index import ANNIndex, ANNBackend
+from novelentitymatcher.novelty.storage.index import ANNBackend, ANNIndex
 
 # Check if optional ANN backends are available.
 try:
@@ -114,7 +114,7 @@ class TestANNIndex:
         """Test k-NN query when k is greater than number of elements."""
         query = sample_embeddings[0]
         # Use a smaller k to avoid HNSWlib limitations
-        similarities, indices = hnswlib_index.knn_query(query, k=50)
+        similarities, _indices = hnswlib_index.knn_query(query, k=50)
 
         # Should return at most n_elements
         assert similarities.shape[1] <= 100

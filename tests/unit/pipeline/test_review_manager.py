@@ -301,6 +301,28 @@ def test_promote_with_index_update(tmp_path: Path):
     assert matcher.reindex_called
 
 
+def test_promote_with_index_update_fallback_calls_fit_without_entities(tmp_path: Path):
+    """Fallback path should not pass entity dictionaries to fit()."""
+    manager = ProposalReviewManager(tmp_path / "records.json")
+    records = manager.create_records(_make_report())
+
+    class FakeMatcher:
+        def __init__(self):
+            self.entities: list[dict] = []
+            self.fit_called = False
+
+        def fit(self):
+            self.fit_called = True
+
+    matcher = FakeMatcher()
+    result = manager.promote_with_index_update(records[0].review_id, matcher)
+
+    assert result.review_record.state == "promoted"
+    assert len(matcher.entities) == 1
+    assert matcher.entities[0]["name"] == "Quantum Biology"
+    assert matcher.fit_called
+
+
 def test_update_state_pending_to_promoted_raises_value_error(tmp_path: Path):
     """Promotion should require approval flow instead of skipping review."""
     manager = ProposalReviewManager(tmp_path / "records.json")

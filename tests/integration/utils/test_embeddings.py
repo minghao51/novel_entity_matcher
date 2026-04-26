@@ -1,9 +1,10 @@
-import pytest
 import numpy as np
+import pytest
+
 from novelentitymatcher.utils.embeddings import (
+    batch_encode,
     compute_embeddings,
     cosine_sim,
-    batch_encode,
 )
 
 

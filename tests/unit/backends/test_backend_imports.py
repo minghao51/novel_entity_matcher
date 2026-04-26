@@ -1,9 +1,11 @@
 import pytest
 
-from novelentitymatcher.backends import HFReranker, HFEmbedding
+from novelentitymatcher.backends import HFEmbedding, HFReranker
+from novelentitymatcher.backends.sentencetransformer import (
+    HFEmbedding as NewHFEmbedding,
+)
 from novelentitymatcher.backends.sentencetransformer import (
     HFReranker as NewHFReranker,
-    HFEmbedding as NewHFEmbedding,
 )
 
 

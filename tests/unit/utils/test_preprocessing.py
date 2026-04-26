@@ -1,9 +1,9 @@
 from novelentitymatcher.utils.preprocessing import (
-    tokenize,
-    remove_stopwords,
-    lemmatize,
     clean_text,
     extract_aliases,
+    lemmatize,
+    remove_stopwords,
+    tokenize,
 )
 
 

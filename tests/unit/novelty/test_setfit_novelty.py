@@ -164,7 +164,7 @@ class TestSetFitDetector:
 
         assert isinstance(with_typo, str)
         # Should have at most 1 character changed
-        changes = sum(1 for a, b in zip(original, with_typo) if a != b)
+        changes = sum(1 for a, b in zip(original, with_typo, strict=False) if a != b)
         assert changes <= 1
 
     def test_change_case(self, known_entities):
