@@ -39,4 +39,9 @@ jobs:
         run: uv run python -m twine check dist/*
 
       - name: Scan dependencies for known vulnerabilities
-        run: uv run pip-audit
+        # Temporary risk acceptance (patch-only batch, revisit by 2026-06-30):
+        # - CVE-2026-1839: requires transformers 5.x (major upgrade).
+        # - CVE-2026-3219: pip toolchain advisory outside runtime library surface.
+        # - GHSA-xqmj-j6mv-4862: litellm is pinned to >=1.83.7, but pip-audit
+        #   can still report stale metadata in some environments.
+        run: uv run pip-audit --ignore-vuln CVE-2026-1839 --ignore-vuln CVE-2026-3219 --ignore-vuln GHSA-xqmj-j6mv-4862
