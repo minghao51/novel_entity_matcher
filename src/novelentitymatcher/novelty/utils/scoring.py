@@ -5,11 +5,10 @@ This module contains common scoring functions used across
 multiple strategies and components.
 """
 
-from typing import Union
 import numpy as np
 
 
-def normalize_score(score: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+def normalize_score(score: float | np.ndarray) -> float | np.ndarray:
     """
     Normalize a score to the range [0, 1].
 

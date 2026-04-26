@@ -8,7 +8,8 @@ and scores novelty based on pattern violations.
 from __future__ import annotations
 
 from collections import Counter
-from typing import Any, Dict, List, Set
+from typing import Any
+
 import numpy as np
 
 
@@ -21,14 +22,14 @@ class PatternScorer:
     is required - it's purely rule-based.
     """
 
-    def __init__(self, known_entities: List[str]):
+    def __init__(self, known_entities: list[str]):
         if not known_entities:
             raise ValueError("known_entities cannot be empty")
 
         self.known_entities = known_entities
         self.patterns = self._extract_patterns()
 
-    def _extract_patterns(self) -> Dict[str, Any]:
+    def _extract_patterns(self) -> dict[str, Any]:
         patterns = {
             "char_ngrams": self._get_char_ngrams(self.known_entities, n=3),
             "char_4grams": self._get_char_ngrams(self.known_entities, n=4),
@@ -106,12 +107,12 @@ class PatternScorer:
                 weights = weights[: len(scores)]
                 weights = [w / sum(weights) for w in weights]
 
-            novelty_score = sum(s * w for s, w in zip(scores, weights))
+            novelty_score = sum(s * w for s, w in zip(scores, weights, strict=False))
             return float(np.clip(novelty_score, 0.0, 1.0))
 
         return 0.5
 
-    def _get_char_ngrams(self, entities: List[str], n: int = 3) -> Set[str]:
+    def _get_char_ngrams(self, entities: list[str], n: int = 3) -> set[str]:
         ngrams = set()
         for entity in entities:
             entity = entity.strip()
@@ -120,11 +121,11 @@ class PatternScorer:
                     ngrams.add(entity[i : i + n])
         return ngrams
 
-    def _has_numbers(self, entities: List[str]) -> float:
+    def _has_numbers(self, entities: list[str]) -> float:
         count = sum(1 for e in entities if any(c.isdigit() for c in e))
         return count / len(entities) if entities else 0.0
 
-    def _get_capitalization_patterns(self, entities: List[str]) -> Set[str]:
+    def _get_capitalization_patterns(self, entities: list[str]) -> set[str]:
         patterns = set()
         for entity in entities:
             if not entity:
@@ -140,8 +141,8 @@ class PatternScorer:
         return patterns
 
     def _get_prefix_suffix_distribution(
-        self, entities: List[str], prefix: bool = True, n: int = 3
-    ) -> Dict[str, int]:
+        self, entities: list[str], prefix: bool = True, n: int = 3
+    ) -> dict[str, int]:
         counter: Counter[str] = Counter()
         for entity in entities:
             entity = entity.strip()
@@ -154,5 +155,5 @@ class PatternScorer:
         return dict(counter)
 
 
-def score_batch_novelty(entities: List[str], scorer: PatternScorer) -> List[float]:
+def score_batch_novelty(entities: list[str], scorer: PatternScorer) -> list[float]:
     return [scorer.score_novelty(entity) for entity in entities]

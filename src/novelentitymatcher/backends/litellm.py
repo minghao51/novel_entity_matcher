@@ -1,6 +1,5 @@
 # backends/litellm.py
 import os
-from typing import Optional
 
 from .base import EmbeddingBackend, RerankerBackend
 
@@ -10,17 +9,18 @@ try:
     LITELLM_AVAILABLE = True
 except ImportError:
     LITELLM_AVAILABLE = False
-    embedding = rerank = None
+    embedding = None  # type: ignore[assignment]
+    rerank = None
 
 
 class LiteLLMEmbedding(EmbeddingBackend):
-    def __init__(self, model: str, api_key: Optional[str] = None):
+    def __init__(self, model: str, api_key: str | None = None):
         if not LITELLM_AVAILABLE:
             raise ImportError("litellm is required for LiteLLMEmbedding")
         self.model = model
         self._api_key = api_key
 
-    def _get_api_key(self) -> Optional[str]:
+    def _get_api_key(self) -> str | None:
         if self._api_key:
             return self._api_key
         return os.environ.get("LITELLM_API_KEY")
@@ -35,13 +35,13 @@ class LiteLLMEmbedding(EmbeddingBackend):
 
 
 class LiteLLMReranker(RerankerBackend):
-    def __init__(self, model: str, api_key: Optional[str] = None):
+    def __init__(self, model: str, api_key: str | None = None):
         if not LITELLM_AVAILABLE:
             raise ImportError("litellm is required for LiteLLMReranker")
         self.model = model
         self._api_key = api_key
 
-    def _get_api_key(self) -> Optional[str]:
+    def _get_api_key(self) -> str | None:
         if self._api_key:
             return self._api_key
         return os.environ.get("LITELLM_API_KEY")

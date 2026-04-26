@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 
 import numpy as np
 
@@ -24,7 +23,7 @@ class DatasetCharacteristics:
 
     n_samples: int
     n_classes: int
-    samples_per_class: Dict[str, int]
+    samples_per_class: dict[str, int]
     class_separability: float
     mean_intra_class_distance: float
     mean_inter_class_distance: float
@@ -35,7 +34,7 @@ class DatasetCharacteristics:
 
 def compute_characteristics(
     embeddings: np.ndarray,
-    labels: List[str],
+    labels: list[str],
     k: int = 5,
 ) -> DatasetCharacteristics:
     """
@@ -119,7 +118,7 @@ def compute_characteristics(
 
 def adaptive_weights(
     characteristics: DatasetCharacteristics,
-    base_weights: Optional[WeightConfig] = None,
+    base_weights: WeightConfig | None = None,
 ) -> WeightConfig:
     """
     Compute adaptive strategy weights from dataset characteristics.

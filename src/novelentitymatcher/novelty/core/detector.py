@@ -6,15 +6,15 @@ pattern to support multiple detection algorithms.
 """
 
 import hashlib
-from typing import Any, Dict, List, Set
+from typing import Any
 
 import numpy as np
 
-from .strategies import StrategyRegistry
-from .signal_combiner import SignalCombiner
-from .metadata import MetadataBuilder
 from ..config.base import DetectionConfig
 from ..schemas import NovelSampleReport
+from .metadata import MetadataBuilder
+from .signal_combiner import SignalCombiner
+from .strategies import StrategyRegistry
 
 
 class NoveltyDetector:
@@ -43,7 +43,7 @@ class NoveltyDetector:
         config.validate_strategies()
 
         self.config = config
-        self._strategies: Dict[str, Any] = {}
+        self._strategies: dict[str, Any] = {}
         self._combiner = SignalCombiner(config)
         self._metadata_builder = MetadataBuilder()
         self._is_initialized = False
@@ -52,7 +52,7 @@ class NoveltyDetector:
     @staticmethod
     def _compute_reference_signature(
         reference_embeddings: np.ndarray,
-        reference_labels: List[str],
+        reference_labels: list[str],
     ) -> str:
         """Create a stable signature for the active reference corpus."""
         normalized = np.ascontiguousarray(reference_embeddings)
@@ -68,7 +68,7 @@ class NoveltyDetector:
     def _initialize_strategies(
         self,
         reference_embeddings: np.ndarray,
-        reference_labels: List[str],
+        reference_labels: list[str],
     ) -> None:
         """
         Initialize all configured strategies.
@@ -107,12 +107,12 @@ class NoveltyDetector:
 
     def detect_novel_samples(
         self,
-        texts: List[str],
+        texts: list[str],
         confidences: np.ndarray,
         embeddings: np.ndarray,
-        predicted_classes: List[str],
+        predicted_classes: list[str],
         reference_embeddings: np.ndarray | None = None,
-        reference_labels: List[str] | None = None,
+        reference_labels: list[str] | None = None,
         **kwargs,
     ) -> NovelSampleReport:
         """
@@ -138,9 +138,7 @@ class NoveltyDetector:
                 novel_samples=[],
                 detection_strategies=list(self.config.strategies),
                 config=self.config.model_dump(),
-                signal_counts={
-                    strategy_id: 0 for strategy_id in self.config.strategies
-                },
+                signal_counts=dict.fromkeys(self.config.strategies, 0),
             )
 
         reference_signature = self._compute_reference_signature(
@@ -153,9 +151,9 @@ class NoveltyDetector:
             self._initialize_strategies(reference_embeddings, reference_labels)
 
         # Run each strategy
-        all_flags: Set[int] = set()
-        all_metrics: Dict[int, Dict[str, Any]] = {}
-        strategy_outputs: Dict[str, tuple[Set[int], Dict]] = {}
+        all_flags: set[int] = set()
+        all_metrics: dict[int, dict[str, Any]] = {}
+        strategy_outputs: dict[str, tuple[set[int], dict]] = {}
 
         for strategy_id, strategy in self._strategies.items():
             flags, metrics = strategy.detect(
@@ -224,7 +222,7 @@ class NoveltyDetector:
             )
         return self._strategies[strategy_id]
 
-    def list_initialized_strategies(self) -> List[str]:
+    def list_initialized_strategies(self) -> list[str]:
         """
         List all initialized strategies.
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import List, Optional
 
 import pandas as pd
 
@@ -110,7 +109,7 @@ def print_benchmark_report(results: pd.DataFrame):
     logger.info(format_benchmark_summary(results))
 
 
-def parse_benchmark_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+def parse_benchmark_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Benchmark semantic matcher models")
     parser.add_argument(
         "--track",

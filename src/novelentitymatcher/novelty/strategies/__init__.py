@@ -36,25 +36,25 @@ Importing Strategies:
 
 # Base protocol
 from .base import NoveltyStrategy
+from .oneclass_impl import OneClassSVMDetector
 
 # Import low-level strategy helpers that are still useful directly.
 from .pattern_impl import PatternScorer, score_batch_novelty
-from .oneclass_impl import OneClassSVMDetector
 from .prototypical_impl import PrototypicalDetector
-from .setfit_impl import SetFitDetector
 from .self_knowledge_impl import SelfKnowledgeDetector, SparseAutoencoder
+from .setfit_impl import SetFitDetector
 
 __all__ = [
     # Base
     "NoveltyStrategy",
+    "OneClassSVMDetector",
     # Low-level strategy helpers
     "PatternScorer",
-    "score_batch_novelty",
-    "OneClassSVMDetector",
     "PrototypicalDetector",
-    "SetFitDetector",
     "SelfKnowledgeDetector",
+    "SetFitDetector",
     "SparseAutoencoder",
+    "score_batch_novelty",
 ]
 
 
@@ -63,15 +63,17 @@ def _register_all() -> None:
 
     Called once from novelty/__init__.py after core modules are fully initialized.
     """
-    from . import confidence  # noqa: F401
-    from . import knn_distance  # noqa: F401
-    from . import uncertainty  # noqa: F401
-    from . import clustering  # noqa: F401
-    from . import pattern  # noqa: F401
-    from . import oneclass  # noqa: F401
-    from . import prototypical  # noqa: F401
-    from . import setfit  # noqa: F401
-    from . import self_knowledge  # noqa: F401
-    from . import lof  # noqa: F401
-    from . import mahalanobis  # noqa: F401
-    from . import setfit_centroid  # noqa: F401
+    from . import (
+        clustering,  # noqa: F401
+        confidence,  # noqa: F401
+        knn_distance,  # noqa: F401
+        lof,  # noqa: F401
+        mahalanobis,  # noqa: F401
+        oneclass,  # noqa: F401
+        pattern,  # noqa: F401
+        prototypical,  # noqa: F401
+        self_knowledge,  # noqa: F401
+        setfit,  # noqa: F401
+        setfit_centroid,  # noqa: F401
+        uncertainty,  # noqa: F401
+    )

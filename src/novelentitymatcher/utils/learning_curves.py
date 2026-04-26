@@ -1,11 +1,11 @@
 """Learning curve analysis for overfitting detection."""
 
-from typing import Dict, Any
+from typing import Any
 
 
 def analyze_overfitting(
     train_acc: float, val_acc: float, test_acc: float
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Analyze train/val/test accuracy for overfitting patterns.
 
     Args:

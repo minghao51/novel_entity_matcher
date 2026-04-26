@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
 
@@ -142,3 +143,23 @@ class NovelClassDiscoveryReport(BaseModel):
     diagnostics: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
     output_file: str | None = None
+
+
+@dataclass
+class PromotionResult:
+    """Captures what happened during a promotion."""
+
+    review_record: ProposalReviewRecord
+    entities_added: list[dict[str, Any]] = field(default_factory=list)
+    index_updated: bool = False
+    retrain_required: bool = False
+
+    @property
+    def state(self) -> str:
+        """Backward-compatible alias for review_record.state."""
+        return self.review_record.state
+
+    @property
+    def promoted_at(self):
+        """Backward-compatible alias for review_record.promoted_at."""
+        return self.review_record.promoted_at

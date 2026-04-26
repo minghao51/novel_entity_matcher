@@ -9,6 +9,6 @@ from .scalable import ScalableClusterer
 from .validation import ClusterValidator
 
 __all__ = [
-    "ScalableClusterer",
     "ClusterValidator",
+    "ScalableClusterer",
 ]

@@ -5,14 +5,15 @@ Flags samples that form small, isolated clusters or don't fit
 well into any existing cluster.
 """
 
-from typing import Dict, List, Set, Any
+from typing import Any
+
 import numpy as np
 
-from .base import NoveltyStrategy
-from ..core.strategies import StrategyRegistry
-from ..config.strategies import ClusteringConfig
 from ..clustering.scalable import ScalableClusterer
 from ..clustering.validation import ClusterValidator
+from ..config.strategies import ClusteringConfig
+from ..core.strategies import StrategyRegistry
+from .base import NoveltyStrategy
 
 
 @StrategyRegistry.register
@@ -32,12 +33,12 @@ class ClusteringStrategy(NoveltyStrategy):
         self._clusterer: ScalableClusterer = None
         self._validator: ClusterValidator = None
         self._reference_embeddings: np.ndarray = None
-        self._reference_labels: List[str] = None
+        self._reference_labels: list[str] = None
 
     def initialize(
         self,
         reference_embeddings: np.ndarray,
-        reference_labels: List[str],
+        reference_labels: list[str],
         config: ClusteringConfig,
     ) -> None:
         """
@@ -67,12 +68,12 @@ class ClusteringStrategy(NoveltyStrategy):
 
     def detect(
         self,
-        texts: List[str],
+        texts: list[str],
         embeddings: np.ndarray,
-        predicted_classes: List[str],
+        predicted_classes: list[str],
         confidences: np.ndarray,
         **kwargs,
-    ) -> tuple[Set[int], Dict[int, Dict[str, Any]]]:
+    ) -> tuple[set[int], dict[int, dict[str, Any]]]:
         """
         Detect novel samples using clustering.
 

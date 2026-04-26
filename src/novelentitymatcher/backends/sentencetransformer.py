@@ -1,9 +1,8 @@
 import numpy as np
-
-from .base import EmbeddingBackend, RerankerBackend
 from sentence_transformers.util import semantic_search
 
-from ..utils.embeddings import get_cached_sentence_transformer, get_cached_cross_encoder
+from ..utils.embeddings import get_cached_cross_encoder, get_cached_sentence_transformer
+from .base import EmbeddingBackend, RerankerBackend
 
 
 def _to_numpy(embeddings):

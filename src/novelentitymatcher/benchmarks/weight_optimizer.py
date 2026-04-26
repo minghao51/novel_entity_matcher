@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import time
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +20,6 @@ import optuna
 
 from .novelty_bench import (
     DATASET_CONFIGS,
-    StrategyResult,
     load_and_split_data,
 )
 from .shared import (
@@ -29,7 +27,6 @@ from .shared import (
     compute_ood_metrics,
     prepare_binary_labels,
 )
-
 
 WEIGHT_FIELDS = [
     "confidence",
@@ -55,23 +52,23 @@ def _run_all_strategies(
     from ..novelty.config.strategies import (
         ConfidenceConfig,
         KNNConfig,
-        SetFitCentroidConfig,
-        UncertaintyConfig,
-        SelfKnowledgeConfig,
-        MahalanobisConfig,
         LOFConfig,
+        MahalanobisConfig,
         OneClassConfig,
         PatternConfig,
+        SelfKnowledgeConfig,
+        SetFitCentroidConfig,
+        UncertaintyConfig,
     )
     from ..novelty.strategies.confidence import ConfidenceStrategy
     from ..novelty.strategies.knn_distance import KNNDistanceStrategy
-    from ..novelty.strategies.setfit_centroid import SetFitCentroidStrategy
-    from ..novelty.strategies.uncertainty import UncertaintyStrategy
-    from ..novelty.strategies.self_knowledge import SelfKnowledgeStrategy
-    from ..novelty.strategies.mahalanobis import MahalanobisDistanceStrategy
     from ..novelty.strategies.lof import LOFStrategy
+    from ..novelty.strategies.mahalanobis import MahalanobisDistanceStrategy
     from ..novelty.strategies.oneclass import OneClassStrategy
     from ..novelty.strategies.pattern import PatternStrategy
+    from ..novelty.strategies.self_knowledge import SelfKnowledgeStrategy
+    from ..novelty.strategies.setfit_centroid import SetFitCentroidStrategy
+    from ..novelty.strategies.uncertainty import UncertaintyStrategy
 
     strategies_configs = [
         ("confidence", ConfidenceStrategy, ConfidenceConfig()),
@@ -97,12 +94,10 @@ def _run_all_strategies(
     results: dict[str, dict[str, tuple]] = {"val": {}, "test": {}}
     all_metrics: dict[str, dict[int, dict]] = {"val": {}, "test": {}}
 
-    for split_name, texts, emb in [
+    for split_name, texts, _emb in [
         ("val", split.val_texts, None),
         ("test", split.test_texts, None),
     ]:
-        from sentence_transformers import SentenceTransformer
-
         emb_actual = model.encode(texts, show_progress_bar=False)
         dummy_classes = ["unknown"] * len(texts)
         dummy_conf = np.ones(len(texts)) * 0.5
@@ -111,7 +106,9 @@ def _run_all_strategies(
 
         for name, strategy in trained.items():
             try:
-                flags, metrics = strategy.detect(texts, emb_actual, dummy_classes, dummy_conf)
+                flags, metrics = strategy.detect(
+                    texts, emb_actual, dummy_classes, dummy_conf
+                )
                 results[split_name][name] = (flags, metrics)
                 for idx, m in metrics.items():
                     per_idx_metrics[idx].update(m)
@@ -165,7 +162,9 @@ def run_weight_optimization(
 
     print(f"Loading data: {dataset}")
     split = load_and_split_data(dataset, max_train, max_val, max_test)
-    print(f"Train: {len(split.train_texts)}, Val: {len(split.val_texts)}, Test: {len(split.test_texts)}")
+    print(
+        f"Train: {len(split.train_texts)}, Val: {len(split.val_texts)}, Test: {len(split.test_texts)}"
+    )
 
     print(f"Loading model: {model_name}")
     model = SentenceTransformer(model_name)
@@ -175,7 +174,9 @@ def run_weight_optimization(
 
     print("Running all strategies...")
     val_outputs, val_all_metrics, test_outputs, test_all_metrics = _run_all_strategies(
-        model, split, train_emb,
+        model,
+        split,
+        train_emb,
     )
 
     val_true = prepare_binary_labels(split.val_labels, "__OOD__")
@@ -209,11 +210,17 @@ def run_weight_optimization(
                 weights[wkey] = 0.0
 
         novelty_threshold = trial.suggest_float("novelty_threshold", 0.3, 0.8)
-        combine_method = trial.suggest_categorical("combine_method", ["weighted", "voting", "meta_learner"])
+        combine_method = trial.suggest_categorical(
+            "combine_method", ["weighted", "voting", "meta_learner"]
+        )
 
         return _compute_combined_auroc(
-            val_outputs, val_all_metrics, val_true,
-            combine_method, weights, novelty_threshold,
+            val_outputs,
+            val_all_metrics,
+            val_true,
+            combine_method,
+            weights,
+            novelty_threshold,
         )
 
     study = optuna.create_study(direction="maximize", study_name="novelty_weights")
@@ -234,8 +241,12 @@ def run_weight_optimization(
     best_method = best["combine_method"]
 
     test_auroc = _compute_combined_auroc(
-        test_outputs, test_all_metrics, test_true,
-        best_method, best_weights, best["novelty_threshold"],
+        test_outputs,
+        test_all_metrics,
+        test_true,
+        best_method,
+        best_weights,
+        best["novelty_threshold"],
     )
 
     print(f"\n{'=' * 60}")
@@ -245,26 +256,27 @@ def run_weight_optimization(
     print(f"Novelty threshold: {best['novelty_threshold']:.4f}")
     print(f"Val AUROC: {best_val_auroc:.4f}")
     print(f"Test AUROC: {test_auroc:.4f}")
-    print(f"\nOptimal weights:")
+    print("\nOptimal weights:")
     for wkey in WEIGHT_FIELDS:
         print(f"  {wkey}: {best_weights[wkey]:.4f}")
 
     top5 = sorted(study.trials, key=lambda t: t.value or 0, reverse=True)[:5]
-    print(f"\nTop 5 trials:")
+    print("\nTop 5 trials:")
     for i, trial in enumerate(top5):
-        print(f"  #{i + 1}: AUROC={trial.value:.4f}, method={trial.params.get('combine_method')}, "
-              f"threshold={trial.params.get('novelty_threshold'):.3f}")
+        print(
+            f"  #{i + 1}: AUROC={trial.value:.4f}, method={trial.params.get('combine_method')}, "
+            f"threshold={trial.params.get('novelty_threshold'):.3f}"
+        )
 
     result = {
         "best_val_auroc": best_val_auroc,
         "best_test_auroc": test_auroc,
         "best_method": best_method,
         "best_novelty_threshold": best["novelty_threshold"],
-        "best_weights": {k: v for k, v in best_weights.items() if k != "novelty_threshold"},
-        "top5_trials": [
-            {"value": t.value, "params": t.params}
-            for t in top5
-        ],
+        "best_weights": {
+            k: v for k, v in best_weights.items() if k != "novelty_threshold"
+        },
+        "top5_trials": [{"value": t.value, "params": t.params} for t in top5],
         "n_trials": n_trials,
         "dataset": dataset,
         "model": model_name,
@@ -279,8 +291,12 @@ def run_weight_optimization(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Bayesian optimization of ensemble weights")
-    parser.add_argument("--dataset", default="ag_news", choices=list(DATASET_CONFIGS.keys()))
+    parser = argparse.ArgumentParser(
+        description="Bayesian optimization of ensemble weights"
+    )
+    parser.add_argument(
+        "--dataset", default="ag_news", choices=list(DATASET_CONFIGS.keys())
+    )
     parser.add_argument("--model", default=DEFAULT_MODEL_NAME)
     parser.add_argument("--trials", type=int, default=200)
     parser.add_argument("--max-train", type=int, default=200)

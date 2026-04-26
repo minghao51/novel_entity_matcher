@@ -1,16 +1,16 @@
-from typing import List, Dict, Any
+from typing import Any
 
 from ..exceptions import ValidationError
 
 __all__ = [
-    "validate_entity",
     "validate_entities",
-    "validate_threshold",
+    "validate_entity",
     "validate_model_name",
+    "validate_threshold",
 ]
 
 
-def validate_entity(entity: Dict[str, Any]) -> bool:
+def validate_entity(entity: dict[str, Any]) -> bool:
     """Validate a single entity dictionary."""
     if "id" not in entity:
         raise ValidationError(
@@ -29,7 +29,7 @@ def validate_entity(entity: Dict[str, Any]) -> bool:
     return True
 
 
-def validate_entities(entities: List[Dict[str, Any]]) -> bool:
+def validate_entities(entities: list[dict[str, Any]]) -> bool:
     """Validate a list of entities."""
     if not entities:
         raise ValidationError(

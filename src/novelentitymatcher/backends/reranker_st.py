@@ -1,10 +1,7 @@
 """SentenceTransformer-based cross-encoder reranker backend."""
 
-from typing import List, Optional
-
-
-from .base import RerankerBackend
 from ..utils.embeddings import get_cached_cross_encoder
+from .base import RerankerBackend
 
 
 class STReranker(RerankerBackend):
@@ -17,7 +14,7 @@ class STReranker(RerankerBackend):
     def __init__(
         self,
         model_name: str = "BAAI/bge-reranker-v2-m3",
-        device: Optional[str] = None,
+        device: str | None = None,
         batch_size: int = 32,
     ):
         """
@@ -33,7 +30,7 @@ class STReranker(RerankerBackend):
         self.batch_size = batch_size
         self.model = get_cached_cross_encoder(model_name, device=device)
 
-    def score(self, query: str, docs: list[str]) -> List[float]:
+    def score(self, query: str, docs: list[str]) -> list[float]:
         """
         Score query-document pairs.
 

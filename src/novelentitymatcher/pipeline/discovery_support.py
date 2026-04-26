@@ -5,9 +5,10 @@ from __future__ import annotations
 import asyncio
 import csv
 import json
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 
@@ -16,9 +17,9 @@ from .match_result import MatchResultWithMetadata
 
 async def collect_match_result_async(
     matcher: Any,
-    queries: List[str],
+    queries: list[str],
     top_k: int = 5,
-) -> tuple[MatchResultWithMetadata, Dict[str, Any]]:
+) -> tuple[MatchResultWithMetadata, dict[str, Any]]:
     """Async helper to collect match result and reference corpus.
 
     Consolidates duplicated logic from NovelEntityMatcher and DiscoveryPipeline.
@@ -51,9 +52,9 @@ async def collect_match_result_async(
 
 def collect_match_result_sync(
     matcher: Any,
-    queries: List[str],
+    queries: list[str],
     top_k: int = 5,
-) -> tuple[MatchResultWithMetadata, Dict[str, Any]]:
+) -> tuple[MatchResultWithMetadata, dict[str, Any]]:
     """Sync helper to collect match result and reference corpus.
 
     Consolidates duplicated logic from NovelEntityMatcher and DiscoveryPipeline.
@@ -77,9 +78,9 @@ def collect_match_result_sync(
 def derive_existing_classes(
     *,
     entities: list[dict[str, Any]],
-    get_reference_corpus: Callable[[], Dict[str, Any]],
-    existing_classes: Optional[List[str]] = None,
-) -> List[str]:
+    get_reference_corpus: Callable[[], dict[str, Any]],
+    existing_classes: list[str] | None = None,
+) -> list[str]:
     if existing_classes:
         return list(existing_classes)
     if entities:
@@ -92,12 +93,12 @@ def build_novel_match_result(
     *,
     query: str,
     match_result: MatchResultWithMetadata,
-    reference_corpus: Dict[str, Any],
+    reference_corpus: dict[str, Any],
     detector: Any,
     use_novelty_detector: bool,
     acceptance_threshold: float,
     return_alternatives: bool = False,
-    existing_classes: Optional[List[str]] = None,
+    existing_classes: list[str] | None = None,
 ):
     from ..novelty.entity_matcher import NovelEntityMatchResult
 
@@ -172,9 +173,9 @@ def build_novel_match_result(
 
 def export_pipeline_metrics(
     *,
-    metrics: Dict[str, Any],
+    metrics: dict[str, Any],
     format: str = "json",
-    path: Optional[str] = None,
+    path: str | None = None,
 ) -> Path:
     """Export pipeline metrics to file.
 

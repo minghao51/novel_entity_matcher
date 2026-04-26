@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .embedding_matcher import EmbeddingMatcher
-    from .entity_matcher import EntityMatcher
     from .bert_classifier import BERTClassifier
-    from .hybrid_matcher import HybridMatcher
+    from .embedding_matcher import EmbeddingMatcher
+    from .hybrid import HybridMatcher
+    from .matcher import _EntityMatcher as EntityMatcher
     from .matcher_shared import TextInput
 
 
@@ -31,40 +31,36 @@ class StrategyConfig:
 class MatchingStrategy(ABC):
     """Abstract base class for matching strategies."""
 
-    def __init__(self, matcher: "MatcherFacade"):
+    def __init__(self, matcher: MatcherFacade):
         self._matcher = matcher
 
     @abstractmethod
     def match(
         self,
-        texts: "TextInput",
+        texts: TextInput,
         top_k: int = 1,
-        threshold_override: Optional[float] = None,
+        threshold_override: float | None = None,
         **kwargs,
     ) -> Any:
         """Execute matching with this strategy."""
-        pass
 
     @abstractmethod
     async def match_async(
         self,
-        texts: "TextInput",
+        texts: TextInput,
         top_k: int = 1,
-        threshold_override: Optional[float] = None,
+        threshold_override: float | None = None,
         **kwargs,
     ) -> Any:
         """Execute async matching with this strategy."""
-        pass
 
     @abstractmethod
     def build_index(self) -> None:
         """Build any required index for this strategy."""
-        pass
 
     @abstractmethod
     def get_reference_corpus(self) -> dict:
         """Get reference corpus for this strategy."""
-        pass
 
 
 class ZeroShotStrategy(MatchingStrategy):
@@ -72,9 +68,9 @@ class ZeroShotStrategy(MatchingStrategy):
 
     def match(
         self,
-        texts: "TextInput",
+        texts: TextInput,
         top_k: int = 1,
-        threshold_override: Optional[float] = None,
+        threshold_override: float | None = None,
         **kwargs,
     ) -> Any:
         effective_threshold = self._resolve_threshold(threshold_override)
@@ -87,9 +83,9 @@ class ZeroShotStrategy(MatchingStrategy):
 
     async def match_async(
         self,
-        texts: "TextInput",
+        texts: TextInput,
         top_k: int = 1,
-        threshold_override: Optional[float] = None,
+        threshold_override: float | None = None,
         **kwargs,
     ) -> Any:
         effective_threshold = self._resolve_threshold(threshold_override)
@@ -106,7 +102,7 @@ class ZeroShotStrategy(MatchingStrategy):
     def get_reference_corpus(self) -> dict:
         return self._matcher.embedding_matcher.get_reference_corpus()  # type: ignore[attr-defined]
 
-    def _resolve_threshold(self, override: Optional[float]) -> float:
+    def _resolve_threshold(self, override: float | None) -> float:
         return self._matcher._resolve_threshold(override, self._matcher.threshold)
 
 
@@ -115,9 +111,9 @@ class HeadOnlyFullStrategy(MatchingStrategy):
 
     def match(
         self,
-        texts: "TextInput",
+        texts: TextInput,
         top_k: int = 1,
-        threshold_override: Optional[float] = None,
+        threshold_override: float | None = None,
         **kwargs,
     ) -> Any:
         effective_threshold = self._resolve_threshold(threshold_override)
@@ -130,9 +126,9 @@ class HeadOnlyFullStrategy(MatchingStrategy):
 
     async def match_async(
         self,
-        texts: "TextInput",
+        texts: TextInput,
         top_k: int = 1,
-        threshold_override: Optional[float] = None,
+        threshold_override: float | None = None,
         **kwargs,
     ) -> Any:
         effective_threshold = self._resolve_threshold(threshold_override)
@@ -149,7 +145,7 @@ class HeadOnlyFullStrategy(MatchingStrategy):
     def get_reference_corpus(self) -> dict:
         return self._matcher.entity_matcher.get_reference_corpus()
 
-    def _resolve_threshold(self, override: Optional[float]) -> float:
+    def _resolve_threshold(self, override: float | None) -> float:
         return self._matcher._resolve_threshold(override, self._matcher.threshold)
 
 
@@ -158,9 +154,9 @@ class BertStrategy(MatchingStrategy):
 
     def match(
         self,
-        texts: "TextInput",
+        texts: TextInput,
         top_k: int = 1,
-        threshold_override: Optional[float] = None,
+        threshold_override: float | None = None,
         **kwargs,
     ) -> Any:
         effective_threshold = self._resolve_threshold(threshold_override)
@@ -173,9 +169,9 @@ class BertStrategy(MatchingStrategy):
 
     async def match_async(
         self,
-        texts: "TextInput",
+        texts: TextInput,
         top_k: int = 1,
-        threshold_override: Optional[float] = None,
+        threshold_override: float | None = None,
         **kwargs,
     ) -> Any:
         effective_threshold = self._resolve_threshold(threshold_override)
@@ -199,7 +195,7 @@ class BertStrategy(MatchingStrategy):
             encoder=encoder_matcher.model
         )
 
-    def _resolve_threshold(self, override: Optional[float]) -> float:
+    def _resolve_threshold(self, override: float | None) -> float:
         return self._matcher._resolve_threshold(override, self._matcher.threshold)
 
 
@@ -208,9 +204,9 @@ class HybridStrategy(MatchingStrategy):
 
     def match(
         self,
-        texts: "TextInput",
+        texts: TextInput,
         top_k: int = 1,
-        threshold_override: Optional[float] = None,
+        threshold_override: float | None = None,
         **kwargs,
     ) -> Any:
         effective_threshold = self._resolve_threshold(threshold_override)
@@ -223,9 +219,9 @@ class HybridStrategy(MatchingStrategy):
 
     async def match_async(
         self,
-        texts: "TextInput",
+        texts: TextInput,
         top_k: int = 1,
-        threshold_override: Optional[float] = None,
+        threshold_override: float | None = None,
         **kwargs,
     ) -> Any:
         effective_threshold = self._resolve_threshold(threshold_override)
@@ -242,7 +238,7 @@ class HybridStrategy(MatchingStrategy):
     def get_reference_corpus(self) -> dict:
         return self._matcher.embedding_matcher.get_reference_corpus()  # type: ignore[attr-defined]
 
-    def _resolve_threshold(self, override: Optional[float]) -> float:
+    def _resolve_threshold(self, override: float | None) -> float:
         return self._matcher._resolve_threshold(override, self._matcher.threshold)
 
 
@@ -270,10 +266,10 @@ class MatcherFacade:
 
     def __init__(
         self,
-        embedding_matcher: "EmbeddingMatcher",
-        entity_matcher: "EntityMatcher",
-        bert_matcher: "BERTClassifier",
-        hybrid_matcher: "HybridMatcher",
+        embedding_matcher: EmbeddingMatcher,
+        entity_matcher: EntityMatcher,
+        bert_matcher: BERTClassifier,
+        hybrid_matcher: HybridMatcher,
         config: StrategyConfig,
     ):
         self.embedding_matcher = embedding_matcher
@@ -286,9 +282,7 @@ class MatcherFacade:
         self._config = config
 
     @staticmethod
-    def _resolve_threshold(
-        threshold_override: Optional[float], default: float
-    ) -> float:
+    def _resolve_threshold(threshold_override: float | None, default: float) -> float:
         """Resolve threshold from override or default.
 
         Moved from _EntityMatcher to MatcherFacade for better encapsulation.
@@ -297,7 +291,7 @@ class MatcherFacade:
 
         return resolve_threshold(threshold_override, default)
 
-    def get_strategy(self, mode: Optional[str] = None) -> MatchingStrategy:
+    def get_strategy(self, mode: str | None = None) -> MatchingStrategy:
         """Get strategy instance for the given or current mode."""
         effective_mode = mode or self._training_mode
         strategy_cls = get_strategy(effective_mode)

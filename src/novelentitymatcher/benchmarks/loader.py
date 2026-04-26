@@ -7,15 +7,15 @@ import hashlib
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import pandas as pd
 
 from .registry import (
-    CacheConfig,
     DATASET_REGISTRY,
-    DatasetConfig,
     DEFAULT_CACHE_DIR,
+    CacheConfig,
+    DatasetConfig,
     get_dataset_config,
 )
 
@@ -152,8 +152,9 @@ class DatasetLoader:
         return self._load_from_cache(config)
 
     async def _download_er_dataset(self, config: DatasetConfig) -> dict[str, Path]:
-        import requests
         from io import StringIO
+
+        import requests
 
         base_url = config.download_url
 
@@ -193,12 +194,12 @@ class DatasetLoader:
         )
 
         name_col = (
-            [c for c in tableA.columns if c != "id"][0]
+            next(c for c in tableA.columns if c != "id")
             if len(tableA.columns) > 1
             else "name"
         )
         right_name_col = (
-            [c for c in tableB.columns if c != "id"][0]
+            next(c for c in tableB.columns if c != "id")
             if len(tableB.columns) > 1
             else "name"
         )
@@ -250,8 +251,8 @@ class DatasetLoader:
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        output: Dict[str, Any] = {}
-        for name, result in zip(datasets, results):
+        output: dict[str, Any] = {}
+        for name, result in zip(datasets, results, strict=False):
             if isinstance(result, Exception):
                 logger.error(f"Failed to load {name}: {result}")
                 output[name] = {"error": str(result)}

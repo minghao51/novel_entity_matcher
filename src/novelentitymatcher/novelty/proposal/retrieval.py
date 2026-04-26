@@ -7,11 +7,12 @@ using dense embeddings (BGE-M3 style) for improved class naming.
 
 from __future__ import annotations
 
-import numpy as np
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from ...utils.logging_config import get_logger
+import numpy as np
+
 from ...utils.embeddings import get_cached_sentence_transformer
+from ...utils.logging_config import get_logger
 
 if TYPE_CHECKING:
     from ...backends.embedding import EmbeddingBackend
@@ -29,8 +30,8 @@ class RetrievalAugmentedProposer:
 
     def __init__(
         self,
-        retriever: Optional["EmbeddingBackend"] = None,
-        llm_proposer: Optional[Any] = None,
+        retriever: EmbeddingBackend | None = None,
+        llm_proposer: Any | None = None,
         k_examples: int = 5,
         k_novel_per_class: int = 3,
         retrieval_metric: str = "cosine",
@@ -54,14 +55,14 @@ class RetrievalAugmentedProposer:
         self.retrieval_metric = retrieval_metric
         self.rerank = rerank
 
-        self._example_corpus: List[str] = []
-        self._example_embeddings: Optional[Any] = None
+        self._example_corpus: list[str] = []
+        self._example_embeddings: Any | None = None
         self._is_indexed: bool = False
 
     def index_examples(
         self,
-        examples: List[str],
-        embeddings: Optional[Any] = None,
+        examples: list[str],
+        embeddings: Any | None = None,
     ) -> None:
         """
         Index examples for retrieval.
@@ -83,8 +84,8 @@ class RetrievalAugmentedProposer:
     def retrieve(
         self,
         query: str,
-        k: Optional[int] = None,
-    ) -> List[Dict[str, Any]]:
+        k: int | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Retrieve k most relevant examples for a query.
 
@@ -133,9 +134,9 @@ class RetrievalAugmentedProposer:
     def retrieve_by_class(
         self,
         class_name: str,
-        novel_samples: List[Any],
-        existing_classes: List[str],
-    ) -> Dict[str, Any]:
+        novel_samples: list[Any],
+        existing_classes: list[str],
+    ) -> dict[str, Any]:
         """
         Retrieve examples relevant to a proposed class.
 
@@ -163,9 +164,9 @@ class RetrievalAugmentedProposer:
 
     def build_prompt(
         self,
-        novel_samples: List[Any],
-        existing_classes: List[str],
-        context: Optional[str] = None,
+        novel_samples: list[Any],
+        existing_classes: list[str],
+        context: str | None = None,
         use_retrieval: bool = True,
     ) -> str:
         """
@@ -254,10 +255,10 @@ Provide your analysis as a JSON object:"""
 
     def propose_classes(
         self,
-        novel_samples: List[Any],
-        existing_classes: List[str],
-        context: Optional[str] = None,
-    ) -> Optional[Any]:
+        novel_samples: list[Any],
+        existing_classes: list[str],
+        context: str | None = None,
+    ) -> Any | None:
         """
         Propose new classes with retrieval-augmented prompting.
 
@@ -317,7 +318,7 @@ class BGERetriever:
     def __init__(
         self,
         model_name: str = "BAAI/bge-m3",
-        device: Optional[str] = None,
+        device: str | None = None,
         batch_size: int = 32,
     ):
         """
@@ -331,7 +332,7 @@ class BGERetriever:
         self.model_name = model_name
         self.device = device
         self.batch_size = batch_size
-        self._model: Optional[Any] = None
+        self._model: Any | None = None
         self._is_initialized = False
 
     def _initialize(self) -> None:
@@ -354,8 +355,8 @@ class BGERetriever:
 
     def encode(
         self,
-        texts: List[str],
-        batch_size: Optional[int] = None,
+        texts: list[str],
+        batch_size: int | None = None,
     ) -> Any:
         """
         Encode texts to embeddings.

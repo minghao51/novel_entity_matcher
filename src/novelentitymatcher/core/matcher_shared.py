@@ -1,21 +1,22 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Union
 
 import numpy as np
 
 from .normalizer import TextNormalizer
 
 if TYPE_CHECKING:
-    from ..backends.static_embedding import StaticEmbeddingBackend
     from sentence_transformers import SentenceTransformer
+
+    from ..backends.static_embedding import StaticEmbeddingBackend
 
 
 EmbeddingModel = Union["SentenceTransformer", "StaticEmbeddingBackend"]
-TextInput = Union[str, List[str]]
+TextInput = Union[str, list[str]]
 
 
-def coerce_texts(texts: TextInput) -> Tuple[List[str], bool]:
+def coerce_texts(texts: TextInput) -> tuple[list[str], bool]:
     if isinstance(texts, str):
         return [texts], True
     return texts, False
@@ -23,7 +24,7 @@ def coerce_texts(texts: TextInput) -> Tuple[List[str], bool]:
 
 def extract_top_prediction_metadata(
     match_results: Any, single_input: bool
-) -> Tuple[List[str], np.ndarray]:
+) -> tuple[list[str], np.ndarray]:
     """
     Normalize matcher output into top-1 predictions and confidences.
 
@@ -32,7 +33,7 @@ def extract_top_prediction_metadata(
     or ``None`` values.
     """
 
-    def _from_result(result: Any) -> Tuple[str, float]:
+    def _from_result(result: Any) -> tuple[str, float]:
         if result is None:
             return "unknown", 0.0
         if isinstance(result, dict):
@@ -52,8 +53,8 @@ def extract_top_prediction_metadata(
         prediction, confidence = _from_result(match_results)
         return [prediction], np.array([confidence], dtype=float)
 
-    predictions: List[str] = []
-    confidences: List[float] = []
+    predictions: list[str] = []
+    confidences: list[float] = []
     for result in match_results:
         prediction, confidence = _from_result(result)
         predictions.append(prediction)
@@ -62,27 +63,27 @@ def extract_top_prediction_metadata(
     return predictions, np.array(confidences, dtype=float)
 
 
-def unwrap_single(results: List[Any], single_input: bool) -> Any:
+def unwrap_single(results: list[Any], single_input: bool) -> Any:
     if single_input:
         return results[0]
     return results
 
 
 def normalize_texts(
-    texts: List[str],
-    normalizer: Optional[TextNormalizer],
+    texts: list[str],
+    normalizer: TextNormalizer | None,
     normalize: bool,
-) -> List[str]:
+) -> list[str]:
     if not (normalizer and normalize):
         return texts
     return [normalizer.normalize(text) for text in texts]
 
 
 def normalize_training_data(
-    training_data: List[dict],
-    normalizer: Optional[TextNormalizer],
+    training_data: list[dict],
+    normalizer: TextNormalizer | None,
     normalize: bool,
-) -> List[dict]:
+) -> list[dict]:
     if not (normalizer and normalize):
         return training_data
     return [
@@ -92,10 +93,10 @@ def normalize_training_data(
 
 
 def flatten_entity_texts(
-    entities: List[Dict[str, Any]],
-) -> Tuple[List[str], List[str]]:
-    entity_texts: List[str] = []
-    entity_ids: List[str] = []
+    entities: list[dict[str, Any]],
+) -> tuple[list[str], list[str]]:
+    entity_texts: list[str] = []
+    entity_ids: list[str] = []
     for entity in entities:
         entity_texts.append(entity["name"])
         entity_ids.append(entity["id"])
@@ -105,7 +106,7 @@ def flatten_entity_texts(
     return entity_texts, entity_ids
 
 
-def resolve_threshold(threshold_override: Optional[float], default: float) -> float:
+def resolve_threshold(threshold_override: float | None, default: float) -> float:
     from ..utils.validation import validate_threshold
 
     if threshold_override is None:

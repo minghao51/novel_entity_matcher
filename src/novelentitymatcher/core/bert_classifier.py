@@ -6,7 +6,7 @@ superior accuracy for complex pattern-driven tasks but with higher computational
 """
 
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any
 
 import numpy as np
 
@@ -14,13 +14,13 @@ from ..exceptions import TrainingError
 from ..utils.logging_config import get_logger, suppress_third_party_loggers
 
 try:
+    from datasets import Dataset
     from transformers import (
         AutoModelForSequenceClassification,
         AutoTokenizer,
         Trainer,
         TrainingArguments,
     )
-    from datasets import Dataset
 
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
@@ -50,7 +50,7 @@ class BERTClassifier:
 
     def __init__(
         self,
-        labels: List[str],
+        labels: list[str],
         model_name: str = "distilbert-base-uncased",
         num_epochs: int = 3,
         batch_size: int = 16,
@@ -86,16 +86,16 @@ class BERTClassifier:
         self.max_length = max_length
         self.use_fp16 = use_fp16
 
-        self.model: Optional[Any] = None
-        self.tokenizer: Optional[Any] = None
+        self.model: Any | None = None
+        self.tokenizer: Any | None = None
         self.is_trained = False
         self.logger = get_logger(__name__)
 
     def train(
         self,
-        training_data: List[dict],
-        num_epochs: Optional[int] = None,
-        batch_size: Optional[int] = None,
+        training_data: list[dict],
+        num_epochs: int | None = None,
+        batch_size: int | None = None,
         show_progress: bool = True,
     ):
         """Train the BERT classifier.
@@ -181,7 +181,7 @@ class BERTClassifier:
 
                     warnings.warn(
                         "Disabling fp16 on MPS (Apple Silicon) due to compatibility. "
-                        "This may slightly slow down training but will not affect accuracy."
+                        "This may slightly slow down training but will not affect accuracy.", stacklevel=2
                     )
                     use_fp16 = False
             except ImportError:
@@ -240,7 +240,7 @@ class BERTClassifier:
 
         self.is_trained = True
 
-    def predict(self, texts: Union[str, List[str]]) -> Union[str, List[str]]:
+    def predict(self, texts: str | list[str]) -> str | list[str]:
         """Predict labels for input text(s).
 
         Args:
@@ -261,7 +261,7 @@ class BERTClassifier:
 
         single_input = isinstance(texts, str)
         if single_input:
-            texts_list: List[str] = [texts]  # type: ignore[list-item]
+            texts_list: list[str] = [texts]  # type: ignore[list-item]
         else:
             texts_list = texts  # type: ignore[assignment]
 
@@ -372,7 +372,7 @@ class BERTClassifier:
         if not labels_path.exists():
             raise FileNotFoundError(f"Labels file not found at {labels_path}")
 
-        with open(labels_path, "r") as f:
+        with open(labels_path) as f:
             labels = f.read().splitlines()
 
         # Initialize classifier

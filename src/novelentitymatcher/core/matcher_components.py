@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .embedding_matcher import EmbeddingMatcher
+from .matcher_entity import _EntityMatcher
 
 if TYPE_CHECKING:
     from .matcher import Matcher
@@ -11,7 +12,7 @@ if TYPE_CHECKING:
 class MatcherComponentFactory:
     """Lazy matcher-component construction behind the public Matcher facade."""
 
-    def __init__(self, owner: "Matcher"):
+    def __init__(self, owner: Matcher):
         self._owner = owner
         self._embedding_matcher: Any = None
         self._entity_matcher: Any = None
@@ -37,8 +38,6 @@ class MatcherComponentFactory:
 
     def get_entity_matcher(self) -> Any:
         if self._entity_matcher is None:
-            from .matcher import _EntityMatcher
-
             self._entity_matcher = _EntityMatcher(
                 entities=self._owner.entities,
                 model_name=self._owner._training_model_name,
@@ -50,8 +49,6 @@ class MatcherComponentFactory:
 
     def get_bert_matcher(self) -> Any:
         if self._bert_matcher is None:
-            from .matcher import _EntityMatcher
-
             self._bert_matcher = _EntityMatcher(
                 entities=self._owner.entities,
                 model_name=self._owner._bert_model_name,

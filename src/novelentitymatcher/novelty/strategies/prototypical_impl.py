@@ -8,14 +8,14 @@ novelty by distance to nearest prototype.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
-from sklearn.metrics.pairwise import cosine_distances, euclidean_distances
 from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_distances, euclidean_distances
 
-from novelentitymatcher.utils.logging_config import get_logger
 from novelentitymatcher.utils.embeddings import get_cached_sentence_transformer
+from novelentitymatcher.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -31,14 +31,14 @@ class PrototypicalDetector:
         self.distance_threshold = distance_threshold
         self.distance_metric = distance_metric
 
-        self.model: Optional[SentenceTransformer] = None
-        self.prototypes: Dict[str, np.ndarray] = {}
-        self.class_covariances: Dict[str, np.ndarray] = {}
+        self.model: SentenceTransformer | None = None
+        self.prototypes: dict[str, np.ndarray] = {}
+        self.class_covariances: dict[str, np.ndarray] = {}
         self.is_trained = False
 
     def train(
         self,
-        training_data: List[Dict[str, str]],
+        training_data: list[dict[str, str]],
         show_progress: bool = False,
     ) -> None:
         if not training_data:
@@ -55,7 +55,7 @@ class PrototypicalDetector:
 
         self.model = get_cached_sentence_transformer(self.model_name)
 
-        class_texts: Dict[str, List[str]] = {}
+        class_texts: dict[str, list[str]] = {}
         for item in training_data:
             label = item["label"]
             text = item["text"]
@@ -92,7 +92,7 @@ class PrototypicalDetector:
                 f"Training complete! Computed {len(self.prototypes)} prototypes."
             )
 
-    def is_novel(self, text: str) -> Tuple[bool, float, Optional[str]]:
+    def is_novel(self, text: str) -> tuple[bool, float, str | None]:
         if not self.is_trained:
             raise RuntimeError("Detector must be trained before calling is_novel()")
 
@@ -117,8 +117,8 @@ class PrototypicalDetector:
 
     def score_batch(
         self,
-        texts: List[str],
-    ) -> List[Tuple[bool, float, Optional[str]]]:
+        texts: list[str],
+    ) -> list[tuple[bool, float, str | None]]:
         if not self.is_trained:
             raise RuntimeError("Detector must be trained before calling score_batch()")
 
@@ -180,7 +180,7 @@ class PrototypicalDetector:
         else:
             raise ValueError(f"Unknown distance metric: {self.distance_metric}")
 
-    def get_prototype_info(self) -> Dict[str, Dict[str, Any]]:
+    def get_prototype_info(self) -> dict[str, dict[str, Any]]:
         info = {}
 
         for label, prototype in self.prototypes.items():
@@ -228,12 +228,12 @@ class PrototypicalDetector:
             json.dump(metadata, f, indent=2)
 
     @classmethod
-    def load(cls, path: str) -> "PrototypicalDetector":
+    def load(cls, path: str) -> PrototypicalDetector:
         p = Path(path)
 
         import json
 
-        with open(p / "metadata.json", "r") as f:
+        with open(p / "metadata.json") as f:
             metadata = json.load(f)
 
         detector = cls(
@@ -242,7 +242,7 @@ class PrototypicalDetector:
             distance_metric=metadata["distance_metric"],
         )
 
-        with open(p / "prototypes.json", "r") as f:
+        with open(p / "prototypes.json") as f:
             proto_data = json.load(f)
         detector.prototypes = {
             label: np.array(arr) for label, arr in proto_data.items()
@@ -250,7 +250,7 @@ class PrototypicalDetector:
 
         cov_path = p / "covariances.json"
         if cov_path.exists():
-            with open(cov_path, "r") as f:
+            with open(cov_path) as f:
                 cov_data = json.load(f)
             detector.class_covariances = {
                 label: np.array(arr) for label, arr in cov_data.items()

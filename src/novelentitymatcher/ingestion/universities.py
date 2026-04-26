@@ -1,11 +1,13 @@
 """Ingestion script for university/institution data."""
 
-from typing import Any
 import json
+from typing import Any
+
 import requests
 
-from .base import BaseFetcher, resolve_output_dirs
 from novelentitymatcher.utils.logging_config import get_logger
+
+from .base import BaseFetcher, resolve_output_dirs
 
 logger = get_logger(__name__)
 
@@ -274,7 +276,7 @@ class UniversitiesFetcher(BaseFetcher):
                     json.dump({"fallback": True, "data": self.FALLBACK_UNIVERSITIES}, f)
 
         try:
-            with open(output_path, "r", encoding="utf-8") as f:
+            with open(output_path, encoding="utf-8") as f:
                 content = json.load(f)
                 if "fallback" in content:
                     return content.get("data", [])
@@ -346,7 +348,7 @@ class TopUniversitiesFetcher(BaseFetcher):
             with open(output_path, "w", encoding="utf-8") as f:
                 json.dump([], f)
 
-        with open(output_path, "r", encoding="utf-8") as f:
+        with open(output_path, encoding="utf-8") as f:
             return json.load(f)
 
     def process(self, raw_data: list[dict[str, Any]]) -> list[dict[str, Any]]:

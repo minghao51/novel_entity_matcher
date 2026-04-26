@@ -6,7 +6,8 @@ with the NoveltyDetector.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Set, Any, Literal, Type
+from typing import Any, Literal
+
 import numpy as np
 
 
@@ -28,7 +29,7 @@ class NoveltyStrategy(ABC):
     def initialize(
         self,
         reference_embeddings: np.ndarray,
-        reference_labels: List[str],
+        reference_labels: list[str],
         config: Any,
     ) -> None:
         """
@@ -39,17 +40,16 @@ class NoveltyStrategy(ABC):
             reference_labels: Class labels for known samples
             config: Strategy-specific configuration object
         """
-        pass
 
     @abstractmethod
     def detect(
         self,
-        texts: List[str],
+        texts: list[str],
         embeddings: np.ndarray,
-        predicted_classes: List[str],
+        predicted_classes: list[str],
         confidences: np.ndarray,
         **kwargs,
-    ) -> tuple[Set[int], Dict[int, Dict[str, Any]]]:
+    ) -> tuple[set[int], dict[int, dict[str, Any]]]:
         """
         Detect novel samples.
 
@@ -65,17 +65,15 @@ class NoveltyStrategy(ABC):
             - flags: Set of indices flagged as novel
             - metrics: Dict mapping index to metric dict
         """
-        pass
 
     @property
     @abstractmethod
-    def config_schema(self) -> Type:
+    def config_schema(self) -> type:
         """
         Return the config dataclass type for this strategy.
 
         This is used for validation and defaults.
         """
-        pass
 
     @abstractmethod
     def get_weight(self) -> float:
@@ -85,7 +83,6 @@ class NoveltyStrategy(ABC):
         This weight determines how much this strategy contributes
         to the final novelty score.
         """
-        pass
 
     def get_config(self) -> Any:
         """

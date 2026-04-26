@@ -1,20 +1,22 @@
 from __future__ import annotations
 
-from typing import List, Iterator, Callable, Any, Optional, Dict
 import threading
 import time
+from collections.abc import Callable, Iterator
+from typing import Any
+
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
 __all__ = [
+    "ModelCache",
+    "batch_encode",
     "compute_embeddings",
     "cosine_sim",
-    "batch_encode",
-    "ModelCache",
-    "get_default_cache",
+    "get_cached_cross_encoder",
     "get_cached_sentence_transformer",
     "get_cached_setfit_model",
-    "get_cached_cross_encoder",
+    "get_default_cache",
 ]
 
 
@@ -28,7 +30,7 @@ class ModelCache:
     def __init__(
         self,
         max_memory_gb: float = 4.0,
-        ttl_seconds: Optional[float] = None,
+        ttl_seconds: float | None = None,
     ):
         """
         Initialize the model cache.
@@ -37,8 +39,8 @@ class ModelCache:
             max_memory_gb: Maximum memory to use for cached models (in GB).
             ttl_seconds: Optional time-to-live for cache entries in seconds.
         """
-        self._cache: Dict[str, Any] = {}
-        self._access_times: Dict[str, float] = {}
+        self._cache: dict[str, Any] = {}
+        self._access_times: dict[str, float] = {}
         self._max_memory_gb = max_memory_gb
         self._ttl_seconds = ttl_seconds
         self._lock = threading.RLock()
@@ -95,7 +97,7 @@ class ModelCache:
             self._hits = 0
             self._misses = 0
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """
         Get cache statistics.
 
@@ -114,7 +116,7 @@ class ModelCache:
 
 
 # Global default cache instance (4GB limit)
-_default_cache: Optional[ModelCache] = None
+_default_cache: ModelCache | None = None
 _cache_lock = threading.Lock()
 
 
@@ -128,7 +130,7 @@ def get_default_cache() -> ModelCache:
 
 
 def get_cached_sentence_transformer(
-    model_name: str, cache: Optional[ModelCache] = None, trust_remote_code: bool = False
+    model_name: str, cache: ModelCache | None = None, trust_remote_code: bool = False
 ) -> SentenceTransformer:
     """Get a SentenceTransformer from cache or load it.
 
@@ -151,8 +153,8 @@ def get_cached_sentence_transformer(
 
 def get_cached_cross_encoder(
     model_name: str,
-    device: Optional[str] = None,
-    cache: Optional[ModelCache] = None,
+    device: str | None = None,
+    cache: ModelCache | None = None,
 ) -> Any:
     """Get a CrossEncoder from cache or load it.
 
@@ -179,8 +181,8 @@ def get_cached_cross_encoder(
 
 def get_cached_setfit_model(
     model_name: str,
-    labels: Optional[List[str]] = None,
-    cache: Optional[ModelCache] = None,
+    labels: list[str] | None = None,
+    cache: ModelCache | None = None,
 ) -> Any:
     """Get a SetFitModel from cache or load it.
 
@@ -207,7 +209,7 @@ def get_cached_setfit_model(
 
 
 def compute_embeddings(
-    texts: List[str], model_name: str = "sentence-transformers/paraphrase-mpnet-base-v2"
+    texts: list[str], model_name: str = "sentence-transformers/paraphrase-mpnet-base-v2"
 ) -> np.ndarray:
     """Compute embeddings for a list of texts."""
     model = get_cached_sentence_transformer(model_name)
@@ -228,7 +230,7 @@ def cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
 
 
 def batch_encode(
-    texts: List[str],
+    texts: list[str],
     model_name: str = "sentence-transformers/paraphrase-mpnet-base-v2",
     batch_size: int = 32,
 ) -> Iterator[np.ndarray]:

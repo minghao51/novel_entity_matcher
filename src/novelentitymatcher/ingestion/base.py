@@ -1,10 +1,11 @@
 """Base classes for data ingestion."""
 
-from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import Any, Optional, Union
 import asyncio
 import csv
+from abc import ABC, abstractmethod
+from pathlib import Path
+from typing import Any, Union
+
 import requests
 
 from novelentitymatcher.utils.logging_config import get_logger
@@ -19,7 +20,7 @@ DEFAULT_MAX_BYTES = 50 * 1024 * 1024
 def _fetch_url(
     url: str,
     output_path: Path,
-    expected_content_type: Optional[str] = None,
+    expected_content_type: str | None = None,
     max_bytes: int = DEFAULT_MAX_BYTES,
     timeout: int = 60,
 ) -> None:
@@ -133,7 +134,7 @@ class BaseFetcher(ABC):
     async def run_async(
         self,
         output_filename: str,
-        semaphore: Optional[asyncio.Semaphore] = None,
+        semaphore: asyncio.Semaphore | None = None,
         batch_size: int = 1000,
     ) -> Path:
         """Execute full ingestion pipeline asynchronously with rate limiting.
@@ -172,8 +173,8 @@ class BaseFetcher(ABC):
 
 def resolve_output_dirs(
     dataset: str,
-    raw_dir: Optional[PathLike] = None,
-    processed_dir: Optional[PathLike] = None,
+    raw_dir: PathLike | None = None,
+    processed_dir: PathLike | None = None,
 ) -> tuple[Path, Path]:
     """Resolve per-dataset output directories without relying on repo layout."""
     raw_base = Path(raw_dir) if raw_dir is not None else Path.cwd() / "data" / "raw"

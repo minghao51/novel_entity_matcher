@@ -15,7 +15,7 @@ import argparse
 import json
 import time
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from .shared import (
     DEFAULT_MODEL_NAME,
@@ -37,20 +37,22 @@ def run_compare(
     num_entities: int = 10,
     samples_per_entity: int = 50,
     num_epochs: int = 3,
-) -> Dict[str, Dict[str, Any]]:
+) -> dict[str, dict[str, Any]]:
     from ..core.bert_classifier import BERTClassifier
     from ..core.classifier import SetFitClassifier
 
     training_data, test_data = generate_synthetic_data(num_entities, samples_per_entity)
-    labels = sorted(set(item["label"] for item in training_data))
+    labels = sorted({item["label"] for item in training_data})
 
     print(f"\n{'=' * 60}")
     print("BERT vs SetFit Comparison")
     print(f"  Entities: {num_entities}, Samples/entity: {samples_per_entity}")
-    print(f"  Train: {len(training_data)}, Test: {len(test_data)}, Epochs: {num_epochs}")
+    print(
+        f"  Train: {len(training_data)}, Test: {len(test_data)}, Epochs: {num_epochs}"
+    )
     print(f"{'=' * 60}\n")
 
-    results: Dict[str, Dict[str, Any]] = {}
+    results: dict[str, dict[str, Any]] = {}
 
     for name, cls, model in [
         ("setfit", SetFitClassifier, DEFAULT_MODEL_NAME),
@@ -65,8 +67,12 @@ def run_compare(
             clf.train(training_data, num_epochs=num_epochs, show_progress=False)
             infer_m = benchmark_inference(clf, test_data)
             results[name] = {**train_m, **infer_m}
-            print(f"  Train: {train_m['training_time']:.2f}s, Mem: {train_m['memory_peak_mb']:.2f}MB")
-            print(f"  Infer: {infer_m['inference_time']:.2f}s, Thru: {infer_m['throughput_samples_per_sec']:.2f}/s")
+            print(
+                f"  Train: {train_m['training_time']:.2f}s, Mem: {train_m['memory_peak_mb']:.2f}MB"
+            )
+            print(
+                f"  Infer: {infer_m['inference_time']:.2f}s, Thru: {infer_m['throughput_samples_per_sec']:.2f}/s"
+            )
             print(f"  Acc: {infer_m['accuracy']:.2%}")
         except (ValueError, RuntimeError) as e:
             print(f"  FAILED: {e}")
@@ -97,11 +103,11 @@ def run_compare(
 
 
 def run_sweep(
-    model_names: List[str] | None = None,
+    model_names: list[str] | None = None,
     num_entities: int = 20,
     samples_per_entity: int = 100,
     num_epochs: int = 5,
-) -> Dict[str, Dict[str, Any]]:
+) -> dict[str, dict[str, Any]]:
     from ..core.bert_classifier import BERTClassifier
 
     if model_names is None:
@@ -112,14 +118,14 @@ def run_sweep(
         ]
 
     training_data, test_data = generate_synthetic_data(num_entities, samples_per_entity)
-    labels = sorted(set(item["label"] for item in training_data))
+    labels = sorted({item["label"] for item in training_data})
 
     print(f"\n{'=' * 60}")
     print(f"BERT Model Sweep ({len(model_names)} models)")
     print(f"  Entities: {num_entities}, Samples/entity: {samples_per_entity}")
     print(f"{'=' * 60}\n")
 
-    results: Dict[str, Dict[str, Any]] = {}
+    results: dict[str, dict[str, Any]] = {}
 
     for model_name in model_names:
         print(f"Benchmarking {model_name}...")
@@ -141,16 +147,26 @@ def run_sweep(
                 "model_name": model_name,
                 "status": "ok",
             }
-            print(f"  Train: {train_m['training_time']:.2f}s, Mem: {train_m['memory_peak_mb']:.2f}MB")
-            print(f"  Infer: {infer_m['inference_time']:.2f}s, Acc: {infer_m['accuracy']:.2%}")
+            print(
+                f"  Train: {train_m['training_time']:.2f}s, Mem: {train_m['memory_peak_mb']:.2f}MB"
+            )
+            print(
+                f"  Infer: {infer_m['inference_time']:.2f}s, Acc: {infer_m['accuracy']:.2%}"
+            )
         except (ValueError, RuntimeError) as e:
             print(f"  FAILED: {e}")
-            results[model_name] = {"model_name": model_name, "status": "failed", "error": str(e)}
+            results[model_name] = {
+                "model_name": model_name,
+                "status": "failed",
+                "error": str(e),
+            }
 
     successful = {k: v for k, v in results.items() if v.get("status") == "ok"}
     if successful:
         print(f"\n{'=' * 80}")
-        print(f"{'Model':<25} {'Train(s)':<10} {'Mem(MB)':<10} {'Infer(s)':<10} {'Thru(/s)':<12} {'Acc':<8}")
+        print(
+            f"{'Model':<25} {'Train(s)':<10} {'Mem(MB)':<10} {'Infer(s)':<10} {'Thru(/s)':<12} {'Acc':<8}"
+        )
         print(f"{'-' * 80}")
         for name, m in sorted(successful.items()):
             print(
@@ -183,7 +199,7 @@ def run_setfit_sweep(
         model_names = list(SETFIT_MODEL_ALIASES.values())
 
     training_data, test_data = generate_synthetic_data(num_entities, samples_per_entity)
-    labels = sorted(set(item["label"] for item in training_data))
+    labels = sorted({item["label"] for item in training_data})
 
     print(f"\n{'=' * 60}")
     print(f"SetFit Model Sweep ({len(model_names)} models)")
@@ -196,21 +212,32 @@ def run_setfit_sweep(
         print(f"Benchmarking {model_name}...")
         try:
             train_m = benchmark_training(
-                SetFitClassifier, training_data, labels,
-                num_epochs=num_epochs, model_name=model_name,
+                SetFitClassifier,
+                training_data,
+                labels,
+                num_epochs=num_epochs,
+                model_name=model_name,
             )
             clf = SetFitClassifier(labels=labels, model_name=model_name)
             clf.train(training_data, num_epochs=num_epochs, show_progress=False)
             infer_m = benchmark_inference(clf, test_data)
 
             results[model_name] = {
-                **train_m, **infer_m,
-                "model_name": model_name, "status": "ok",
+                **train_m,
+                **infer_m,
+                "model_name": model_name,
+                "status": "ok",
             }
-            print(f"  Train: {train_m['training_time']:.2f}s, Acc: {infer_m['accuracy']:.2%}")
+            print(
+                f"  Train: {train_m['training_time']:.2f}s, Acc: {infer_m['accuracy']:.2%}"
+            )
         except (ValueError, RuntimeError) as e:
             print(f"  FAILED: {e}")
-            results[model_name] = {"model_name": model_name, "status": "failed", "error": str(e)}
+            results[model_name] = {
+                "model_name": model_name,
+                "status": "failed",
+                "error": str(e),
+            }
 
     successful = {k: v for k, v in results.items() if v.get("status") == "ok"}
     if successful:
@@ -243,13 +270,18 @@ def run_scale_test(
 
     for n_samples in sample_counts:
         samples_per_entity = max(1, n_samples // num_entities)
-        training_data, test_data = generate_synthetic_data(num_entities, samples_per_entity)
-        labels = sorted(set(item["label"] for item in training_data))
+        training_data, test_data = generate_synthetic_data(
+            num_entities, samples_per_entity
+        )
+        labels = sorted({item["label"] for item in training_data})
 
         try:
             train_m = benchmark_training(
-                SetFitClassifier, training_data, labels,
-                num_epochs=num_epochs, model_name=DEFAULT_MODEL_NAME,
+                SetFitClassifier,
+                training_data,
+                labels,
+                num_epochs=num_epochs,
+                model_name=DEFAULT_MODEL_NAME,
             )
             clf = SetFitClassifier(labels=labels, model_name=DEFAULT_MODEL_NAME)
             clf.train(training_data, num_epochs=num_epochs, show_progress=False)
@@ -258,13 +290,20 @@ def run_scale_test(
             results[str(n_samples)] = {
                 "n_train": len(training_data),
                 "samples_per_entity": samples_per_entity,
-                **train_m, **infer_m,
+                **train_m,
+                **infer_m,
                 "status": "ok",
             }
-            print(f"  n={n_samples}: Train={train_m['training_time']:.2f}s, Acc={infer_m['accuracy']:.2%}")
+            print(
+                f"  n={n_samples}: Train={train_m['training_time']:.2f}s, Acc={infer_m['accuracy']:.2%}"
+            )
         except (ValueError, RuntimeError) as e:
             print(f"  n={n_samples}: FAILED - {e}")
-            results[str(n_samples)] = {"n_train": n_samples, "status": "failed", "error": str(e)}
+            results[str(n_samples)] = {
+                "n_train": n_samples,
+                "status": "failed",
+                "error": str(e),
+            }
 
     return results
 
@@ -277,7 +316,7 @@ def run_mode_comparison(
     from ..core.matcher import Matcher
 
     training_data, test_data = generate_synthetic_data(num_entities, samples_per_entity)
-    entities = sorted(set(item["label"] for item in training_data))
+    entities = sorted({item["label"] for item in training_data})
 
     print(f"\n{'=' * 60}")
     print(f"Mode Comparison ({len(entities)} entities)")
@@ -309,7 +348,9 @@ def run_mode_comparison(
                 "qps": len(test_data) / elapsed if elapsed > 0 else 0,
                 "status": "ok",
             }
-            print(f"  Acc: {accuracy:.2%}, Time: {elapsed:.2f}s, QPS: {len(test_data) / elapsed:.0f}")
+            print(
+                f"  Acc: {accuracy:.2%}, Time: {elapsed:.2f}s, QPS: {len(test_data) / elapsed:.0f}"
+            )
         except (ValueError, RuntimeError) as e:
             print(f"  FAILED: {e}")
             results[mode] = {"mode": mode, "status": "failed", "error": str(e)}
@@ -321,11 +362,17 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Classifier benchmarks")
     parser.add_argument(
         "--mode",
-        choices=["compare", "sweep-models", "sweep-setfit", "scale-test", "sweep-modes"],
+        choices=[
+            "compare",
+            "sweep-models",
+            "sweep-setfit",
+            "scale-test",
+            "sweep-modes",
+        ],
         default="compare",
         help="'compare' BERT vs SetFit, 'sweep-models' BERT sweep, "
-             "'sweep-setfit' SetFit model sweep, 'scale-test' sample scaling, "
-             "'sweep-modes' mode comparison",
+        "'sweep-setfit' SetFit model sweep, 'scale-test' sample scaling, "
+        "'sweep-modes' mode comparison",
     )
     parser.add_argument("--num-entities", type=int, default=10)
     parser.add_argument("--num-samples", type=int, default=50)

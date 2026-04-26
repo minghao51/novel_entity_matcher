@@ -7,7 +7,6 @@ module usage, third-party library log suppression, and environment variable supp
 import logging
 import os
 import warnings
-from typing import Optional
 
 # Global state to track if logging has been configured
 _logging_configured = False
@@ -15,8 +14,8 @@ _logging_configured = False
 
 def configure_logging(
     verbose: bool = False,
-    log_level: Optional[int] = None,
-    log_file: Optional[str] = None,
+    log_level: int | None = None,
+    log_file: str | None = None,
 ) -> None:
     """Configure logging for novel_entity_matcher package.
 

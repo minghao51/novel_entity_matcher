@@ -7,21 +7,21 @@ Provides utilities for saving and loading proposals in YAML format.
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any
 
 import numpy as np
 import yaml
 
+from ...utils.logging_config import get_logger
 from ..schemas import (
-    DiscoveryCluster,
     ClassProposal,
+    DiscoveryCluster,
     NovelClassAnalysis,
     NovelClassDiscoveryReport,
     NovelSampleMetadata,
     NovelSampleReport,
     ProposalReviewRecord,
 )
-from ...utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -43,7 +43,7 @@ def _to_builtin(value: Any) -> Any:
 
 def save_proposals(
     report: NovelClassDiscoveryReport,
-    output_dir: Union[str, Path] = "./proposals",
+    output_dir: str | Path = "./proposals",
     format: str = "yaml",
 ) -> str:
     """
@@ -83,7 +83,7 @@ def save_proposals(
     return str(output_path)
 
 
-def load_proposals(path: Union[str, Path]) -> NovelClassDiscoveryReport:
+def load_proposals(path: str | Path) -> NovelClassDiscoveryReport:
     """
     Load novel class discovery report from file.
 
@@ -104,10 +104,10 @@ def load_proposals(path: Union[str, Path]) -> NovelClassDiscoveryReport:
     # Load based on format
     suffix = path.suffix.lower()
     if suffix in [".yaml", ".yml"]:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
     elif suffix == ".json":
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
     else:
         raise ValueError(f"Unsupported file format: {suffix}")
@@ -120,9 +120,9 @@ def load_proposals(path: Union[str, Path]) -> NovelClassDiscoveryReport:
 
 
 def list_proposals(
-    output_dir: Union[str, Path] = "./proposals",
+    output_dir: str | Path = "./proposals",
     sort: str = "newest",
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     List all discovery reports in output directory.
 
@@ -187,7 +187,7 @@ def list_proposals(
     return proposals
 
 
-def _report_to_dict(report: NovelClassDiscoveryReport) -> Dict[str, Any]:
+def _report_to_dict(report: NovelClassDiscoveryReport) -> dict[str, Any]:
     """Convert NovelClassDiscoveryReport to dict for serialization."""
     data = {
         "discovery_id": report.discovery_id,
@@ -242,7 +242,7 @@ def _report_to_dict(report: NovelClassDiscoveryReport) -> Dict[str, Any]:
     return data
 
 
-def _dict_to_report(data: Dict[str, Any]) -> NovelClassDiscoveryReport:
+def _dict_to_report(data: dict[str, Any]) -> NovelClassDiscoveryReport:
     """Convert dict to NovelClassDiscoveryReport."""
     # Parse timestamp
     timestamp = datetime.fromisoformat(data["timestamp"])
@@ -267,7 +267,7 @@ def _dict_to_report(data: Dict[str, Any]) -> NovelClassDiscoveryReport:
 
     # Reconstruct class proposals if available
     class_proposals = None
-    if "class_proposals" in data and data["class_proposals"]:
+    if data.get("class_proposals"):
         proposal_data = data["class_proposals"]
         class_proposals = NovelClassAnalysis(
             proposed_classes=[
@@ -300,7 +300,7 @@ def _dict_to_report(data: Dict[str, Any]) -> NovelClassDiscoveryReport:
 
 def export_summary(
     report: NovelClassDiscoveryReport,
-    output_path: Union[str, Path],
+    output_path: str | Path,
     format: str = "markdown",
 ) -> None:
     """

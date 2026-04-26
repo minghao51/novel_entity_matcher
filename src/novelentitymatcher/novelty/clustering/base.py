@@ -1,7 +1,7 @@
 """Abstract contract for clustering backends."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -17,7 +17,7 @@ class ClusteringBackend(ABC):
         embeddings: np.ndarray,
         min_cluster_size: int = 5,
         **kwargs: Any,
-    ) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
+    ) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
         """
         Fit and predict cluster labels.
 

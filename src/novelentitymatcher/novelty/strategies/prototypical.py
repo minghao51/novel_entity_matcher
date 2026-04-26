@@ -4,12 +4,13 @@ Prototypical network novelty detection strategy wrapper.
 Wraps PrototypicalDetector to implement NoveltyStrategy protocol.
 """
 
-from typing import Dict, List, Set, Any
+from typing import Any
+
 import numpy as np
 
-from .base import NoveltyStrategy
-from ..core.strategies import StrategyRegistry
 from ..config.strategies import PrototypicalConfig
+from ..core.strategies import StrategyRegistry
+from .base import NoveltyStrategy
 from .prototypical_impl import PrototypicalDetector
 
 
@@ -25,7 +26,7 @@ class PrototypicalStrategy(NoveltyStrategy):
     def initialize(
         self,
         reference_embeddings: np.ndarray,
-        reference_labels: List[str],
+        reference_labels: list[str],
         config: PrototypicalConfig,
     ) -> None:
         self._config = config or PrototypicalConfig()
@@ -40,12 +41,12 @@ class PrototypicalStrategy(NoveltyStrategy):
 
     def detect(
         self,
-        texts: List[str],
+        texts: list[str],
         embeddings: np.ndarray,
-        predicted_classes: List[str],
+        predicted_classes: list[str],
         confidences: np.ndarray,
         **kwargs,
-    ) -> tuple[Set[int], Dict[int, Dict[str, Any]]]:
+    ) -> tuple[set[int], dict[int, dict[str, Any]]]:
         flags: set[int] = set()
         metrics: dict[int, dict[str, Any]] = {}
 

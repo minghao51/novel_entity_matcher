@@ -5,9 +5,9 @@ This module contains shared utility functions used across
 the novelty detection subsystem.
 """
 
-from .scoring import normalize_score, compute_similarity
+from .scoring import compute_similarity, normalize_score
 
 __all__ = [
-    "normalize_score",
     "compute_similarity",
+    "normalize_score",
 ]

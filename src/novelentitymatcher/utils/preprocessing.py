@@ -1,7 +1,6 @@
 import re
-from typing import List
 
-__all__ = ["tokenize", "remove_stopwords", "lemmatize", "clean_text", "extract_aliases"]
+__all__ = ["clean_text", "extract_aliases", "lemmatize", "remove_stopwords", "tokenize"]
 
 try:
     import nltk
@@ -15,7 +14,7 @@ except ImportError:
     _lemmatizer = None
 
 
-def tokenize(text: str, lowercase: bool = True) -> List[str]:
+def tokenize(text: str, lowercase: bool = True) -> list[str]:
     """Tokenize text into words."""
     if not text:
         return []
@@ -27,7 +26,7 @@ def tokenize(text: str, lowercase: bool = True) -> List[str]:
     return tokens
 
 
-def remove_stopwords(tokens: List[str], lang: str = "english") -> List[str]:
+def remove_stopwords(tokens: list[str], lang: str = "english") -> list[str]:
     """Remove stopwords from token list."""
     if not NLTK_AVAILABLE:
         return tokens
@@ -70,7 +69,7 @@ def clean_text(text: str, lowercase: bool = True, remove_punct: bool = True) -> 
     return text.strip()
 
 
-def extract_aliases(text: str) -> List[str]:
+def extract_aliases(text: str) -> list[str]:
     """Extract potential aliases from text (abbreviations in parentheses)."""
     pattern = r"\b([A-Z]{2,})\s*\([^)]+\)|([A-Z]{2,})"
     matches = re.findall(pattern, text)

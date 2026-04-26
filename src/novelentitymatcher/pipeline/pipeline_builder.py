@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, List, Optional
+from typing import Any
 
 from .adapters import (
     ClusterEvidenceStage,
@@ -19,8 +20,9 @@ from .orchestrator import PipelineOrchestrator
 class PipelineStageConfig:
     """Configuration for a single pipeline stage."""
 
-    collect_sync: Optional[Callable[[List[str]], tuple[Any, dict]]] = None
-    collect_async: Optional[Callable[[List[str]], Awaitable[tuple[Any, dict]]]] = None
+    match_enabled: bool = True
+    collect_sync: Callable[[list[str]], tuple[Any, dict]] | None = None
+    collect_async: Callable[[list[str]], Awaitable[tuple[Any, dict]]] | None = None
     detector: Any = None
     clusterer: Any = None
     llm_proposer: Any = None
@@ -30,20 +32,20 @@ class PipelineStageConfig:
     similarity_threshold: float = 0.75
     min_cluster_size: int = 5
     clustering_metric: str = "cosine"
-    clustering_min_samples: Optional[int] = None
+    clustering_min_samples: int | None = None
     clustering_cluster_selection_epsilon: float = 0.0
     evidence_enabled: bool = True
     evidence_method: str = "tfidf"
     max_keywords: int = 8
     max_examples: int = 4
     token_budget: int = 256
-    use_tfidf: Optional[bool] = None
+    use_tfidf: bool | None = None
     run_llm_proposal: bool = True
-    existing_classes_resolver: Optional[Callable[[], List[str]]] = None
-    context_text: Optional[str] = None
+    existing_classes_resolver: Callable[[], list[str]] | None = None
+    context_text: str | None = None
     max_retries: int = 2
     prefer_cluster_level: bool = True
-    ood_strategies: Optional[List[str]] = None
+    ood_strategies: list[str] | None = None
     ood_calibration_mode: str = "none"
     ood_calibration_alpha: float = 0.1
     ood_mahalanobis_mode: str = "class_conditional"
@@ -60,7 +62,7 @@ class PipelineBuilder:
     between DiscoveryPipeline and NovelEntityMatcher.
     """
 
-    def __init__(self, config: Optional[PipelineStageConfig] = None, **kwargs: Any):
+    def __init__(self, config: PipelineStageConfig | None = None, **kwargs: Any):
         if config is not None:
             self._cfg = config
         else:
@@ -76,6 +78,7 @@ class PipelineBuilder:
         )
 
         return PipelineStageConfig(
+            match_enabled=kwargs.get("match_enabled", True),
             collect_sync=kwargs.get("collect_sync"),
             collect_async=kwargs.get("collect_async"),
             detector=kwargs.get("detector"),
@@ -119,12 +122,17 @@ class PipelineBuilder:
     def build(
         self,
         *,
-        existing_classes: Optional[List[str]] = None,
-        context: Optional[str] = None,
-        run_llm_proposal: Optional[bool] = None,
+        existing_classes: list[str] | None = None,
+        context: str | None = None,
+        run_llm_proposal: bool | None = None,
     ) -> PipelineOrchestrator:
         """Build the 5-stage pipeline orchestrator."""
         cfg = self._cfg
+        if not cfg.match_enabled:
+            raise ValueError(
+                "match_enabled=False is not supported because downstream stages "
+                "require matcher metadata artifacts."
+            )
 
         if run_llm_proposal is None:
             run_llm_proposal = cfg.run_llm_proposal
@@ -199,20 +207,19 @@ class PipelineBuilder:
         cls,
         config: Any,
         *,
-        collect_sync: Optional[Callable[[List[str]], tuple[Any, dict]]] = None,
-        collect_async: Optional[
-            Callable[[List[str]], Awaitable[tuple[Any, dict]]]
-        ] = None,
+        collect_sync: Callable[[list[str]], tuple[Any, dict]] | None = None,
+        collect_async: Callable[[list[str]], Awaitable[tuple[Any, dict]]] | None = None,
         detector: Any = None,
         clusterer: Any = None,
         llm_proposer: Any = None,
-        existing_classes_resolver: Optional[Callable[[], List[str]]] = None,
-    ) -> "PipelineBuilder":
+        existing_classes_resolver: Callable[[], list[str]] | None = None,
+    ) -> PipelineBuilder:
         """Factory to create PipelineBuilder from a PipelineConfig object."""
         return cls(
             PipelineStageConfig(
                 collect_sync=collect_sync,
                 collect_async=collect_async,
+                match_enabled=config.match_enabled,
                 detector=detector,
                 clusterer=clusterer,
                 llm_proposer=llm_proposer,
@@ -250,8 +257,6 @@ class PipelineBuilder:
                 proposal_schema_max_attributes=getattr(
                     config, "proposal_schema_max_attributes", 10
                 ),
-                proposal_hierarchical=getattr(
-                    config, "proposal_hierarchical", True
-                ),
+                proposal_hierarchical=getattr(config, "proposal_hierarchical", True),
             )
         )

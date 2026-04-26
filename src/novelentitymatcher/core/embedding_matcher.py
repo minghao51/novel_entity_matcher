@@ -1,10 +1,17 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
+from ..config import is_static_embedding_model, resolve_model_alias
+from ..utils.embeddings import ModelCache, get_default_cache
+from ..utils.validation import (
+    validate_entities,
+    validate_model_name,
+    validate_threshold,
+)
 from .matcher_shared import (
     EmbeddingModel,
     TextInput,
@@ -15,13 +22,6 @@ from .matcher_shared import (
     unwrap_single,
 )
 from .normalizer import TextNormalizer
-from ..config import is_static_embedding_model, resolve_model_alias
-from ..utils.embeddings import ModelCache, get_default_cache
-from ..utils.validation import (
-    validate_entities,
-    validate_model_name,
-    validate_threshold,
-)
 
 
 def _sentence_transformer_cls():
@@ -38,12 +38,12 @@ class EmbeddingMatcher:
 
     def __init__(
         self,
-        entities: List[Dict[str, Any]],
+        entities: list[dict[str, Any]],
         model_name: str = "sentence-transformers/paraphrase-mpnet-base-v2",
         threshold: float = 0.7,
         normalize: bool = True,
-        embedding_dim: Optional[int] = None,
-        cache: Optional[ModelCache] = None,
+        embedding_dim: int | None = None,
+        cache: ModelCache | None = None,
     ):
         validate_entities(entities)
         validate_model_name(model_name)
@@ -56,11 +56,11 @@ class EmbeddingMatcher:
 
         self.normalizer = TextNormalizer() if normalize else None
         self.cache = cache if cache is not None else get_default_cache()
-        self.model: Optional[EmbeddingModel] = None
-        self.entity_texts: List[str] = []
-        self.entity_ids: List[str] = []
-        self.embeddings: Optional[np.ndarray] = None
-        self._async_executor: Optional[Any] = None
+        self.model: EmbeddingModel | None = None
+        self.entity_texts: list[str] = []
+        self.entity_ids: list[str] = []
+        self.embeddings: np.ndarray | None = None
+        self._async_executor: Any | None = None
 
     def _ensure_async_executor(self):
         if self._async_executor is None:
@@ -69,7 +69,7 @@ class EmbeddingMatcher:
             self._async_executor = AsyncExecutor()
         return self._async_executor
 
-    def build_index(self, batch_size: Optional[int] = None):
+    def build_index(self, batch_size: int | None = None):
         resolved_name = resolve_model_alias(self.model_name)
 
         if is_static_embedding_model(resolved_name):
@@ -128,10 +128,10 @@ class EmbeddingMatcher:
     def match(
         self,
         texts: TextInput,
-        candidates: Optional[List[Dict[str, Any]]] = None,
+        candidates: list[dict[str, Any]] | None = None,
         top_k: int = 1,
-        batch_size: Optional[int] = None,
-        threshold_override: Optional[float] = None,
+        batch_size: int | None = None,
+        threshold_override: float | None = None,
     ) -> Any:
         if self.embeddings is None or self.model is None:
             raise RuntimeError("Index not built. Call build_index() first.")
@@ -154,7 +154,7 @@ class EmbeddingMatcher:
             candidate_indices = list(range(len(self.entity_ids)))
 
         if not candidate_indices:
-            empty: Optional[List[Any]] = None if top_k == 1 else []
+            empty: list[Any] | None = None if top_k == 1 else []
             return empty if single_input else [empty for _ in texts]
 
         candidate_embeddings = self.embeddings[candidate_indices]
@@ -180,10 +180,10 @@ class EmbeddingMatcher:
 
         similarities = cosine_similarity(query_embeddings, candidate_embeddings)
 
-        results: List[Any] = []
+        results: list[Any] = []
         for sim_row in similarities:
             sorted_indices = np.argsort(sim_row)[::-1]
-            matches: List[Dict[str, Any]] = []
+            matches: list[dict[str, Any]] = []
             seen_ids = set()
             for idx in sorted_indices:
                 score = sim_row[idx]
@@ -213,16 +213,16 @@ class EmbeddingMatcher:
 
         return unwrap_single(results, single_input)
 
-    async def build_index_async(self, batch_size: Optional[int] = None):
+    async def build_index_async(self, batch_size: int | None = None):
         await self._ensure_async_executor().run_in_thread(self.build_index, batch_size)
 
     async def match_async(
         self,
         texts: TextInput,
-        candidates: Optional[List[Dict[str, Any]]] = None,
+        candidates: list[dict[str, Any]] | None = None,
         top_k: int = 1,
-        batch_size: Optional[int] = None,
-        threshold_override: Optional[float] = None,
+        batch_size: int | None = None,
+        threshold_override: float | None = None,
     ) -> Any:
         if self.embeddings is None or self.model is None:
             raise RuntimeError(

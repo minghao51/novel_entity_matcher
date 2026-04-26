@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 
@@ -26,10 +27,12 @@ from ..novelty.schemas import (
     NovelClassDiscoveryReport,
     NovelSampleMetadata,
     NovelSampleReport,
+    PromotionResult,
     ProposalReviewRecord,
 )
 from ..novelty.storage.persistence import export_summary, save_proposals
-from ..novelty.storage.review import ProposalReviewManager, PromotionResult
+from ..novelty.storage.review import ProposalReviewManager
+from ..utils.logging_config import get_logger
 from .config import PipelineConfig
 from .contracts import StageContext
 from .discovery_support import (
@@ -41,7 +44,6 @@ from .discovery_support import (
 from .match_result import MatchResultWithMetadata
 from .orchestrator import PipelineOrchestrator
 from .pipeline_builder import PipelineBuilder
-from ..utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -64,11 +66,11 @@ class DiscoveryPipeline:
 
     def __init__(
         self,
-        entities: Optional[list[dict[str, Any]]] = None,
+        entities: list[dict[str, Any]] | None = None,
         *,
-        matcher: Optional[Matcher] = None,
+        matcher: Matcher | None = None,
         review_storage_path: str | Path = "./proposals/review_records.json",
-        config: Optional[PipelineConfig] = None,
+        config: PipelineConfig | None = None,
         **kwargs: Any,
     ):
         self._config = config or PipelineConfig.from_dict(kwargs)
@@ -114,7 +116,8 @@ class DiscoveryPipeline:
             backend=self._config.clustering_backend,
             min_cluster_size=clustering_cfg.min_cluster_size,
             min_samples=(
-                self._config.clustering_min_samples or clustering_cfg.hdbscan_min_samples
+                self._config.clustering_min_samples
+                or clustering_cfg.hdbscan_min_samples
             ),
             cluster_selection_epsilon=(
                 self._config.clustering_cluster_selection_epsilon
@@ -157,7 +160,7 @@ class DiscoveryPipeline:
     def config(self) -> PipelineConfig:
         return self._config
 
-    def _build_detection_config(self, kwargs: Dict[str, Any]) -> DetectionConfig:
+    def _build_detection_config(self, kwargs: dict[str, Any]) -> DetectionConfig:
         detection_config = kwargs.get("detection_config")
         if isinstance(detection_config, DetectionConfig):
             return detection_config
@@ -217,9 +220,9 @@ class DiscoveryPipeline:
     def _build_orchestrator(
         self,
         *,
-        existing_classes: Optional[List[str]] = None,
-        context: Optional[str] = None,
-        run_llm_proposal: Optional[bool] = None,
+        existing_classes: list[str] | None = None,
+        context: str | None = None,
+        run_llm_proposal: bool | None = None,
     ) -> PipelineOrchestrator:
         builder = PipelineBuilder.from_pipeline_config(
             self._config,
@@ -243,20 +246,20 @@ class DiscoveryPipeline:
     # ------------------------------------------------------------------
 
     def _derive_existing_classes(
-        self, existing_classes: Optional[List[str]] = None
-    ) -> List[str]:
+        self, existing_classes: list[str] | None = None
+    ) -> list[str]:
         return derive_existing_classes(
             entities=self.entities,
             get_reference_corpus=self.get_reference_corpus,
             existing_classes=existing_classes,
         )
 
-    def get_reference_corpus(self) -> Dict[str, Any]:
+    def get_reference_corpus(self) -> dict[str, Any]:
         return self.matcher.get_reference_corpus()
 
     async def _collect_match_result_async(
-        self, queries: List[str]
-    ) -> tuple[MatchResultWithMetadata, Dict[str, Any]]:
+        self, queries: list[str]
+    ) -> tuple[MatchResultWithMetadata, dict[str, Any]]:
         return await collect_match_result_async(
             self.matcher,
             queries,
@@ -264,8 +267,8 @@ class DiscoveryPipeline:
         )
 
     def _collect_match_result_sync(
-        self, queries: List[str]
-    ) -> tuple[MatchResultWithMetadata, Dict[str, Any]]:
+        self, queries: list[str]
+    ) -> tuple[MatchResultWithMetadata, dict[str, Any]]:
         return collect_match_result_sync(
             self.matcher,
             queries,
@@ -276,11 +279,11 @@ class DiscoveryPipeline:
     # Public API: fit
     # ------------------------------------------------------------------
 
-    def fit(self, *args: Any, **kwargs: Any) -> "DiscoveryPipeline":
+    def fit(self, *args: Any, **kwargs: Any) -> DiscoveryPipeline:
         self.matcher.fit(*args, **kwargs)
         return self
 
-    async def fit_async(self, *args: Any, **kwargs: Any) -> "DiscoveryPipeline":
+    async def fit_async(self, *args: Any, **kwargs: Any) -> DiscoveryPipeline:
         await self.matcher.fit_async(*args, **kwargs)
         return self
 
@@ -292,7 +295,7 @@ class DiscoveryPipeline:
         self,
         text: str,
         return_alternatives: bool = False,
-        existing_classes: Optional[List[str]] = None,
+        existing_classes: list[str] | None = None,
     ) -> NovelEntityMatchResult:
         match_result, reference_corpus = self._collect_match_result_sync([text])
         return build_novel_match_result(
@@ -310,7 +313,7 @@ class DiscoveryPipeline:
         self,
         text: str,
         return_alternatives: bool = False,
-        existing_classes: Optional[List[str]] = None,
+        existing_classes: list[str] | None = None,
     ) -> NovelEntityMatchResult:
         match_result, reference_corpus = await self._collect_match_result_async([text])
         return build_novel_match_result(
@@ -328,7 +331,7 @@ class DiscoveryPipeline:
         self,
         texts: list[str],
         return_alternatives: bool = False,
-        existing_classes: Optional[List[str]] = None,
+        existing_classes: list[str] | None = None,
     ) -> list[NovelEntityMatchResult]:
         match_result, reference_corpus = self._collect_match_result_sync(texts)
         return [
@@ -363,12 +366,12 @@ class DiscoveryPipeline:
 
     async def discover(
         self,
-        queries: List[str],
+        queries: list[str],
         *,
-        existing_classes: Optional[List[str]] = None,
-        context: Optional[str] = None,
+        existing_classes: list[str] | None = None,
+        context: str | None = None,
         return_metadata: bool = True,
-        run_llm_proposal: Optional[bool] = None,
+        run_llm_proposal: bool | None = None,
     ) -> NovelClassDiscoveryReport:
         """Run the full pipeline: match -> OOD -> cluster -> evidence -> propose."""
         discovery_id = str(uuid.uuid4())[:8]
@@ -460,7 +463,7 @@ class DiscoveryPipeline:
             signal_counts=dict(getattr(report, "signal_counts", {})),
         )
 
-    def _get_matcher_config(self) -> Dict[str, Any]:
+    def _get_matcher_config(self) -> dict[str, Any]:
         config = {
             "matcher_type": self.matcher.__class__.__name__,
         }
@@ -469,7 +472,7 @@ class DiscoveryPipeline:
         if hasattr(self.matcher, "threshold"):
             config["threshold"] = str(self.matcher.threshold)
         if hasattr(self.matcher, "_training_mode"):
-            config["mode"] = getattr(self.matcher, "_training_mode")
+            config["mode"] = self.matcher._training_mode
         return config
 
     # ------------------------------------------------------------------
@@ -521,7 +524,7 @@ class DiscoveryPipeline:
     def export_metrics(
         self,
         format: str = "json",
-        path: Optional[str] = None,
+        path: str | None = None,
     ) -> Path:
         """Export collected metrics to file.
 
@@ -557,12 +560,12 @@ class DiscoveryPipeline:
         cls,
         config_path: str | Path,
         *,
-        entities: Optional[list[dict[str, Any]]] = None,
-        matcher: Optional[Matcher] = None,
+        entities: list[dict[str, Any]] | None = None,
+        matcher: Matcher | None = None,
         **overrides: Any,
-    ) -> "DiscoveryPipeline":
+    ) -> DiscoveryPipeline:
         config = Config(config_path)
-        matcher_kwargs: Dict[str, Any] = {
+        matcher_kwargs: dict[str, Any] = {
             "model": config.get("embedding.model"),
             "acceptance_threshold": config.get("embedding.threshold"),
         }

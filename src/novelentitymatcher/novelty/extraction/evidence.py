@@ -11,20 +11,38 @@ from __future__ import annotations
 
 import math
 import re
-from typing import List, Optional
 
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from ..schemas.models import ClusterEvidence
 from ...utils.logging_config import get_logger
+from ..schemas.models import ClusterEvidence
 
 logger = get_logger(__name__)
 
 _STOPWORDS = {
-    "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
-    "in", "into", "is", "it", "of", "on", "or", "that", "the", "this",
-    "to", "with",
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "by",
+    "for",
+    "from",
+    "in",
+    "into",
+    "is",
+    "it",
+    "of",
+    "on",
+    "or",
+    "that",
+    "the",
+    "this",
+    "to",
+    "with",
 }
 
 
@@ -57,9 +75,9 @@ class ClusterEvidenceExtractor:
 
     def extract(
         self,
-        cluster_texts: List[str],
-        cluster_embeddings: Optional[np.ndarray] = None,
-        reference_embeddings: Optional[np.ndarray] = None,
+        cluster_texts: list[str],
+        cluster_embeddings: np.ndarray | None = None,
+        reference_embeddings: np.ndarray | None = None,
     ) -> ClusterEvidence:
         """Extract evidence from a single cluster.
 
@@ -89,9 +107,9 @@ class ClusterEvidenceExtractor:
 
     def _extract_keywords(
         self,
-        texts: List[str],
-        embeddings: Optional[np.ndarray] = None,
-    ) -> List[str]:
+        texts: list[str],
+        embeddings: np.ndarray | None = None,
+    ) -> list[str]:
         """Dispatch keyword extraction based on method."""
         if self.method == "centroid":
             return self._centroid_keywords(texts, embeddings)
@@ -99,7 +117,7 @@ class ClusterEvidenceExtractor:
             tfidf_kw = self._tfidf_keywords(texts)
             centroid_kw = self._centroid_keywords(texts, embeddings)
             seen: set[str] = set()
-            combined: List[str] = []
+            combined: list[str] = []
             for kw in tfidf_kw + centroid_kw:
                 normalized = kw.lower()
                 if normalized not in seen:
@@ -111,7 +129,7 @@ class ClusterEvidenceExtractor:
         else:
             return self._tfidf_keywords(texts)
 
-    def _tfidf_keywords(self, texts: List[str]) -> List[str]:
+    def _tfidf_keywords(self, texts: list[str]) -> list[str]:
         """TF-IDF based keyword extraction."""
         if not texts:
             return []
@@ -133,8 +151,8 @@ class ClusterEvidenceExtractor:
         return [features[i] for i in ranked[: self.max_keywords]]
 
     def _centroid_keywords(
-        self, texts: List[str], embeddings: Optional[np.ndarray] = None
-    ) -> List[str]:
+        self, texts: list[str], embeddings: np.ndarray | None = None
+    ) -> list[str]:
         """Keyword extraction based on proximity to the embedding centroid.
 
         When embeddings are provided, selects texts closest to the cluster
@@ -159,9 +177,9 @@ class ClusterEvidenceExtractor:
 
     def _select_representatives(
         self,
-        texts: List[str],
-        embeddings: Optional[np.ndarray] = None,
-    ) -> List[str]:
+        texts: list[str],
+        embeddings: np.ndarray | None = None,
+    ) -> list[str]:
         """Select representative examples, preferring those closest to centroid."""
         if not texts:
             return []
@@ -177,7 +195,7 @@ class ClusterEvidenceExtractor:
             sims = (embeddings @ centroid) / (emb_norms.squeeze() * centroid_norm)
             top_indices = np.argsort(-sims)[: self.max_examples]
 
-            representatives: List[str] = []
+            representatives: list[str] = []
             tokens_used = 0
             for idx in top_indices:
                 text = texts[int(idx)]
@@ -190,8 +208,8 @@ class ClusterEvidenceExtractor:
 
         return self._truncate(texts)
 
-    def _truncate(self, texts: List[str]) -> List[str]:
-        examples: List[str] = []
+    def _truncate(self, texts: list[str]) -> list[str]:
+        examples: list[str] = []
         tokens_used = 0
         for text in texts[: self.max_examples]:
             token_est = max(1, math.ceil(len(text.split()) * 1.2))
@@ -201,7 +219,7 @@ class ClusterEvidenceExtractor:
             tokens_used += token_est
         return examples
 
-    def _tokenize(self, text: str) -> List[str]:
+    def _tokenize(self, text: str) -> list[str]:
         return [
             token
             for token in re.findall(r"[a-zA-Z0-9]+", text.lower())

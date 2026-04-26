@@ -7,12 +7,11 @@ for handling up to 1M scale with subquadratic runtime.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
 from ...utils.logging_config import get_logger
-
 from .backends import ClusteringBackendRegistry
 
 logger = get_logger(__name__)
@@ -67,9 +66,9 @@ class ScalableClusterer:
         self.umap_metric = umap_metric
         self.prediction_data = prediction_data
 
-        self._backend_instance: Optional[Any] = None
-        self._labels: Optional[np.ndarray] = None
-        self._probabilities: Optional[np.ndarray] = None
+        self._backend_instance: Any | None = None
+        self._labels: np.ndarray | None = None
+        self._probabilities: np.ndarray | None = None
         self._n_points: int = 0
 
     def _auto_backend(self, n_points: int) -> str:
@@ -102,7 +101,7 @@ class ScalableClusterer:
         self,
         embeddings: np.ndarray,
         metric: str = "cosine",
-    ) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
+    ) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
         """
         Fit clusterer and predict labels.
 
@@ -135,7 +134,7 @@ class ScalableClusterer:
         self._probabilities = probabilities
 
         unique_clusters = sorted({int(label) for label in labels if int(label) >= 0})
-        validation_info: Dict[str, Any] = {
+        validation_info: dict[str, Any] = {
             "backend": backend_name,
             "n_points": self._n_points,
             "n_clusters": len(unique_clusters),
@@ -155,18 +154,18 @@ class ScalableClusterer:
         self,
         embeddings: np.ndarray,
         metric: str = "cosine",
-    ) -> "ScalableClusterer":
+    ) -> ScalableClusterer:
         """Fit the clusterer (alias for compatibility)."""
         self.fit_predict(embeddings, metric=metric)
         return self
 
     @property
-    def labels(self) -> Optional[np.ndarray]:
+    def labels(self) -> np.ndarray | None:
         """Get cluster labels."""
         return self._labels
 
     @property
-    def probabilities(self) -> Optional[np.ndarray]:
+    def probabilities(self) -> np.ndarray | None:
         """Get cluster membership probabilities."""
         return self._probabilities
 
@@ -189,9 +188,9 @@ class ScalableClusterer:
 def compute_cluster_quality(
     embeddings: np.ndarray,
     labels: np.ndarray,
-    known_embeddings: Optional[np.ndarray] = None,
+    known_embeddings: np.ndarray | None = None,
     metric: str = "cosine",
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Compute quality metrics for discovered clusters.
 
@@ -278,7 +277,7 @@ def validate_novel_cluster(
     known_ratio_threshold: float = 0.4,
     min_cluster_size: int = 5,
     metric: str = "cosine",
-) -> Tuple[bool, float]:
+) -> tuple[bool, float]:
     """
     Validate that a cluster represents truly novel entities.
 

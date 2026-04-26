@@ -8,7 +8,7 @@ into final novelty decisions.
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 import numpy as np
 
@@ -70,8 +70,8 @@ class SignalCombiner:
         self.config = config
         self.weights: WeightConfig = config.get_weight_config()
         self.combine_method = config.combine_method
-        self._meta_model: Optional[Any] = None
-        self._feature_names: List[str] = _SCORE_KEYS + _FLAG_KEYS
+        self._meta_model: Any | None = None
+        self._feature_names: list[str] = _SCORE_KEYS + _FLAG_KEYS
 
     def _weight_for_strategy(self, strategy_id: str) -> float:
         """Resolve the configured weight for a strategy id."""
@@ -93,9 +93,9 @@ class SignalCombiner:
 
     def combine(
         self,
-        strategy_outputs: Dict[str, tuple[Set[int], Dict]],
-        all_metrics: Dict[int, Dict[str, Any]],
-    ) -> tuple[Set[int], Dict[int, float]]:
+        strategy_outputs: dict[str, tuple[set[int], dict]],
+        all_metrics: dict[int, dict[str, Any]],
+    ) -> tuple[set[int], dict[int, float]]:
         """
         Combine strategy signals into final novelty decisions.
 
@@ -123,17 +123,17 @@ class SignalCombiner:
 
     def _weighted_combination(
         self,
-        strategy_outputs: Dict[str, tuple[Set[int], Dict]],
-        all_metrics: Dict[int, Dict[str, Any]],
-    ) -> tuple[Set[int], Dict[int, float]]:
+        strategy_outputs: dict[str, tuple[set[int], dict]],
+        all_metrics: dict[int, dict[str, Any]],
+    ) -> tuple[set[int], dict[int, float]]:
         """
         Weighted fusion of strategy scores.
 
         Computes a weighted average of strategy scores and applies
         heuristics for high-confidence detection.
         """
-        novelty_scores: Dict[int, float] = {}
-        novel_indices: Set[int] = set()
+        novelty_scores: dict[int, float] = {}
+        novel_indices: set[int] = set()
 
         # Collect all sample indices that were flagged by any strategy
         all_indices = set()
@@ -167,8 +167,8 @@ class SignalCombiner:
     def _compute_weighted_score(
         self,
         idx: int,
-        metrics: Dict[int, Dict[str, Any]],
-        active_strategies: Set[str] | None = None,
+        metrics: dict[int, dict[str, Any]],
+        active_strategies: set[str] | None = None,
     ) -> float:
         """
         Compute weighted novelty score for a single sample.
@@ -235,7 +235,7 @@ class SignalCombiner:
         return float(np.clip(weighted_score, 0.0, 1.0))
 
     def _is_novel(
-        self, idx: int, score: float, metrics: Dict[int, Dict[str, Any]]
+        self, idx: int, score: float, metrics: dict[int, dict[str, Any]]
     ) -> bool:
         """
         Determine if a sample is novel based on score and heuristics.
@@ -265,15 +265,15 @@ class SignalCombiner:
         return score >= self.weights.novelty_threshold
 
     def _union_combination(
-        self, strategy_outputs: Dict[str, tuple[Set[int], Dict]]
-    ) -> tuple[Set[int], Dict[int, float]]:
+        self, strategy_outputs: dict[str, tuple[set[int], dict]]
+    ) -> tuple[set[int], dict[int, float]]:
         """
         Union combination: flag if any strategy flags.
 
         Returns score of 1.0 for flagged samples.
         """
-        novel_indices: Set[int] = set()
-        novelty_scores: Dict[int, float] = {}
+        novel_indices: set[int] = set()
+        novelty_scores: dict[int, float] = {}
 
         for flags, _ in strategy_outputs.values():
             novel_indices.update(flags)
@@ -284,8 +284,8 @@ class SignalCombiner:
         return novel_indices, novelty_scores
 
     def _intersection_combination(
-        self, strategy_outputs: Dict[str, tuple[Set[int], Dict]]
-    ) -> tuple[Set[int], Dict[int, float]]:
+        self, strategy_outputs: dict[str, tuple[set[int], dict]]
+    ) -> tuple[set[int], dict[int, float]]:
         """
         Intersection combination: flag only if all strategies flag.
 
@@ -302,20 +302,20 @@ class SignalCombiner:
         for flags, _ in strategy_outputs.values():
             novel_indices.intersection_update(flags)
 
-        novelty_scores = {idx: 1.0 for idx in novel_indices}
+        novelty_scores = dict.fromkeys(novel_indices, 1.0)
 
         return novel_indices, novelty_scores
 
     def _voting_combination(
-        self, strategy_outputs: Dict[str, tuple[Set[int], Dict]]
-    ) -> tuple[Set[int], Dict[int, float]]:
+        self, strategy_outputs: dict[str, tuple[set[int], dict]]
+    ) -> tuple[set[int], dict[int, float]]:
         """
         Voting combination: flag if majority of strategies flag.
 
         Score represents the fraction of strategies that flagged the sample.
         """
         # Count votes for each sample
-        vote_counts: Dict[int, int] = {}
+        vote_counts: dict[int, int] = {}
         num_strategies = len(strategy_outputs)
 
         for flags, _ in strategy_outputs.values():
@@ -341,9 +341,9 @@ class SignalCombiner:
 
     def _meta_learner_combination(
         self,
-        strategy_outputs: Dict[str, tuple[Set[int], Dict]],
-        all_metrics: Dict[int, Dict[str, Any]],
-    ) -> tuple[Set[int], Dict[int, float]]:
+        strategy_outputs: dict[str, tuple[set[int], dict]],
+        all_metrics: dict[int, dict[str, Any]],
+    ) -> tuple[set[int], dict[int, float]]:
         """
         Learned fusion of strategy scores via a logistic regression meta-learner.
 
@@ -356,8 +356,8 @@ class SignalCombiner:
             )
             return self._weighted_combination(strategy_outputs, all_metrics)
 
-        novelty_scores: Dict[int, float] = {}
-        novel_indices: Set[int] = set()
+        novelty_scores: dict[int, float] = {}
+        novel_indices: set[int] = set()
 
         all_indices = set()
         for flags, _ in strategy_outputs.values():
@@ -380,8 +380,8 @@ class SignalCombiner:
         return novel_indices, novelty_scores
 
     def _extract_features(
-        self, idx: int, metrics: Dict[int, Dict[str, Any]]
-    ) -> List[float]:
+        self, idx: int, metrics: dict[int, dict[str, Any]]
+    ) -> list[float]:
         """Extract a fixed-length feature vector from per-sample metrics."""
         sample = metrics.get(idx, {})
         features = []

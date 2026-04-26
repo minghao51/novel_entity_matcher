@@ -1,6 +1,6 @@
-from abc import ABC, abstractmethod
 import heapq
-from typing import Any, Dict, List
+from abc import ABC, abstractmethod
+from typing import Any
 
 
 class EmbeddingBackend(ABC):
@@ -13,17 +13,16 @@ class RerankerBackend(ABC):
     """Abstract base class for reranker backends."""
 
     @abstractmethod
-    def score(self, query: str, docs: list[str]) -> List[float]:
+    def score(self, query: str, docs: list[str]) -> list[float]:
         """Score query-document pairs."""
-        pass
 
     def rerank(
         self,
         query: str,
-        candidates: List[Dict[str, Any]],
+        candidates: list[dict[str, Any]],
         top_k: int = 5,
         text_field: str = "text",
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Rerank candidates and return top_k.
 
@@ -34,7 +33,7 @@ class RerankerBackend(ABC):
 
         scored = [
             {**candidate, "cross_encoder_score": float(score)}
-            for candidate, score in zip(candidates, scores)
+            for candidate, score in zip(candidates, scores, strict=False)
         ]
 
         return heapq.nlargest(top_k, scored, key=lambda x: x["cross_encoder_score"])

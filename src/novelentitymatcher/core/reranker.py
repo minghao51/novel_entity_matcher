@@ -1,6 +1,6 @@
 """Cross-encoder reranking for semantic entity matching."""
 
-from typing import Dict, List, Any, Optional
+from typing import Any
 
 from ..backends.reranker_st import STReranker
 from ..config import resolve_reranker_alias
@@ -30,7 +30,7 @@ class CrossEncoderReranker:
         self,
         model: str = "bge-m3",
         backend=None,
-        device: Optional[str] = None,
+        device: str | None = None,
         batch_size: int = 32,
     ):
         """
@@ -58,10 +58,10 @@ class CrossEncoderReranker:
     def rerank(
         self,
         query: str,
-        candidates: List[Dict[str, Any]],
+        candidates: list[dict[str, Any]],
         top_k: int = 5,
         text_field: str = "text",
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Rerank candidates using cross-encoder.
 
@@ -83,11 +83,11 @@ class CrossEncoderReranker:
 
     def rerank_batch(
         self,
-        queries: List[str],
-        candidates_list: List[List[Dict[str, Any]]],
+        queries: list[str],
+        candidates_list: list[list[dict[str, Any]]],
         top_k: int = 5,
         text_field: str = "text",
-    ) -> List[List[Dict[str, Any]]]:
+    ) -> list[list[dict[str, Any]]]:
         """
         Batch reranking for multiple queries.
 
@@ -104,10 +104,10 @@ class CrossEncoderReranker:
             raise ValueError("queries and candidates_list must have the same length")
         return [
             self.backend.rerank(query, cands, top_k=top_k, text_field=text_field)
-            for query, cands in zip(queries, candidates_list)
+            for query, cands in zip(queries, candidates_list, strict=False)
         ]
 
-    def score(self, query: str, docs: List[str]) -> List[float]:
+    def score(self, query: str, docs: list[str]) -> list[float]:
         """
         Score query-document pairs.
 

@@ -1,5 +1,5 @@
-import unicodedata
 import re
+import unicodedata
 
 
 class TextNormalizer:
@@ -38,4 +38,3 @@ class TextNormalizer:
     normalize_entity_name = normalize
 
     # Backwards-compatible alias
-    normalize_entity_name = normalize

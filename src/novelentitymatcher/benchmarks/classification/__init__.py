@@ -1,13 +1,13 @@
 from .evaluator import (
     ClassificationEvaluator,
-    sweep_num_classes,
-    evaluate_by_class_count,
     ClassificationSample,
+    evaluate_by_class_count,
+    sweep_num_classes,
 )
 
 __all__ = [
     "ClassificationEvaluator",
-    "sweep_num_classes",
-    "evaluate_by_class_count",
     "ClassificationSample",
+    "evaluate_by_class_count",
+    "sweep_num_classes",
 ]

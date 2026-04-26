@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import pandas as pd
 from sklearn.metrics import (
@@ -49,7 +49,7 @@ class EntityResolutionEvaluator(BaseEvaluator[pd.DataFrame]):
     ) -> EvaluationResult:
         if len(data) == 0:
             return EvaluationResult(
-                metrics={m: 0.0 for m in self.get_default_metrics()},
+                metrics=dict.fromkeys(self.get_default_metrics(), 0.0),
                 details={"error": "Empty dataset"},
             )
 

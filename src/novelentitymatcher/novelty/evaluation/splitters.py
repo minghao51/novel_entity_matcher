@@ -5,7 +5,8 @@ Provides utilities for creating OOD (Out-of-Distribution) splits
 and gradual novelty scenarios for testing.
 """
 
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Any
+
 import numpy as np
 
 
@@ -34,9 +35,9 @@ class OODSplitter:
 
     def create_split(
         self,
-        texts: List[str],
-        labels: List[str],
-    ) -> Tuple[List[str], List[str], List[str], List[bool]]:
+        texts: list[str],
+        labels: list[str],
+    ) -> tuple[list[str], list[str], list[str], list[bool]]:
         """
         Create OOD train/test split.
 
@@ -61,7 +62,7 @@ class OODSplitter:
         test_texts = []
         test_is_novel = []
 
-        for text, label in zip(texts, labels):
+        for text, label in zip(texts, labels, strict=False):
             if label in known_classes:
                 train_texts.append(text)
                 train_labels.append(label)
@@ -73,9 +74,9 @@ class OODSplitter:
 
     def create_split_with_indices(
         self,
-        texts: List[str],
-        labels: List[str],
-    ) -> Dict[str, Any]:
+        texts: list[str],
+        labels: list[str],
+    ) -> dict[str, Any]:
         """
         Create OOD split with additional metadata.
 
@@ -118,7 +119,7 @@ class GradualNoveltySplitter:
 
     def __init__(
         self,
-        known_ratios: Optional[List[float]] = None,
+        known_ratios: list[float] | None = None,
         random_state: int = 42,
     ):
         """
@@ -133,9 +134,9 @@ class GradualNoveltySplitter:
 
     def create_splits(
         self,
-        texts: List[str],
-        labels: List[str],
-    ) -> List[Dict[str, Any]]:
+        texts: list[str],
+        labels: list[str],
+    ) -> list[dict[str, Any]]:
         """
         Create multiple splits with different novelty levels.
 
@@ -158,9 +159,9 @@ class GradualNoveltySplitter:
 
     def get_novelty_progression(
         self,
-        texts: List[str],
-        labels: List[str],
-    ) -> Dict[str, List]:
+        texts: list[str],
+        labels: list[str],
+    ) -> dict[str, list]:
         """
         Get summary of novelty progression across splits.
 

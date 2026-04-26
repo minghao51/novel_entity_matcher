@@ -6,17 +6,18 @@ import argparse
 import logging
 import sys
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
-from .runner import BenchmarkRunner
 from .registry import DATASET_REGISTRY, get_datasets_by_task
+from .runner import BenchmarkRunner
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def add_run_parser(subparsers) -> argparse.ArgumentParser:
+def add_run_parser(subparsers: Any) -> argparse.ArgumentParser:
     parser = subparsers.add_parser("run", help="Run benchmarks")
     parser.add_argument(
         "--task",
@@ -118,7 +119,7 @@ def add_run_parser(subparsers) -> argparse.ArgumentParser:
     return parser
 
 
-def add_load_parser(subparsers) -> argparse.ArgumentParser:
+def add_load_parser(subparsers: Any) -> argparse.ArgumentParser:
     parser = subparsers.add_parser("load", help="Load/download datasets")
     parser.add_argument(
         "--datasets",
@@ -133,7 +134,7 @@ def add_load_parser(subparsers) -> argparse.ArgumentParser:
     return parser
 
 
-def add_list_parser(subparsers) -> argparse.ArgumentParser:
+def add_list_parser(subparsers: Any) -> argparse.ArgumentParser:
     parser = subparsers.add_parser("list", help="List available datasets")
     parser.add_argument(
         "--task",
@@ -144,7 +145,7 @@ def add_list_parser(subparsers) -> argparse.ArgumentParser:
     return parser
 
 
-def add_clear_parser(subparsers) -> argparse.ArgumentParser:
+def add_clear_parser(subparsers: Any) -> argparse.ArgumentParser:
     parser = subparsers.add_parser("clear", help="Clear cached datasets")
     parser.add_argument(
         "--dataset",
@@ -153,7 +154,7 @@ def add_clear_parser(subparsers) -> argparse.ArgumentParser:
     return parser
 
 
-def add_sweep_parser(subparsers) -> argparse.ArgumentParser:
+def add_sweep_parser(subparsers: Any) -> argparse.ArgumentParser:
     parser = subparsers.add_parser("sweep", help="Run parameter sweep")
     parser.add_argument(
         "--task",
@@ -169,14 +170,22 @@ def add_sweep_parser(subparsers) -> argparse.ArgumentParser:
     parser.add_argument(
         "--param",
         choices=[
-            "threshold", "k", "distance",
-            "knn_k", "knn_metric",
-            "lof_neighbors", "lof_metric",
-            "svm_nu", "svm_kernel",
-            "mahalanobis_conformal", "mahalanobis_threshold",
-            "cluster_min_size", "cluster_persistence",
+            "threshold",
+            "k",
+            "distance",
+            "knn_k",
+            "knn_metric",
+            "lof_neighbors",
+            "lof_metric",
+            "svm_nu",
+            "svm_kernel",
+            "mahalanobis_conformal",
+            "mahalanobis_threshold",
+            "cluster_min_size",
+            "cluster_persistence",
             "centroid_percentile",
-            "self_knowledge_dim", "self_knowledge_epochs",
+            "self_knowledge_dim",
+            "self_knowledge_epochs",
         ],
         required=True,
         help="Parameter to sweep",
@@ -195,26 +204,36 @@ def add_sweep_parser(subparsers) -> argparse.ArgumentParser:
     return parser
 
 
-def add_bench_classifier_parser(subparsers) -> argparse.ArgumentParser:
+def add_bench_classifier_parser(subparsers: Any) -> argparse.ArgumentParser:
     parser = subparsers.add_parser("bench-classifier", help="Benchmark classifiers")
     parser.add_argument(
         "--mode",
-        choices=["compare", "sweep-models", "sweep-setfit", "scale-test", "sweep-modes"],
+        choices=[
+            "compare",
+            "sweep-models",
+            "sweep-setfit",
+            "scale-test",
+            "sweep-modes",
+        ],
         default="compare",
         help="'compare' BERT vs SetFit, 'sweep-models' BERT sweep, "
-             "'sweep-setfit' SetFit model sweep, 'scale-test' sample scaling, "
-             "'sweep-modes' mode comparison",
+        "'sweep-setfit' SetFit model sweep, 'scale-test' sample scaling, "
+        "'sweep-modes' mode comparison",
     )
     parser.add_argument("--num-entities", type=int, default=10)
     parser.add_argument("--num-samples", type=int, default=50)
     parser.add_argument("--num-epochs", type=int, default=3)
-    parser.add_argument("--models", nargs="+", default=["distilbert", "tinybert", "roberta-base"])
+    parser.add_argument(
+        "--models", nargs="+", default=["distilbert", "tinybert", "roberta-base"]
+    )
     parser.add_argument("--output", type=Path)
     return parser
 
 
-def add_bench_weights_parser(subparsers) -> argparse.ArgumentParser:
-    parser = subparsers.add_parser("bench-weights", help="Bayesian optimization of ensemble weights")
+def add_bench_weights_parser(subparsers: Any) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser(
+        "bench-weights", help="Bayesian optimization of ensemble weights"
+    )
     parser.add_argument("--dataset", default="ag_news")
     parser.add_argument("--model", default="sentence-transformers/all-MiniLM-L6-v2")
     parser.add_argument("--trials", type=int, default=200)
@@ -225,8 +244,10 @@ def add_bench_weights_parser(subparsers) -> argparse.ArgumentParser:
     return parser
 
 
-def add_bench_ann_parser(subparsers) -> argparse.ArgumentParser:
-    parser = subparsers.add_parser("bench-ann", help="Benchmark ANN backends (hnswlib vs faiss vs exact)")
+def add_bench_ann_parser(subparsers: Any) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser(
+        "bench-ann", help="Benchmark ANN backends (hnswlib vs faiss vs exact)"
+    )
     parser.add_argument("--sizes", nargs="+", type=int, default=[1000, 5000, 10000])
     parser.add_argument("--dim", type=int, default=384)
     parser.add_argument("--k", type=int, default=10)
@@ -235,17 +256,21 @@ def add_bench_ann_parser(subparsers) -> argparse.ArgumentParser:
     return parser
 
 
-def add_bench_reranker_parser(subparsers) -> argparse.ArgumentParser:
+def add_bench_reranker_parser(subparsers: Any) -> argparse.ArgumentParser:
     parser = subparsers.add_parser("bench-reranker", help="Benchmark reranker models")
-    parser.add_argument("--models", nargs="+", default=["bge-m3", "bge-large", "ms-marco"])
+    parser.add_argument(
+        "--models", nargs="+", default=["bge-m3", "bge-large", "ms-marco"]
+    )
     parser.add_argument("--queries", type=int, default=50)
     parser.add_argument("--candidates", type=int, default=20)
     parser.add_argument("--output", default=None)
     return parser
 
 
-def add_bench_novelty_parser(subparsers) -> argparse.ArgumentParser:
-    parser = subparsers.add_parser("bench-novelty", help="Benchmark novelty detection strategies")
+def add_bench_novelty_parser(subparsers: Any) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser(
+        "bench-novelty", help="Benchmark novelty detection strategies"
+    )
     parser.add_argument(
         "--depth",
         choices=["quick", "standard", "full"],
@@ -256,14 +281,20 @@ def add_bench_novelty_parser(subparsers) -> argparse.ArgumentParser:
     parser.add_argument("--max-train", type=int, default=200)
     parser.add_argument("--max-val", type=int, default=200)
     parser.add_argument("--max-test", type=int, default=500)
-    parser.add_argument("--model", default="sentence-transformers/all-MiniLM-L6-v2", help="Single model")
-    parser.add_argument("--models", nargs="+", default=None, help="Multiple models to sweep")
+    parser.add_argument(
+        "--model", default="sentence-transformers/all-MiniLM-L6-v2", help="Single model"
+    )
+    parser.add_argument(
+        "--models", nargs="+", default=None, help="Multiple models to sweep"
+    )
     parser.add_argument("--output", default=None, help="Output CSV path")
     return parser
 
 
-def add_bench_async_parser(subparsers) -> argparse.ArgumentParser:
-    parser = subparsers.add_parser("bench-async", help="Benchmark sync vs async matcher APIs")
+def add_bench_async_parser(subparsers: Any) -> argparse.ArgumentParser:
+    parser = subparsers.add_parser(
+        "bench-async", help="Benchmark sync vs async matcher APIs"
+    )
     parser.add_argument("--multiplier", type=int, default=20)
     parser.add_argument("--concurrency", type=int, default=8)
     parser.add_argument("--section", default="languages/languages")
@@ -275,13 +306,13 @@ def add_bench_async_parser(subparsers) -> argparse.ArgumentParser:
     return parser
 
 
-def add_render_parser(subparsers) -> argparse.ArgumentParser:
+def add_render_parser(subparsers: Any) -> argparse.ArgumentParser:
     parser = subparsers.add_parser("render", help="Render benchmark JSON as markdown")
     parser.add_argument("input", type=Path, help="Benchmark JSON file")
     return parser
 
 
-def add_plot_parser(subparsers) -> argparse.ArgumentParser:
+def add_plot_parser(subparsers: Any) -> argparse.ArgumentParser:
     parser = subparsers.add_parser("plot", help="Generate charts from benchmark JSON")
     parser.add_argument("--embedding-results", required=True)
     parser.add_argument("--training-results", required=True)
@@ -521,11 +552,14 @@ def main(argv: list[str] | None = None) -> int:
 
         elif args.command == "sweep":
             from .novelty_bench import NoveltyBenchmark, load_and_split_data
-            from .shared import prepare_binary_labels, compute_ood_metrics
+            from .shared import compute_ood_metrics, prepare_binary_labels
 
             ds_name = args.dataset
             split = load_and_split_data(
-                ds_name, args.max_train, args.max_val, args.max_test,
+                ds_name,
+                args.max_train,
+                args.max_val,
+                args.max_test,
             )
             benchmark = NoveltyBenchmark(args.model)
 
@@ -534,10 +568,14 @@ def main(argv: list[str] | None = None) -> int:
 
             if param == "knn_k":
                 values = values or [1, 3, 5, 7, 10, 15, 20, 30, 50]
-                results = benchmark.benchmark_knn(split, k_values=[int(v) for v in values])
+                results = benchmark.benchmark_knn(
+                    split, k_values=[int(v) for v in values]
+                )
             elif param == "lof_neighbors":
                 values = values or [5, 10, 15, 20, 30, 50]
-                results = benchmark.benchmark_lof(split, n_neighbors_list=[int(v) for v in values])
+                results = benchmark.benchmark_lof(
+                    split, n_neighbors_list=[int(v) for v in values]
+                )
             elif param == "svm_nu":
                 values = values or [0.01, 0.05, 0.1, 0.15, 0.2, 0.3]
                 results = benchmark.benchmark_oneclass_svm(split, nu_values=values)
@@ -563,44 +601,77 @@ def main(argv: list[str] | None = None) -> int:
                             s = MahalanobisDistanceStrategy()
                             s.initialize(train_emb, split.train_labels, config)
                             _, val_m = s.detect(
-                                split.val_texts, val_emb,
+                                split.val_texts,
+                                val_emb,
                                 ["unknown"] * len(split.val_texts),
                                 np.ones(len(split.val_texts)) * 0.5,
                             )
                             _, test_m = s.detect(
-                                split.test_texts, test_emb,
+                                split.test_texts,
+                                test_emb,
                                 ["unknown"] * len(split.test_texts),
                                 np.ones(len(split.test_texts)) * 0.5,
                             )
-                            results.append(benchmark._make_result(
-                                "mahalanobis_conformal",
-                                {"method": method, "alpha": alpha},
-                                compute_ood_metrics(
-                                    val_true,
-                                    np.array([val_m[i].get("p_value", val_m[i].get("mahalanobis_novelty_score", 0.0)) for i in range(len(split.val_texts))]),
-                                ),
-                                compute_ood_metrics(
-                                    test_true,
-                                    np.array([test_m[i].get("p_value", test_m[i].get("mahalanobis_novelty_score", 0.0)) for i in range(len(split.test_texts))]),
-                                ),
-                            ))
+                            results.append(
+                                benchmark._make_result(
+                                    "mahalanobis_conformal",
+                                    {"method": method, "alpha": alpha},
+                                    compute_ood_metrics(
+                                        val_true,
+                                        np.array(
+                                            [
+                                                val_m[i].get(
+                                                    "p_value",
+                                                    val_m[i].get(
+                                                        "mahalanobis_novelty_score", 0.0
+                                                    ),
+                                                )
+                                                for i in range(len(split.val_texts))
+                                            ]
+                                        ),
+                                    ),
+                                    compute_ood_metrics(
+                                        test_true,
+                                        np.array(
+                                            [
+                                                test_m[i].get(
+                                                    "p_value",
+                                                    test_m[i].get(
+                                                        "mahalanobis_novelty_score", 0.0
+                                                    ),
+                                                )
+                                                for i in range(len(split.test_texts))
+                                            ]
+                                        ),
+                                    ),
+                                )
+                            )
                         except (ValueError, RuntimeError) as e:
-                            logger.warning(f"mahalanobis_conformal {method}/{alpha} failed: {e}")
+                            logger.warning(
+                                f"mahalanobis_conformal {method}/{alpha} failed: {e}"
+                            )
             elif param == "centroid_percentile":
                 values = values or [90, 92, 95, 97, 99]
-                results = benchmark.benchmark_setfit_centroid(split, percentile_values=values)
+                results = benchmark.benchmark_setfit_centroid(
+                    split, percentile_values=values
+                )
             elif param == "self_knowledge_dim":
                 values = values or [32, 64, 128, 256, 512]
-                results = benchmark.benchmark_self_knowledge(split, hidden_dims=[int(v) for v in values])
+                results = benchmark.benchmark_self_knowledge(
+                    split, hidden_dims=[int(v) for v in values]
+                )
             elif param == "self_knowledge_epochs":
                 values = values or [25, 50, 100, 150, 200]
-                results = benchmark.benchmark_self_knowledge(split, epoch_values=[int(v) for v in values])
+                results = benchmark.benchmark_self_knowledge(
+                    split, epoch_values=[int(v) for v in values]
+                )
             else:
                 logger.info(f"Sweep for param '{param}' not yet implemented")
                 return 1
 
             if results:
                 import pandas as pd
+
                 records = [
                     {
                         "strategy": r.strategy,
@@ -621,25 +692,37 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "bench-classifier":
             from .classifier_bench import main as classifier_main
 
-            return classifier_main([
-                "--mode", args.mode,
-                "--num-entities", str(args.num_entities),
-                "--num-samples", str(args.num_samples),
-                "--num-epochs", str(args.num_epochs),
-                *(["--models"] + args.models if args.models else []),
-                *(["--output", str(args.output)] if args.output else []),
-            ])
+            return classifier_main(
+                [
+                    "--mode",
+                    args.mode,
+                    "--num-entities",
+                    str(args.num_entities),
+                    "--num-samples",
+                    str(args.num_samples),
+                    "--num-epochs",
+                    str(args.num_epochs),
+                    *(["--models", *args.models] if args.models else []),
+                    *(["--output", str(args.output)] if args.output else []),
+                ]
+            )
 
         elif args.command == "bench-novelty":
             from .novelty_bench import main as novelty_main
 
             argv_list = [
-                "--depth", args.depth,
-                "--datasets", *args.datasets,
-                "--max-train", str(args.max_train),
-                "--max-val", str(args.max_val),
-                "--max-test", str(args.max_test),
-                "--model", args.model,
+                "--depth",
+                args.depth,
+                "--datasets",
+                *args.datasets,
+                "--max-train",
+                str(args.max_train),
+                "--max-val",
+                str(args.max_val),
+                "--max-test",
+                str(args.max_test),
+                "--model",
+                args.model,
             ]
             if args.models:
                 argv_list.extend(["--models", *args.models])
@@ -651,13 +734,20 @@ def main(argv: list[str] | None = None) -> int:
             from .async_bench import main as async_main
 
             argv_list = [
-                "--multiplier", str(args.multiplier),
-                "--concurrency", str(args.concurrency),
-                "--section", args.section,
-                "--model", args.model,
-                "--modes", *args.modes,
-                "--max-entities", str(args.max_entities),
-                "--max-queries", str(args.max_queries),
+                "--multiplier",
+                str(args.multiplier),
+                "--concurrency",
+                str(args.concurrency),
+                "--section",
+                args.section,
+                "--model",
+                args.model,
+                "--modes",
+                *args.modes,
+                "--max-entities",
+                str(args.max_entities),
+                "--max-queries",
+                str(args.max_queries),
             ]
             if args.output:
                 argv_list.extend(["--output", str(args.output)])
@@ -667,12 +757,18 @@ def main(argv: list[str] | None = None) -> int:
             from .weight_optimizer import main as weights_main
 
             argv_list = [
-                "--dataset", args.dataset,
-                "--model", args.model,
-                "--trials", str(args.trials),
-                "--max-train", str(args.max_train),
-                "--max-val", str(args.max_val),
-                "--max-test", str(args.max_test),
+                "--dataset",
+                args.dataset,
+                "--model",
+                args.model,
+                "--trials",
+                str(args.trials),
+                "--max-train",
+                str(args.max_train),
+                "--max-val",
+                str(args.max_val),
+                "--max-test",
+                str(args.max_test),
             ]
             if args.output:
                 argv_list.extend(["--output", args.output])
@@ -682,10 +778,14 @@ def main(argv: list[str] | None = None) -> int:
             from .infra_bench import main_ann
 
             argv_list = [
-                "--sizes", *[str(s) for s in args.sizes],
-                "--dim", str(args.dim),
-                "--k", str(args.k),
-                "--queries", str(args.queries),
+                "--sizes",
+                *[str(s) for s in args.sizes],
+                "--dim",
+                str(args.dim),
+                "--k",
+                str(args.k),
+                "--queries",
+                str(args.queries),
             ]
             if args.output:
                 argv_list.extend(["--output", args.output])
@@ -695,9 +795,12 @@ def main(argv: list[str] | None = None) -> int:
             from .infra_bench import main_reranker
 
             argv_list = [
-                "--models", *args.models,
-                "--queries", str(args.queries),
-                "--candidates", str(args.candidates),
+                "--models",
+                *args.models,
+                "--queries",
+                str(args.queries),
+                "--candidates",
+                str(args.candidates),
             ]
             if args.output:
                 argv_list.extend(["--output", args.output])
@@ -711,12 +814,18 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "plot":
             from .visualization import plot_main
 
-            return plot_main([
-                "--embedding-results", args.embedding_results,
-                "--training-results", args.training_results,
-                "--bert-results", args.bert_results,
-                "--output-dir", args.output_dir,
-            ])
+            return plot_main(
+                [
+                    "--embedding-results",
+                    args.embedding_results,
+                    "--training-results",
+                    args.training_results,
+                    "--bert-results",
+                    args.bert_results,
+                    "--output-dir",
+                    args.output_dir,
+                ]
+            )
 
         return 0
 

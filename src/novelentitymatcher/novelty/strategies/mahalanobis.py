@@ -6,13 +6,14 @@ distribution of their predicted class. Supports optional conformal calibration
 for statistically grounded p-value based novelty routing.
 """
 
-from typing import Dict, List, Set, Any, Optional
+from typing import Any
+
 import numpy as np
 
-from .base import NoveltyStrategy
-from ..core.strategies import StrategyRegistry
-from ..config.strategies import MahalanobisConfig
 from ...utils.logging_config import get_logger
+from ..config.strategies import MahalanobisConfig
+from ..core.strategies import StrategyRegistry
+from .base import NoveltyStrategy
 
 logger = get_logger(__name__)
 
@@ -37,15 +38,15 @@ class MahalanobisDistanceStrategy(NoveltyStrategy):
 
     def __init__(self):
         self._config: MahalanobisConfig = None
-        self._class_means: Dict[str, np.ndarray] = {}
-        self._cov_inv: Optional[np.ndarray] = None
+        self._class_means: dict[str, np.ndarray] = {}
+        self._cov_inv: np.ndarray | None = None
         self._dim: int = 0
         self._calibrator: Any = None
 
     def initialize(
         self,
         reference_embeddings: np.ndarray,
-        reference_labels: List[str],
+        reference_labels: list[str],
         config: MahalanobisConfig,
     ) -> None:
         """
@@ -73,7 +74,7 @@ class MahalanobisDistanceStrategy(NoveltyStrategy):
     def _initialize_with_calibration(
         self,
         reference_embeddings: np.ndarray,
-        reference_labels: List[str],
+        reference_labels: list[str],
     ) -> None:
         """Initialize with conformal calibration, splitting reference data."""
         from .conformal import ConformalCalibrator
@@ -121,7 +122,7 @@ class MahalanobisDistanceStrategy(NoveltyStrategy):
     def _initialize_core(
         self,
         reference_embeddings: np.ndarray,
-        reference_labels: List[str],
+        reference_labels: list[str],
     ) -> None:
         """Core initialization: compute class means and pooled covariance."""
         unique_labels = set(reference_labels)
@@ -143,7 +144,7 @@ class MahalanobisDistanceStrategy(NoveltyStrategy):
     def _compute_all_distances(
         self,
         embeddings: np.ndarray,
-        labels: List[str],
+        labels: list[str],
     ) -> np.ndarray:
         """Compute Mahalanobis distances for a batch of samples."""
         distances = np.empty(len(embeddings))
@@ -160,7 +161,7 @@ class MahalanobisDistanceStrategy(NoveltyStrategy):
     def _compute_pooled_covariance(
         self,
         embeddings: np.ndarray,
-        labels: List[str],
+        labels: list[str],
     ) -> np.ndarray:
         """
         Compute the pooled (within-class) covariance matrix.
@@ -190,12 +191,12 @@ class MahalanobisDistanceStrategy(NoveltyStrategy):
 
     def detect(
         self,
-        texts: List[str],
+        texts: list[str],
         embeddings: np.ndarray,
-        predicted_classes: List[str],
+        predicted_classes: list[str],
         confidences: np.ndarray,
         **kwargs,
-    ) -> tuple[Set[int], Dict[int, Dict[str, Any]]]:
+    ) -> tuple[set[int], dict[int, dict[str, Any]]]:
         """
         Detect novel samples using Mahalanobis distance.
 
@@ -260,7 +261,7 @@ class MahalanobisDistanceStrategy(NoveltyStrategy):
         idx: int,
         embedding: np.ndarray,
         predicted_class: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Compute Mahalanobis distance metrics for a single sample.
 

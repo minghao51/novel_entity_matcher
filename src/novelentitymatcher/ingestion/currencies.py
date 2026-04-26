@@ -1,7 +1,7 @@
 """Ingestion script for ISO 4217 currency codes."""
 
-from typing import Any
 import csv
+from typing import Any
 
 from .base import BaseFetcher, _fetch_url, resolve_output_dirs
 
@@ -24,7 +24,7 @@ class CurrenciesFetcher(BaseFetcher):
             )
 
         data = []
-        with open(output_path, "r", encoding="utf-8") as f:
+        with open(output_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 data.append(row)

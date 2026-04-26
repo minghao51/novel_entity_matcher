@@ -1,10 +1,11 @@
 import os
 import platform
-from typing import Any, Optional
+from typing import Any
 
-from .base import EmbeddingBackend
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
+
+from .base import EmbeddingBackend
 
 # Keep this aligned with matcher.py so direct backend imports behave the same way.
 if platform.system() == "Darwin" and platform.machine() == "arm64":
@@ -29,7 +30,7 @@ class StaticEmbeddingBackend(EmbeddingBackend):
     - minishlab/potion-base-32M (model2vec)
     """
 
-    def __init__(self, model_name: str, embedding_dim: Optional[int] = None):
+    def __init__(self, model_name: str, embedding_dim: int | None = None):
         """
         Initialize static embedding backend.
 
@@ -101,7 +102,7 @@ class StaticEmbeddingBackend(EmbeddingBackend):
         similarities = cosine_similarity(query_embeddings, corpus_embeddings)
 
         results = []
-        for idx, query_sim in enumerate(similarities):
+        for _idx, query_sim in enumerate(similarities):
             top_indices = query_sim.argsort()[-top_k:][::-1]
             results.append(
                 [

@@ -4,13 +4,13 @@ Self-knowledge detection strategy wrapper.
 Wraps SelfKnowledgeDetector to implement NoveltyStrategy protocol.
 """
 
-from typing import Any, Dict, List, Set
+from typing import Any
 
 import numpy as np
 
-from .base import NoveltyStrategy
-from ..core.strategies import StrategyRegistry
 from ..config.strategies import SelfKnowledgeConfig
+from ..core.strategies import StrategyRegistry
+from .base import NoveltyStrategy
 from .self_knowledge_impl import SelfKnowledgeDetector
 
 
@@ -33,7 +33,7 @@ class SelfKnowledgeStrategy(NoveltyStrategy):
     def initialize(
         self,
         reference_embeddings: np.ndarray,
-        reference_labels: List[str],
+        reference_labels: list[str],
         config: SelfKnowledgeConfig,
     ) -> None:
         self._config = config or SelfKnowledgeConfig()
@@ -46,12 +46,12 @@ class SelfKnowledgeStrategy(NoveltyStrategy):
 
     def detect(
         self,
-        texts: List[str],
+        texts: list[str],
         embeddings: np.ndarray,
-        predicted_classes: List[str],
+        predicted_classes: list[str],
         confidences: np.ndarray,
         **kwargs,
-    ) -> tuple[Set[int], Dict[int, Dict[str, Any]]]:
+    ) -> tuple[set[int], dict[int, dict[str, Any]]]:
         flags: set[int] = set()
         metrics: dict[int, dict[str, Any]] = {}
 

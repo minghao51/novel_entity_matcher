@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import random
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import numpy as np
 import pandas as pd
@@ -68,7 +68,7 @@ class NoveltyEvaluator(BaseEvaluator[tuple[pd.DataFrame, pd.DataFrame]]):
 
         if len(known_data) == 0 or len(ood_data) == 0:
             return EvaluationResult(
-                metrics={m: 0.0 for m in self.get_default_metrics()},
+                metrics=dict.fromkeys(self.get_default_metrics(), 0.0),
                 details={"error": "Empty known or OOD dataset"},
             )
 
@@ -113,7 +113,9 @@ class NoveltyEvaluator(BaseEvaluator[tuple[pd.DataFrame, pd.DataFrame]]):
         except ValueError:
             pass
 
-        detection_rates = self._compute_detection_rates(true_labels_arr, novelty_scores_arr)
+        detection_rates = self._compute_detection_rates(
+            true_labels_arr, novelty_scores_arr
+        )
 
         all_data = pd.concat([known_data, ood_data])
         per_sample_results = pd.DataFrame(
@@ -154,7 +156,7 @@ class NoveltyEvaluator(BaseEvaluator[tuple[pd.DataFrame, pd.DataFrame]]):
         num_ood = np.sum(true_labels == 1)
 
         if num_ood == 0:
-            return {fp_rate: 0.0 for fp_rate in fp_rates}
+            return dict.fromkeys(fp_rates, 0.0)
 
         sorted_indices = np.argsort(novelty_scores)[::-1]
         sorted_labels = true_labels[sorted_indices]

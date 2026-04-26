@@ -5,7 +5,7 @@ Contains data structures for detection results, metrics, and reports.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Set, Any, Optional
+from typing import Any
 
 
 @dataclass
@@ -19,10 +19,10 @@ class StrategyMetrics:
     strategy_id: str
     """Identifier for the strategy."""
 
-    flags: Set[int]
+    flags: set[int]
     """Indices flagged as novel by this strategy."""
 
-    metrics: Dict[int, Dict[str, Any]]
+    metrics: dict[int, dict[str, Any]]
     """Per-sample metrics from this strategy."""
 
 
@@ -52,10 +52,10 @@ class SampleMetrics:
     novelty_score: float
     """Final combined novelty score."""
 
-    strategy_flags: Dict[str, bool]
+    strategy_flags: dict[str, bool]
     """Which strategies flagged this sample."""
 
-    raw_metrics: Dict[str, Any]
+    raw_metrics: dict[str, Any]
     """Raw metrics from each strategy."""
 
 
@@ -68,10 +68,10 @@ class NovelSampleReport:
     of samples.
     """
 
-    novel_indices: List[int]
+    novel_indices: list[int]
     """Indices of samples flagged as novel."""
 
-    novel_scores: Dict[int, float]
+    novel_scores: dict[int, float]
     """Novelty scores for all flagged samples."""
 
     num_novel: int
@@ -83,16 +83,16 @@ class NovelSampleReport:
     novel_ratio: float
     """Ratio of novel samples (num_novel / num_total)."""
 
-    sample_metadata: List[Dict[str, Any]]
+    sample_metadata: list[dict[str, Any]]
     """Per-sample metadata including text, class, confidence, metrics."""
 
-    strategy_flags: Dict[str, Dict[str, Any]]
+    strategy_flags: dict[str, dict[str, Any]]
     """Strategy-level statistics (num_flagged, flagged_indices)."""
 
-    config_used: Dict[str, Any]
+    config_used: dict[str, Any]
     """Configuration used for detection."""
 
-    def get_novel_samples(self) -> List[Dict[str, Any]]:
+    def get_novel_samples(self) -> list[dict[str, Any]]:
         """
         Get metadata for only the novel samples.
 
@@ -113,7 +113,7 @@ class NovelSampleReport:
         """
         return self.strategy_flags.get(strategy_id, {}).get("num_flagged", 0)
 
-    def get_sample_at_index(self, index: int) -> Optional[Dict[str, Any]]:
+    def get_sample_at_index(self, index: int) -> dict[str, Any] | None:
         """
         Get metadata for a specific sample by index.
 
@@ -140,7 +140,7 @@ class DetectionReport:
     novelty_report: NovelSampleReport
     """The core novelty detection report."""
 
-    strategies_used: List[str]
+    strategies_used: list[str]
     """List of strategies that were used."""
 
     runtime_seconds: float
@@ -149,7 +149,7 @@ class DetectionReport:
     timestamp: str
     """ISO timestamp of when detection was run."""
 
-    additional_info: Dict[str, Any] = field(default_factory=dict)
+    additional_info: dict[str, Any] = field(default_factory=dict)
     """Any additional information to include in the report."""
 
 
@@ -188,10 +188,10 @@ class EvaluationReport:
     optimal_threshold: float
     """Threshold that maximizes F1 score."""
 
-    confusion_matrix: Optional[Dict[str, int]] = None
+    confusion_matrix: dict[str, int] | None = None
     """Confusion matrix at optimal threshold."""
 
-    per_class_metrics: Optional[Dict[str, Dict[str, float]]] = None
+    per_class_metrics: dict[str, dict[str, float]] | None = None
     """Per-class metrics if available."""
 
     num_samples: int = 0

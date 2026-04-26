@@ -6,8 +6,9 @@ from typing import Any
 
 import requests
 
-from .base import BaseFetcher, resolve_output_dirs
 from novelentitymatcher.utils.logging_config import get_logger
+
+from .base import BaseFetcher, resolve_output_dirs
 
 logger = get_logger(__name__)
 
@@ -80,7 +81,7 @@ class IndustriesFetcher(BaseFetcher):
                 json.dump(self.FALLBACK_NAICS, f, indent=2)
             return list(self.FALLBACK_NAICS)
 
-        with open(output_path, "r", encoding="utf-8") as f:
+        with open(output_path, encoding="utf-8") as f:
             if output_path.suffix == ".json":
                 payload = json.load(f)
                 if isinstance(payload, list):

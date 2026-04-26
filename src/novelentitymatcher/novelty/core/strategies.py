@@ -5,7 +5,6 @@ Provides a central registry for all novelty detection strategies,
 allowing dynamic strategy registration and instantiation.
 """
 
-from typing import Dict, List, Type
 from ..strategies.base import NoveltyStrategy
 
 
@@ -17,10 +16,10 @@ class StrategyRegistry:
     Once registered, they can be instantiated by their strategy_id.
     """
 
-    _strategies: Dict[str, Type[NoveltyStrategy]] = {}
+    _strategies: dict[str, type[NoveltyStrategy]] = {}
 
     @classmethod
-    def register(cls, strategy_cls: Type[NoveltyStrategy]) -> Type[NoveltyStrategy]:
+    def register(cls, strategy_cls: type[NoveltyStrategy]) -> type[NoveltyStrategy]:
         """
         Register a strategy class.
 
@@ -53,7 +52,7 @@ class StrategyRegistry:
         return strategy_cls
 
     @classmethod
-    def get(cls, strategy_id: str) -> Type[NoveltyStrategy]:
+    def get(cls, strategy_id: str) -> type[NoveltyStrategy]:
         """
         Get a strategy class by ID.
 
@@ -88,7 +87,7 @@ class StrategyRegistry:
         return strategy_cls()
 
     @classmethod
-    def list_strategies(cls, maturity: str | None = None) -> List[str]:
+    def list_strategies(cls, maturity: str | None = None) -> list[str]:
         """
         List all registered strategy IDs, optionally filtered by maturity.
 

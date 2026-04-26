@@ -4,23 +4,24 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, cast
+from typing import Any, cast
 
 import pandas as pd
 
+from ..novelty.entity_matcher import NovelEntityMatcher
 from .base import EvaluationResult
+from .classification import ClassificationEvaluator
+from .entity_resolution import EntityResolutionEvaluator
 from .loader import DatasetLoader
+from .novelty import NoveltyEvaluator
 from .registry import (
     DATASET_REGISTRY,
     get_dataset_config,
     get_datasets_by_task,
 )
-from .entity_resolution import EntityResolutionEvaluator
-from .classification import ClassificationEvaluator
-from .novelty import NoveltyEvaluator
-from ..novelty.entity_matcher import NovelEntityMatcher
 
 logger = logging.getLogger(__name__)
 
@@ -305,7 +306,7 @@ class BenchmarkRunner:
         true_labels = [str(label) for label in true_labels_raw]
         pred_labels = [
             "__no_match__" if (pred is None or conf < threshold) else str(pred)
-            for pred, conf in zip(predictions, confidences)
+            for pred, conf in zip(predictions, confidences, strict=False)
         ]
 
         macro_f1 = f1_score(true_labels, pred_labels, average="macro", zero_division=0)
@@ -557,7 +558,7 @@ class BenchmarkRunner:
                         "optimal_threshold", 0.0
                     )
 
-                for split_name, (split_df, split_key) in splits_to_eval.items():
+                for split_name, (split_df, _split_key) in splits_to_eval.items():
                     if mode == "zero-shot" and zero_shot_threshold is not None:
                         result = self._evaluate_with_threshold(
                             split_df,

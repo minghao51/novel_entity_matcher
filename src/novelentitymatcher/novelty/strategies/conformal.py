@@ -7,7 +7,7 @@ enabling rigorous routing of out-of-distribution inputs.
 
 from __future__ import annotations
 
-from typing import Dict, List, Literal, Optional
+from typing import Literal
 
 import numpy as np
 
@@ -38,8 +38,8 @@ class ConformalCalibrator:
     ):
         self.alpha = alpha
         self.method = method
-        self._nonconformity_scores: Optional[np.ndarray] = None
-        self._class_scores: Dict[str, np.ndarray] = {}
+        self._nonconformity_scores: np.ndarray | None = None
+        self._class_scores: dict[str, np.ndarray] = {}
         self._n_calibration: int = 0
         self._is_calibrated: bool = False
 
@@ -47,7 +47,7 @@ class ConformalCalibrator:
         self,
         scores: np.ndarray,
         labels: np.ndarray,
-    ) -> "ConformalCalibrator":
+    ) -> ConformalCalibrator:
         """Compute nonconformity scores from calibration data.
 
         Args:
@@ -145,7 +145,7 @@ class ConformalCalibrator:
     def predict_pvalues_for_class(
         self,
         scores: np.ndarray,
-        predicted_classes: List[str],
+        predicted_classes: list[str],
     ) -> np.ndarray:
         """Compute class-conditional p-values when predicted classes are known.
 
@@ -170,23 +170,19 @@ class ConformalCalibrator:
             else self._nonconformity_scores
         )
 
-        for i, (score, pred_class) in enumerate(zip(scores, predicted_classes)):
+        for i, (score, pred_class) in enumerate(zip(scores, predicted_classes, strict=False)):
             class_cal = self._class_scores.get(str(pred_class))
             if class_cal is not None and len(class_cal) > 0:
-                pvalues[i] = self._compute_pvalues(
-                    np.array([score]), class_cal
-                )[0]
+                pvalues[i] = self._compute_pvalues(np.array([score]), class_cal)[0]
             elif all_cal is not None:
-                pvalues[i] = self._compute_pvalues(
-                    np.array([score]), all_cal
-                )[0]
+                pvalues[i] = self._compute_pvalues(np.array([score]), all_cal)[0]
             else:
                 pvalues[i] = 1.0
 
         return pvalues
 
     @property
-    def calibration_metadata(self) -> Dict:
+    def calibration_metadata(self) -> dict:
         """Return calibration metadata for reproducibility."""
         return {
             "alpha": self.alpha,

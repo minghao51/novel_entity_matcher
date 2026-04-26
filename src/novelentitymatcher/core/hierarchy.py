@@ -7,7 +7,8 @@ This module provides:
 - HierarchicalMatcher: User-facing API for hierarchical matching
 """
 
-from typing import Dict, List, Optional, Any
+from typing import Any
+
 import networkx as nx
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
@@ -16,9 +17,9 @@ from .matcher import EmbeddingMatcher
 from .normalizer import TextNormalizer
 
 __all__ = [
-    "HierarchyIndex",
-    "HierarchicalScoring",
     "HierarchicalMatcher",
+    "HierarchicalScoring",
+    "HierarchyIndex",
 ]
 
 
@@ -33,7 +34,7 @@ class HierarchyIndex:
     - Path finding and depth calculation
     """
 
-    def __init__(self, entities: List[Dict[str, Any]]):
+    def __init__(self, entities: list[dict[str, Any]]):
         """
         Build hierarchy index from entity definitions.
 
@@ -49,7 +50,7 @@ class HierarchyIndex:
         self.entities = {e["id"]: e for e in entities}
         self.graph: Any = nx.DiGraph()
         self._build_graph()
-        self._cache: Dict[str, Any] = {}
+        self._cache: dict[str, Any] = {}
 
     def _build_graph(self) -> None:
         """Build directed acyclic graph from entity definitions."""
@@ -79,8 +80,8 @@ class HierarchyIndex:
                     self.graph.add_edge(entity_id, child, weight=weight)
 
     def _bfs_traverse(
-        self, entity_id: str, max_depth: Optional[int], neighbor_fn
-    ) -> List[str]:
+        self, entity_id: str, max_depth: int | None, neighbor_fn
+    ) -> list[str]:
         if entity_id not in self.graph:
             return []
         cache_key = f"{neighbor_fn.__name__}_{entity_id}_{max_depth}"
@@ -99,9 +100,7 @@ class HierarchyIndex:
         self._cache[cache_key] = results
         return results
 
-    def get_ancestors(
-        self, entity_id: str, max_depth: Optional[int] = None
-    ) -> List[str]:
+    def get_ancestors(self, entity_id: str, max_depth: int | None = None) -> list[str]:
         """
         Get all ancestor entities for a given entity.
 
@@ -115,8 +114,8 @@ class HierarchyIndex:
         return self._bfs_traverse(entity_id, max_depth, self.graph.predecessors)
 
     def get_descendants(
-        self, entity_id: str, max_depth: Optional[int] = None
-    ) -> List[str]:
+        self, entity_id: str, max_depth: int | None = None
+    ) -> list[str]:
         """
         Get all descendant entities for a given entity.
 
@@ -159,7 +158,7 @@ class HierarchyIndex:
             except nx.NetworkXNoPath:
                 return -1
 
-    def get_path(self, from_entity: str, to_entity: str) -> List[str]:
+    def get_path(self, from_entity: str, to_entity: str) -> list[str]:
         """
         Get shortest path between two entities in the hierarchy.
 
@@ -309,7 +308,7 @@ class HierarchicalMatcher:
 
     def __init__(
         self,
-        entities: List[Dict[str, Any]],
+        entities: list[dict[str, Any]],
         embedding_model: str = "BAAI/bge-base-en-v1.5",
         alpha: float = 0.7,
         beta: float = 0.3,
@@ -341,8 +340,8 @@ class HierarchicalMatcher:
 
         # Will be initialized in build_index()
         self.embedding_matcher: Any = None
-        self.entity_embeddings: Dict[str, Any] = {}
-        self.entity_texts: Dict[str, str] = {}
+        self.entity_embeddings: dict[str, Any] = {}
+        self.entity_texts: dict[str, str] = {}
 
     def build_index(self):
         """
@@ -386,7 +385,7 @@ class HierarchicalMatcher:
 
     def match(
         self, query: str, top_k: int = 5, match_level: str = "all", max_depth: int = 3
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Match query considering hierarchical relationships.
 
@@ -526,7 +525,7 @@ class HierarchicalMatcher:
                     )
 
         # Remove duplicates (keep highest score)
-        seen: Dict[str, Dict[str, Any]] = {}
+        seen: dict[str, dict[str, Any]] = {}
         for candidate in candidates:
             cid = candidate["id"]
             if cid not in seen or candidate["score"] > seen[cid]["score"]:
@@ -537,8 +536,8 @@ class HierarchicalMatcher:
         return results[:top_k]
 
     def get_ancestors(
-        self, entity_id: str, max_depth: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
+        self, entity_id: str, max_depth: int | None = None
+    ) -> list[dict[str, Any]]:
         """
         Get all ancestors of an entity with metadata.
 
@@ -562,8 +561,8 @@ class HierarchicalMatcher:
         ]
 
     def get_descendants(
-        self, entity_id: str, max_depth: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
+        self, entity_id: str, max_depth: int | None = None
+    ) -> list[dict[str, Any]]:
         """
         Get all descendants of an entity with metadata.
 
@@ -587,8 +586,8 @@ class HierarchicalMatcher:
         ]
 
     def get_hierarchy_path(
-        self, entity_id: str, to_entity: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+        self, entity_id: str, to_entity: str | None = None
+    ) -> list[dict[str, Any]]:
         """
         Get path from entity_id to root or to_entity.
 

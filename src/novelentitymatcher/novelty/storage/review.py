@@ -4,35 +4,16 @@ from __future__ import annotations
 
 import json
 import uuid
-from dataclasses import dataclass, field
+from collections.abc import Callable, Iterable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any
 
 from ..schemas import (
     NovelClassDiscoveryReport,
+    PromotionResult,
     ProposalReviewRecord,
 )
-
-
-@dataclass
-class PromotionResult:
-    """Captures what happened during a promotion."""
-
-    review_record: ProposalReviewRecord
-    entities_added: list[dict[str, Any]] = field(default_factory=list)
-    index_updated: bool = False
-    retrain_required: bool = False
-
-    @property
-    def state(self) -> str:
-        """Backward-compatible alias for review_record.state."""
-        return self.review_record.state
-
-    @property
-    def promoted_at(self):
-        """Backward-compatible alias for review_record.promoted_at."""
-        return self.review_record.promoted_at
 
 
 class ProposalReviewManager:
@@ -80,10 +61,12 @@ class ProposalReviewManager:
             existing[record["review_id"]] = record
 
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
-        self.storage_path.write_text(
+        tmp_path = self.storage_path.with_suffix(self.storage_path.suffix + ".tmp")
+        tmp_path.write_text(
             json.dumps(list(existing.values()), indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
+        tmp_path.replace(self.storage_path)
 
     def list_records(
         self, discovery_id: str | None = None
@@ -206,7 +189,7 @@ class ProposalReviewManager:
             else:
                 fit = getattr(matcher, "fit", None)
                 if callable(fit):
-                    fit(entities)
+                    fit()
 
         def retrain_callback() -> None:
             pass

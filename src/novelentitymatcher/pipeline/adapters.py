@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 import re
 from collections import Counter, defaultdict
-from typing import Any, Awaitable, Callable, Iterable, List, Optional
+from collections.abc import Awaitable, Callable, Iterable
+from typing import Any
 
 import numpy as np
 
@@ -48,10 +49,8 @@ class MatcherMetadataStage(PipelineStage):
 
     def __init__(
         self,
-        collect_sync: Callable[[List[str]], tuple[Any, dict[Any, Any]]] | None,
-        collect_async: Callable[
-            [List[str]], Awaitable[tuple[Any, dict[Any, Any]]]
-        ]
+        collect_sync: Callable[[list[str]], tuple[Any, dict[Any, Any]]] | None,
+        collect_async: Callable[[list[str]], Awaitable[tuple[Any, dict[Any, Any]]]]
         | None,
     ):
         if collect_sync is None or collect_async is None:
@@ -103,7 +102,7 @@ class OODDetectionStage(PipelineStage):
         self,
         detector: Any,
         enabled: bool = True,
-        ood_strategies: Optional[List[str]] = None,
+        ood_strategies: list[str] | None = None,
         ood_calibration_mode: str = "none",
         ood_calibration_alpha: float = 0.1,
         ood_mahalanobis_mode: str = "class_conditional",
@@ -191,7 +190,7 @@ class CommunityDetectionStage(PipelineStage):
         cluster_labels, backend = self._cluster_embeddings(embeddings)
         index_to_cluster: dict[int, int] = {}
         groups: dict[int, list[Any]] = defaultdict(list)
-        for sample, cluster_id in zip(novel_samples, cluster_labels):
+        for sample, cluster_id in zip(novel_samples, cluster_labels, strict=False):
             sample.cluster_id = cluster_id if cluster_id >= 0 else None
             if cluster_id >= 0:
                 groups[int(cluster_id)].append(sample)
@@ -445,7 +444,10 @@ class ClusterEvidenceStage(PipelineStage):
                 ),
             },
             token_budget=self.token_budget,
-            metadata={"sample_count": len(samples), "evidence_method": self.evidence_method},
+            metadata={
+                "sample_count": len(samples),
+                "evidence_method": self.evidence_method,
+            },
         )
 
     def _extract_rake_keywords(self, texts: list[str]) -> list[str]:
@@ -511,9 +513,9 @@ class ProposalStage(PipelineStage):
     def __init__(
         self,
         proposer: Any,
-        existing_classes_resolver: Callable[[], List[str]],
+        existing_classes_resolver: Callable[[], list[str]],
         enabled: bool = True,
-        context_text: Optional[str] = None,
+        context_text: str | None = None,
         max_retries: int = 2,
         force_cluster_level: bool = True,
         proposal_mode: str = "cluster",

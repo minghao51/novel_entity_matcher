@@ -8,14 +8,14 @@ to detect novel entities without requiring negative examples.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
-from sklearn.svm import OneClassSVM
 from sentence_transformers import SentenceTransformer
+from sklearn.svm import OneClassSVM
 
-from novelentitymatcher.utils.logging_config import get_logger
 from novelentitymatcher.utils.embeddings import get_cached_sentence_transformer
+from novelentitymatcher.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -33,14 +33,14 @@ class OneClassSVMDetector:
         self.kernel = kernel
         self.gamma = gamma
 
-        self.model: Optional[SentenceTransformer] = None
-        self.oc_svm: Optional[OneClassSVM] = None
-        self.known_embeddings: Optional[np.ndarray] = None
+        self.model: SentenceTransformer | None = None
+        self.oc_svm: OneClassSVM | None = None
+        self.known_embeddings: np.ndarray | None = None
         self.is_trained = False
 
     def train(
         self,
-        known_entities: List[str],
+        known_entities: list[str],
         show_progress: bool = False,
     ) -> None:
         if not known_entities:
@@ -73,7 +73,7 @@ class OneClassSVMDetector:
         if show_progress:
             logger.info("Training complete!")
 
-    def is_novel(self, text: str) -> Tuple[bool, float]:
+    def is_novel(self, text: str) -> tuple[bool, float]:
         if not self.is_trained:
             raise RuntimeError("Detector must be trained before calling is_novel()")
 
@@ -90,7 +90,7 @@ class OneClassSVMDetector:
 
         return is_novel, confidence
 
-    def score_batch(self, texts: List[str]) -> List[Tuple[bool, float]]:
+    def score_batch(self, texts: list[str]) -> list[tuple[bool, float]]:
         if not self.is_trained:
             raise RuntimeError("Detector must be trained before calling score_batch()")
 
@@ -103,7 +103,7 @@ class OneClassSVMDetector:
         distances = self.oc_svm.decision_function(embeddings)
 
         results = []
-        for pred, dist in zip(predictions, distances):
+        for pred, dist in zip(predictions, distances, strict=False):
             is_novel = bool(pred == -1)
             confidence = float(np.clip(-dist, 0.0, 1.0))
             results.append((is_novel, confidence))
@@ -139,12 +139,12 @@ class OneClassSVMDetector:
             json.dump(metadata, f, indent=2)
 
     @classmethod
-    def load(cls, path: str) -> "OneClassSVMDetector":
+    def load(cls, path: str) -> OneClassSVMDetector:
         p = Path(path)
 
         import json
 
-        with open(p / "metadata.json", "r") as f:
+        with open(p / "metadata.json") as f:
             metadata = json.load(f)
 
         detector = cls(
@@ -163,7 +163,7 @@ class OneClassSVMDetector:
 
         return detector
 
-    def get_support_vectors_info(self) -> Dict[str, Any]:
+    def get_support_vectors_info(self) -> dict[str, Any]:
         if not self.is_trained or self.oc_svm is None:
             return {}
 

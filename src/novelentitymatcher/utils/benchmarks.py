@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from statistics import mean
 import time
-from typing import Any, Dict, Iterable, List, Optional
+from collections.abc import Iterable
+from statistics import mean
+from typing import Any
 
 import pandas as pd
+
+from novelentitymatcher.utils.logging_config import get_logger
 
 from ..config import (
     get_embedding_model_aliases,
@@ -16,13 +19,13 @@ from ..config import (
 from ..core.matcher import EmbeddingMatcher, Matcher
 from .benchmark_dataset import load_processed_sections
 from .benchmark_reporting import (
-    format_benchmark_summary,  # noqa: F401 - re-exported for backwards compatibility
-    parse_benchmark_args as _parse_args,
+    format_benchmark_summary,
     print_benchmark_report,
     save_benchmark_report,
 )
-
-from novelentitymatcher.utils.logging_config import get_logger
+from .benchmark_reporting import (
+    parse_benchmark_args as _parse_args,
+)
 
 logger = get_logger(__name__)
 
@@ -40,7 +43,7 @@ except ImportError:  # pragma: no cover - optional dependency
         return iterable
 
 
-def _top_level_match_id(result: Any) -> Optional[str]:
+def _top_level_match_id(result: Any) -> str | None:
     if isinstance(result, dict):
         return result.get("id")
     if isinstance(result, list) and result:
@@ -52,8 +55,8 @@ def _top_level_match_id(result: Any) -> Optional[str]:
 
 def benchmark_accuracy(
     matcher: Any,
-    test_pairs: List[Dict[str, Any]],
-) -> Dict[str, float]:
+    test_pairs: list[dict[str, Any]],
+) -> dict[str, float]:
     correct = 0
     scores = []
 
@@ -73,10 +76,10 @@ def benchmark_accuracy(
 
 def benchmark_latency(
     matcher: Any,
-    queries: List[str],
+    queries: list[str],
     iterations: int = 5,
     warmup_iterations: int = 1,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     for _ in range(warmup_iterations):
         for query in queries:
             matcher.match(query)
@@ -106,9 +109,9 @@ def benchmark_latency(
 
 
 def compare_models(
-    entities: List[Dict[str, Any]],
-    queries: List[str],
-    model_names: List[str],
+    entities: list[dict[str, Any]],
+    queries: list[str],
+    model_names: list[str],
     num_iterations: int = 3,
 ) -> pd.DataFrame:
     accuracy_pairs = [
@@ -126,9 +129,9 @@ def compare_models(
 
 def _split_accuracy_fields(
     matcher: Any,
-    split_pairs: Dict[str, List[Dict[str, Any]]],
-) -> Dict[str, Any]:
-    fields: Dict[str, Any] = {}
+    split_pairs: dict[str, list[dict[str, Any]]],
+) -> dict[str, Any]:
+    fields: dict[str, Any] = {}
 
     metric_splits = (
         "base",
@@ -162,13 +165,13 @@ def _split_accuracy_fields(
 
 
 def benchmark_embedding_models(
-    entities: Optional[List[Dict[str, Any]]] = None,
-    queries: Optional[List[str]] = None,
-    accuracy_pairs: Optional[List[Dict[str, Any]]] = None,
-    model_names: Optional[List[str]] = None,
+    entities: list[dict[str, Any]] | None = None,
+    queries: list[str] | None = None,
+    accuracy_pairs: list[dict[str, Any]] | None = None,
+    model_names: list[str] | None = None,
     iterations: int = 3,
-    batch_size: Optional[int] = None,
-    sections_data: Optional[List[Dict[str, Any]]] = None,
+    batch_size: int | None = None,
+    sections_data: list[dict[str, Any]] | None = None,
 ) -> pd.DataFrame:
     model_names = model_names or get_embedding_model_aliases()
     if sections_data is None:
@@ -184,7 +187,7 @@ def benchmark_embedding_models(
                 }
             ]
 
-    records: List[Dict[str, Any]] = []
+    records: list[dict[str, Any]] = []
 
     for section_data in sections_data:
         section_name = section_data["section"]
@@ -324,14 +327,14 @@ def benchmark_embedding_models(
 
 
 def benchmark_trained_modes(
-    entities: Optional[List[Dict[str, Any]]] = None,
-    training_data: Optional[List[Dict[str, Any]]] = None,
-    evaluation_pairs: Optional[List[Dict[str, Any]]] = None,
-    queries: Optional[List[str]] = None,
-    model_names: Optional[List[str]] = None,
-    modes: Optional[Iterable[str]] = None,
+    entities: list[dict[str, Any]] | None = None,
+    training_data: list[dict[str, Any]] | None = None,
+    evaluation_pairs: list[dict[str, Any]] | None = None,
+    queries: list[str] | None = None,
+    model_names: list[str] | None = None,
+    modes: Iterable[str] | None = None,
     num_epochs: int = 1,
-    sections_data: Optional[List[Dict[str, Any]]] = None,
+    sections_data: list[dict[str, Any]] | None = None,
 ) -> pd.DataFrame:
     model_names = model_names or get_training_model_aliases()
     modes = list(modes or ("head-only", "full"))
@@ -356,7 +359,7 @@ def benchmark_trained_modes(
                 }
             ]
 
-    records: List[Dict[str, Any]] = []
+    records: list[dict[str, Any]] = []
 
     for section_data in sections_data:
         section_name = section_data["section"]
@@ -487,14 +490,14 @@ def benchmark_trained_modes(
 
 def run_benchmark_suite(
     track: str = "all",
-    embedding_models: Optional[List[str]] = None,
-    training_models: Optional[List[str]] = None,
-    output_path: Optional[str] = None,
-    sections: Optional[List[str]] = None,
+    embedding_models: list[str] | None = None,
+    training_models: list[str] | None = None,
+    output_path: str | None = None,
+    sections: list[str] | None = None,
     max_entities_per_section: int = 200,
     max_queries_per_section: int = 50,
-) -> Dict[str, pd.DataFrame]:
-    suite: Dict[str, pd.DataFrame] = {}
+) -> dict[str, pd.DataFrame]:
+    suite: dict[str, pd.DataFrame] = {}
     loaded_sections = load_processed_sections(
         sections=sections,
         max_entities_per_section=max_entities_per_section,
@@ -522,7 +525,7 @@ def run_benchmark_suite(
     return suite
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     suite = run_benchmark_suite(
         track=args.track,

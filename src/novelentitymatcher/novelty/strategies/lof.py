@@ -6,7 +6,7 @@ against the reference set using sklearn's LocalOutlierFactor.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Set, Type
+from typing import Any
 
 import numpy as np
 from sklearn.neighbors import LocalOutlierFactor
@@ -32,14 +32,14 @@ class LOFStrategy(NoveltyStrategy):
     maturity = "experimental"
 
     def __init__(self):
-        self._config: Optional[LOFConfig] = None
-        self._lof_model: Optional[LocalOutlierFactor] = None
+        self._config: LOFConfig | None = None
+        self._lof_model: LocalOutlierFactor | None = None
         self._fallback: bool = False
 
     def initialize(
         self,
         reference_embeddings: np.ndarray,
-        reference_labels: List[str],
+        reference_labels: list[str],
         config: LOFConfig,
     ) -> None:
         """
@@ -82,12 +82,12 @@ class LOFStrategy(NoveltyStrategy):
 
     def detect(
         self,
-        texts: List[str],
+        texts: list[str],
         embeddings: np.ndarray,
-        predicted_classes: List[str],
+        predicted_classes: list[str],
         confidences: np.ndarray,
         **kwargs,
-    ) -> tuple[Set[int], Dict[int, Dict[str, Any]]]:
+    ) -> tuple[set[int], dict[int, dict[str, Any]]]:
         """
         Detect novel samples using LOF anomaly scores.
 
@@ -101,8 +101,8 @@ class LOFStrategy(NoveltyStrategy):
         Returns:
             (flags, metrics) - Flagged indices and per-sample metrics
         """
-        flags: Set[int] = set()
-        metrics: Dict[int, Dict[str, Any]] = {}
+        flags: set[int] = set()
+        metrics: dict[int, dict[str, Any]] = {}
 
         if self._fallback or self._lof_model is None:
             for idx in range(len(embeddings)):
@@ -146,7 +146,7 @@ class LOFStrategy(NoveltyStrategy):
         return flags, metrics
 
     @property
-    def config_schema(self) -> Type:
+    def config_schema(self) -> type:
         """Return LOFConfig as the config schema."""
         return LOFConfig
 

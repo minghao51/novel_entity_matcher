@@ -6,15 +6,16 @@ import csv
 import math
 import re
 from collections import Counter
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any
 
 from .preprocessing import clean_text
 
 PROCESSED_DATA_DIR = Path(__file__).resolve().parents[3] / "data" / "processed"
 
 
-def parse_aliases(raw_aliases: str) -> List[str]:
+def parse_aliases(raw_aliases: str) -> list[str]:
     if not raw_aliases:
         return []
     return [alias.strip() for alias in raw_aliases.split("|") if alias.strip()]
@@ -25,9 +26,9 @@ def dataset_section_name(path: Path) -> str:
 
 
 def row_to_entity(
-    row: Dict[str, str],
-    alias_counts: Optional[Counter[str]] = None,
-) -> Dict[str, Any]:
+    row: dict[str, str],
+    alias_counts: Counter[str] | None = None,
+) -> dict[str, Any]:
     aliases = parse_aliases(row.get("aliases", ""))
     if alias_counts is not None:
         aliases = [
@@ -35,7 +36,7 @@ def row_to_entity(
             for alias in aliases
             if alias_counts.get(alias, 0) == 1 and alias != row["id"]
         ]
-    entity: Dict[str, Any] = {"id": row["id"], "name": row["name"]}
+    entity: dict[str, Any] = {"id": row["id"], "name": row["name"]}
     if aliases:
         entity["aliases"] = aliases
     if row.get("type"):
@@ -43,7 +44,7 @@ def row_to_entity(
     return entity
 
 
-def dedupe_texts(entity: Dict[str, Any], include_id: bool = True) -> List[str]:
+def dedupe_texts(entity: dict[str, Any], include_id: bool = True) -> list[str]:
     texts = [entity["name"], *entity.get("aliases", [])]
     if include_id:
         texts.append(entity["id"])
@@ -88,9 +89,9 @@ def introduce_typo(text: str) -> str:
 def generate_holdout_queries(
     source_text: str,
     excluded_texts: Iterable[str],
-) -> List[Tuple[str, str]]:
+) -> list[tuple[str, str]]:
     excluded = {normalize_eval_text(text) for text in excluded_texts if text}
-    candidates: List[Tuple[str, str]] = []
+    candidates: list[tuple[str, str]] = []
     raw_candidates = [
         ("typo", normalize_eval_text(introduce_typo(normalize_eval_text(source_text)))),
         (
@@ -112,9 +113,9 @@ def generate_holdout_queries(
     return candidates
 
 
-def build_split_pairs(entity: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+def build_split_pairs(entity: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     indexed_texts = dedupe_texts(entity, include_id=False)
-    empty_split: Dict[str, List[Dict[str, Any]]] = {
+    empty_split: dict[str, list[dict[str, Any]]] = {
         "base": [],
         "train": [],
         "val": [],
@@ -166,7 +167,7 @@ def build_split_pairs(entity: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]
     }
 
 
-def select_primary_queries(split_pairs: Dict[str, List[Dict[str, Any]]]) -> List[str]:
+def select_primary_queries(split_pairs: dict[str, list[dict[str, Any]]]) -> list[str]:
     for split in ("test", "val", "train", "base"):
         pairs = split_pairs.get(split, [])
         if pairs:
@@ -176,9 +177,9 @@ def select_primary_queries(split_pairs: Dict[str, List[Dict[str, Any]]]) -> List
 
 def iter_processed_dataset_paths(
     processed_dir: Path = PROCESSED_DATA_DIR,
-    sections: Optional[Iterable[str]] = None,
-) -> List[Path]:
-    selected = {section for section in sections} if sections else None
+    sections: Iterable[str] | None = None,
+) -> list[Path]:
+    selected = set(sections) if sections else None
     paths = sorted(processed_dir.glob("*/*.csv"))
     if selected is None:
         return paths
@@ -187,11 +188,11 @@ def iter_processed_dataset_paths(
 
 def load_processed_sections(
     processed_dir: Path = PROCESSED_DATA_DIR,
-    sections: Optional[Iterable[str]] = None,
+    sections: Iterable[str] | None = None,
     max_entities_per_section: int = 200,
     max_queries_per_section: int = 50,
-) -> List[Dict[str, Any]]:
-    loaded_sections: List[Dict[str, Any]] = []
+) -> list[dict[str, Any]]:
+    loaded_sections: list[dict[str, Any]] = []
 
     for path in iter_processed_dataset_paths(
         processed_dir=processed_dir, sections=sections
@@ -205,11 +206,11 @@ def load_processed_sections(
 
         entities = []
         training_data = []
-        base_pairs: List[Dict[str, Any]] = []
-        train_pairs: List[Dict[str, Any]] = []
-        val_pairs: List[Dict[str, Any]] = []
-        test_pairs: List[Dict[str, Any]] = []
-        perturbation_pairs: Dict[str, List[Dict[str, Any]]] = {
+        base_pairs: list[dict[str, Any]] = []
+        train_pairs: list[dict[str, Any]] = []
+        val_pairs: list[dict[str, Any]] = []
+        test_pairs: list[dict[str, Any]] = []
+        perturbation_pairs: dict[str, list[dict[str, Any]]] = {
             "typo": [],
             "remove_parenthetical": [],
             "ampersand_expanded": [],
@@ -287,7 +288,7 @@ def load_processed_sections(
 def build_embedding_benchmark_dataset(
     num_entities: int = 200,
     num_queries: int = 50,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     section = load_processed_sections(
         max_entities_per_section=num_entities,
         max_queries_per_section=num_queries,
@@ -299,7 +300,7 @@ def build_embedding_benchmark_dataset(
     }
 
 
-def build_trained_benchmark_dataset() -> Dict[str, Any]:
+def build_trained_benchmark_dataset() -> dict[str, Any]:
     sections = load_processed_sections(
         max_entities_per_section=40, max_queries_per_section=20
     )
@@ -324,11 +325,11 @@ def build_trained_benchmark_dataset() -> Dict[str, Any]:
 
 
 def _training_texts_from_split_pairs(
-    split_pairs: Dict[str, List[Dict[str, Any]]],
-) -> List[str]:
+    split_pairs: dict[str, list[dict[str, Any]]],
+) -> list[str]:
     training_texts = [pair["query"] for pair in split_pairs.get("base", [])]
     training_texts.extend(pair["query"] for pair in split_pairs.get("train", []))
-    deduped: List[str] = []
+    deduped: list[str] = []
     for text in training_texts:
         if text and text not in deduped:
             deduped.append(text)
@@ -336,9 +337,9 @@ def _training_texts_from_split_pairs(
 
 
 def _first_available_pairs(
-    split_pairs: Dict[str, List[Dict[str, Any]]],
-    preferred_splits: Tuple[str, ...],
-) -> List[Dict[str, Any]]:
+    split_pairs: dict[str, list[dict[str, Any]]],
+    preferred_splits: tuple[str, ...],
+) -> list[dict[str, Any]]:
     for split_name in preferred_splits:
         pairs = split_pairs.get(split_name, [])
         if pairs:
@@ -348,13 +349,13 @@ def _first_available_pairs(
 
 def build_processed_ood_sections(
     processed_dir: Path = PROCESSED_DATA_DIR,
-    sections: Optional[Iterable[str]] = None,
+    sections: Iterable[str] | None = None,
     max_entities_per_section: int = 200,
     max_queries_per_section: int = 50,
     ood_ratio: float = 0.2,
     min_known_classes: int = 3,
-) -> List[Dict[str, Any]]:
-    loaded_sections: List[Dict[str, Any]] = []
+) -> list[dict[str, Any]]:
+    loaded_sections: list[dict[str, Any]] = []
 
     for section in load_processed_sections(
         processed_dir=processed_dir,
@@ -385,12 +386,12 @@ def build_processed_ood_sections(
         if len(known_items) < min_known_classes or not heldout_items:
             continue
 
-        known_entities: List[Dict[str, Any]] = []
-        training_data: List[Dict[str, str]] = []
-        known_val_pairs: List[Dict[str, Any]] = []
-        known_test_pairs: List[Dict[str, Any]] = []
-        novel_val_pairs: List[Dict[str, Any]] = []
-        novel_test_pairs: List[Dict[str, Any]] = []
+        known_entities: list[dict[str, Any]] = []
+        training_data: list[dict[str, str]] = []
+        known_val_pairs: list[dict[str, Any]] = []
+        known_test_pairs: list[dict[str, Any]] = []
+        novel_val_pairs: list[dict[str, Any]] = []
+        novel_test_pairs: list[dict[str, Any]] = []
 
         for entity, split_pairs in known_items:
             known_entities.append(entity)

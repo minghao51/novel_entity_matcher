@@ -5,17 +5,17 @@ import subprocess
 import sys
 from pathlib import Path
 
+from ..utils.logging_config import get_logger
 from . import (
-    run_languages,
     run_currencies,
     run_industries,
-    run_timezones,
+    run_languages,
     run_occupations,
     run_products,
+    run_timezones,
     run_universities,
 )
 from .base import resolve_output_dirs, run_all_concurrent
-from ..utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 

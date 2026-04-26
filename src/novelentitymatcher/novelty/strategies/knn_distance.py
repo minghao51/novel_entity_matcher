@@ -5,13 +5,14 @@ Flags samples based on their distance to k-nearest neighbors in the
 reference set.
 """
 
-from typing import Dict, List, Set, Any, Optional
+from typing import Any
+
 import numpy as np
 
-from .base import NoveltyStrategy
-from ..core.strategies import StrategyRegistry
 from ..config.strategies import KNNConfig
+from ..core.strategies import StrategyRegistry
 from ..storage.index import ANNIndex
+from .base import NoveltyStrategy
 
 
 @StrategyRegistry.register
@@ -28,12 +29,12 @@ class KNNDistanceStrategy(NoveltyStrategy):
 
     def __init__(self):
         self._config: KNNConfig = None
-        self._ann_index: Optional[ANNIndex] = None
+        self._ann_index: ANNIndex | None = None
 
     def initialize(
         self,
         reference_embeddings: np.ndarray,
-        reference_labels: List[str],
+        reference_labels: list[str],
         config: KNNConfig,
     ) -> None:
         """
@@ -55,12 +56,12 @@ class KNNDistanceStrategy(NoveltyStrategy):
 
     def detect(
         self,
-        texts: List[str],
+        texts: list[str],
         embeddings: np.ndarray,
-        predicted_classes: List[str],
+        predicted_classes: list[str],
         confidences: np.ndarray,
         **kwargs,
-    ) -> tuple[Set[int], Dict[int, Dict[str, Any]]]:
+    ) -> tuple[set[int], dict[int, dict[str, Any]]]:
         """
         Detect novel samples using kNN distance.
 
@@ -103,7 +104,7 @@ class KNNDistanceStrategy(NoveltyStrategy):
         similarities: np.ndarray,
         neighbor_indices: np.ndarray,
         predicted_class: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Compute kNN-based metrics for a single sample.
 

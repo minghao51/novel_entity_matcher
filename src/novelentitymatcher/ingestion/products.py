@@ -1,12 +1,14 @@
 """Ingestion script for UNSPSC/MCC product categories."""
 
-from typing import Any
 import csv
 import json
+from typing import Any
+
 import requests
 
-from .base import BaseFetcher, resolve_output_dirs
 from novelentitymatcher.utils.logging_config import get_logger
+
+from .base import BaseFetcher, resolve_output_dirs
 
 logger = get_logger(__name__)
 
@@ -90,7 +92,7 @@ class UNSPSCFetcher(BaseFetcher):
                 with open(output_path, "w", encoding="utf-8") as f:
                     json.dump(self.FALLBACK_UNSPSC, f)
 
-        with open(output_path, "r", encoding="utf-8") as f:
+        with open(output_path, encoding="utf-8") as f:
             data = json.load(f)
             return data if data else self.FALLBACK_UNSPSC
 
@@ -322,7 +324,7 @@ class MCCFetcher(BaseFetcher):
                     writer.writerows(self.FALLBACK_MCC)
 
         data = []
-        with open(output_path, "r", encoding="utf-8") as f:
+        with open(output_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 data.append(row)

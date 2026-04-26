@@ -1,29 +1,29 @@
 """Canonical schema exports for novelty detection."""
 
 from .models import (
-    ClusterEvidence,
-    DiscoveryCluster,
-    NovelSampleMetadata,
-    NovelSampleReport,
     ClassProposal,
+    ClusterEvidence,
+    DiscoveredAttribute,
+    DiscoveryCluster,
     NovelClassAnalysis,
     NovelClassDiscoveryReport,
+    NovelSampleMetadata,
+    NovelSampleReport,
+    PromotionResult,
     ProposalReviewRecord,
-    DiscoveredAttribute,
 )
 from .results import EvaluationReport
-from ..storage.review import PromotionResult
 
 __all__ = [
-    "ClusterEvidence",
-    "DiscoveryCluster",
-    "NovelSampleMetadata",
-    "NovelSampleReport",
     "ClassProposal",
+    "ClusterEvidence",
+    "DiscoveredAttribute",
+    "DiscoveryCluster",
+    "EvaluationReport",
     "NovelClassAnalysis",
     "NovelClassDiscoveryReport",
-    "ProposalReviewRecord",
-    "DiscoveredAttribute",
-    "EvaluationReport",
+    "NovelSampleMetadata",
+    "NovelSampleReport",
     "PromotionResult",
+    "ProposalReviewRecord",
 ]

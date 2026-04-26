@@ -8,7 +8,8 @@ few-shot learning capability.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any
+
 import numpy as np
 
 from novelentitymatcher.utils.logging_config import get_logger
@@ -19,7 +20,7 @@ logger = get_logger(__name__)
 class SetFitDetector:
     def __init__(
         self,
-        known_entities: List[str],
+        known_entities: list[str],
         model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
         num_epochs: int = 4,
         batch_size: int = 16,
@@ -37,19 +38,19 @@ class SetFitDetector:
         self.learning_rate = learning_rate
         self.margin = margin
 
-        self.model: Optional[Any] = None
-        self.novelty_threshold: Optional[float] = None
-        self.known_embeddings: Optional[np.ndarray] = None
+        self.model: Any | None = None
+        self.novelty_threshold: float | None = None
+        self.known_embeddings: np.ndarray | None = None
         self.is_trained = False
 
     def train(
         self,
-        synthetic_novels: Optional[List[str]] = None,
+        synthetic_novels: list[str] | None = None,
         show_progress: bool = False,
     ) -> None:
         try:
-            from setfit import SetFitModel, SetFitTrainer
             from datasets import Dataset
+            from setfit import SetFitModel, SetFitTrainer
         except ImportError:
             raise ImportError(
                 "SetFit is not installed. Install with: pip install setfit"
@@ -138,7 +139,7 @@ class SetFitDetector:
 
         return is_novel, float(confidence)
 
-    def score_batch(self, texts: List[str]):
+    def score_batch(self, texts: list[str]):
         if not self.is_trained:
             raise RuntimeError("Detector must be trained before calling score_batch()")
 
@@ -200,12 +201,12 @@ class SetFitDetector:
             json.dump(metadata, f, indent=2)
 
     @classmethod
-    def load(cls, path: str) -> "SetFitDetector":
+    def load(cls, path: str) -> SetFitDetector:
         p = Path(path)
 
         import json
 
-        with open(p / "metadata.json", "r") as f:
+        with open(p / "metadata.json") as f:
             metadata = json.load(f)
 
         detector = cls(
@@ -237,8 +238,8 @@ class SetFitDetector:
     def generate_synthetic_novels(
         self,
         num_samples: int = 100,
-        augmentation_methods: Optional[List[str]] = None,
-    ) -> List[str]:
+        augmentation_methods: list[str] | None = None,
+    ) -> list[str]:
         if augmentation_methods is None:
             augmentation_methods = ["typos", "case_change", "spacing", "substring"]
 
@@ -264,15 +265,15 @@ class SetFitDetector:
         return synthetic
 
     def _prepare_synthetic_novels(
-        self, synthetic_novels: Optional[List[str]]
-    ) -> List[str]:
+        self, synthetic_novels: list[str] | None
+    ) -> list[str]:
         novels = [text for text in (synthetic_novels or []) if text]
         if novels:
             return novels
 
         target_count = max(2, min(len(self.known_entities), 8))
         known_set = set(self.known_entities)
-        generated: List[str] = []
+        generated: list[str] = []
         attempts = 0
         max_attempts = target_count * 10
 
@@ -292,7 +293,7 @@ class SetFitDetector:
         return generated
 
     def _encode_texts(
-        self, texts: List[str], show_progress_bar: Optional[bool] = None
+        self, texts: list[str], show_progress_bar: bool | None = None
     ) -> np.ndarray:
         if self.model is None:
             raise RuntimeError("Model not initialized")

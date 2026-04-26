@@ -1,12 +1,13 @@
 """Hybrid matching pipeline with blocking, retrieval, and reranking."""
 
-import os
-from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, Any, List, Optional
+from typing import Any
 
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+
+from .blocking import BlockingStrategy, NoOpBlocking
 from .matcher import EmbeddingMatcher
 from .reranker import CrossEncoderReranker
-from .blocking import BlockingStrategy, NoOpBlocking
 
 
 class HybridMatcher:
@@ -42,8 +43,8 @@ class HybridMatcher:
 
     def __init__(
         self,
-        entities: List[Dict[str, Any]],
-        blocking_strategy: Optional[BlockingStrategy] = None,
+        entities: list[dict[str, Any]],
+        blocking_strategy: BlockingStrategy | None = None,
         retriever_model: str = "BAAI/bge-base-en-v1.5",
         reranker_model: str = "BAAI/bge-reranker-v2-m3",
         normalize: bool = True,
@@ -78,7 +79,7 @@ class HybridMatcher:
         blocking_top_k: int = 1000,
         retrieval_top_k: int = 50,
         final_top_k: int = 5,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Match query using three-stage waterfall pipeline.
 
@@ -126,51 +127,105 @@ class HybridMatcher:
 
     def match_bulk(
         self,
-        queries: List[str],
+        queries: list[str],
         blocking_top_k: int = 1000,
         retrieval_top_k: int = 50,
         final_top_k: int = 5,
         n_jobs: int = -1,
-        chunk_size: Optional[int] = None,
-    ) -> List[List[Dict[str, Any]]]:
+        chunk_size: int | None = None,
+    ) -> list[list[dict[str, Any]]]:
         """
         Batch matching for multiple queries.
+
+        Batches bi-encoder encoding across all queries (single model.encode call
+        instead of one per query), then computes per-query similarity against
+        blocked candidates.
 
         Args:
             queries: List of search queries
             blocking_top_k: Number of candidates after blocking stage
             retrieval_top_k: Number of candidates after retrieval stage
             final_top_k: Number of final results after reranking
-            n_jobs: Number of parallel workers. -1 = use all CPU cores, 1 = sequential.
-            chunk_size: Number of queries per chunk when using parallel processing.
+            n_jobs: Ignored (kept for backwards compatibility).
+            chunk_size: Ignored (kept for backwards compatibility).
 
         Returns:
             List of matched entity lists (one per query)
         """
-        if n_jobs == 1 or len(queries) == 0:
-            return [
-                self.match(q, blocking_top_k, retrieval_top_k, final_top_k)
-                for q in queries
+        if not queries:
+            return []
+
+        # Stage 1: Blocking - per-query lexical filtering
+        all_candidates: list[list[dict[str, Any]]] = []
+        for query in queries:
+            candidates = self.blocker.block(
+                query, self.retriever.entities, top_k=blocking_top_k
+            )
+            all_candidates.append(candidates or [])
+
+        # Stage 2: Bi-Encoder Retrieval - batched encoding
+        query_embeddings = self.retriever.model.encode(queries)
+        if isinstance(query_embeddings, list):
+            query_embeddings = np.array(query_embeddings)
+
+        entity_lookup = {e["id"]: e for e in self.retriever.entities}
+        all_retrieved: list[list[dict[str, Any]]] = []
+
+        for i in range(len(queries)):
+            candidates = all_candidates[i]
+            if not candidates:
+                all_retrieved.append([])
+                continue
+
+            candidate_ids = {c["id"] for c in candidates}
+            candidate_indices = [
+                j
+                for j, eid in enumerate(self.retriever.entity_ids)
+                if eid in candidate_ids
             ]
+            if not candidate_indices:
+                all_retrieved.append([])
+                continue
 
-        # Determine number of workers
-        if n_jobs <= 0:
-            num_workers = os.cpu_count() or 1
-        else:
-            num_workers = n_jobs
+            candidate_embeddings = self.retriever.embeddings[candidate_indices]
+            query_emb = query_embeddings[i : i + 1]
+            similarities = cosine_similarity(query_emb, candidate_embeddings)[0]
 
-        # Determine chunk size
-        if chunk_size is None:
-            chunk_size = max(1, len(queries) // (num_workers * 4))
-
-        # Process in parallel using ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=num_workers) as executor:
-            futures = [
-                executor.submit(
-                    self.match, q, blocking_top_k, retrieval_top_k, final_top_k
+            sorted_indices = np.argsort(similarities)[::-1]
+            seen_ids: set[str] = set()
+            retrieved: list[dict[str, Any]] = []
+            for idx in sorted_indices:
+                score = similarities[idx]
+                if score < self.retriever.threshold:
+                    continue
+                entity_id = self.retriever.entity_ids[candidate_indices[idx]]
+                if entity_id in seen_ids:
+                    continue
+                seen_ids.add(entity_id)
+                entity = entity_lookup.get(entity_id, {})
+                retrieved.append(
+                    {
+                        "id": entity_id,
+                        "score": float(score),
+                        "text": entity.get(
+                            "name",
+                            self.retriever.entity_texts[candidate_indices[idx]],
+                        ),
+                    }
                 )
-                for q in queries
-            ]
-            results = [future.result() for future in futures]
+                if len(retrieved) >= retrieval_top_k:
+                    break
+
+            all_retrieved.append(retrieved)
+
+        # Stage 3: Cross-Encoder Reranking - per-query
+        results: list[list[dict[str, Any]]] = []
+        for query, retrieved in zip(queries, all_retrieved, strict=True):
+            if not retrieved:
+                results.append([])
+            else:
+                results.append(
+                    self.reranker.rerank(query, retrieved, top_k=final_top_k)
+                )
 
         return results

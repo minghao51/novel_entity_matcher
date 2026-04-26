@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Tuple
+from typing import Any
 
 import numpy as np
 from sklearn.metrics import pairwise_distances
 
 from ...utils.logging_config import get_logger
-
 from .base import ClusteringBackend
 
 logger = get_logger(__name__)
@@ -17,7 +16,7 @@ logger = get_logger(__name__)
 class ClusteringBackendRegistry:
     """Registry for clustering backends."""
 
-    _backends: Dict[str, type] = {}
+    _backends: dict[str, type] = {}
 
     @classmethod
     def register(cls, backend_cls: type) -> type:
@@ -63,7 +62,7 @@ class HDBSCANBackend(ClusteringBackend):
         embeddings: np.ndarray,
         min_cluster_size: int = 5,
         **kwargs: Any,
-    ) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
+    ) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
         try:
             import hdbscan
         except ImportError:
@@ -85,7 +84,7 @@ class HDBSCANBackend(ClusteringBackend):
         probabilities = getattr(self._clusterer, "probabilities_", np.ones(len(labels)))
         persistences = getattr(self._clusterer, "cluster_persistence_", [])
 
-        info: Dict[str, Any] = {
+        info: dict[str, Any] = {
             "backend": self.name,
             "persistences": persistences,
             "n_clusters": len(set(labels)) - (1 if -1 in labels else 0),
@@ -123,7 +122,7 @@ class SOPTICSBackend(ClusteringBackend):
         embeddings: np.ndarray,
         min_cluster_size: int = 5,
         **kwargs: Any,
-    ) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
+    ) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
         distance_matrix = self._compute_distances(embeddings)
         n = distance_matrix.shape[0]
 
@@ -203,7 +202,7 @@ class SOPTICSBackend(ClusteringBackend):
             f"sOPTICS: found {cluster_id} clusters, {np.sum(labels == -1)} noise points"
         )
 
-        info: Dict[str, Any] = {
+        info: dict[str, Any] = {
             "backend": self.name,
             "persistences": np.ones(cluster_id),
             "n_clusters": cluster_id,
@@ -251,7 +250,7 @@ class UMAPHDBSCANBackend(ClusteringBackend):
         embeddings: np.ndarray,
         min_cluster_size: int = 5,
         **kwargs: Any,
-    ) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
+    ) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
         try:
             import umap
         except ImportError:
@@ -296,7 +295,7 @@ class UMAPHDBSCANBackend(ClusteringBackend):
         probabilities = getattr(self._clusterer, "probabilities_", np.ones(len(labels)))
         persistences = getattr(self._clusterer, "cluster_persistence_", [])
 
-        info: Dict[str, Any] = {
+        info: dict[str, Any] = {
             "backend": self.name,
             "persistences": persistences,
             "n_clusters": len(set(labels)) - (1 if -1 in labels else 0),

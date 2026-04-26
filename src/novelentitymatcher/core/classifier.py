@@ -1,18 +1,17 @@
-from typing import Optional, Union, List, Any
 import tempfile
+from typing import Any
 
 import numpy as np
 from datasets import Dataset
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics.pairwise import cosine_similarity
 
 from ..exceptions import TrainingError
-from ..utils.logging_config import get_logger, suppress_third_party_loggers
 from ..utils.embeddings import (
     get_cached_sentence_transformer,
     get_cached_setfit_model,
 )
-
-from sklearn.linear_model import LogisticRegression
+from ..utils.logging_config import get_logger, suppress_third_party_loggers
 
 
 def _load_setfit_model_class():
@@ -40,14 +39,14 @@ class SetFitClassifier:
 
     def __init__(
         self,
-        labels: List[str],
+        labels: list[str],
         model_name: str = "sentence-transformers/paraphrase-mpnet-base-v2",
         num_epochs: int = 4,
         batch_size: int = 16,
         weight_decay: float = 0.01,
         head_c: float = 1.0,
         num_iterations: int = 5,
-        pca_dims: Optional[int] = None,
+        pca_dims: int | None = None,
         skip_body_training: bool = False,
     ):
         self.labels = labels
@@ -59,19 +58,19 @@ class SetFitClassifier:
         self.num_iterations = num_iterations
         self.pca_dims = pca_dims
         self.skip_body_training = skip_body_training
-        self.model: Optional[Any] = None
-        self.model_head: Optional[LogisticRegression] = None
+        self.model: Any | None = None
+        self.model_head: LogisticRegression | None = None
         self.class_centroids: dict[str, np.ndarray] = {}
-        self.pca: Optional[Any] = None
+        self.pca: Any | None = None
         self.is_trained = False
         self.logger = get_logger(__name__)
         self._use_sentence_transformer_fallback = False
 
     def train(
         self,
-        training_data: List[dict],
-        num_epochs: Optional[int] = None,
-        batch_size: Optional[int] = None,
+        training_data: list[dict],
+        num_epochs: int | None = None,
+        batch_size: int | None = None,
         show_progress: bool = True,
     ):
         """Train the classifier.
@@ -157,7 +156,7 @@ class SetFitClassifier:
         self,
         embeddings: np.ndarray,
         labels_arr: np.ndarray,
-        training_data: List[dict],
+        training_data: list[dict],
     ) -> None:
         embeddings = np.asarray(embeddings)
         if self.pca_dims:
@@ -183,7 +182,7 @@ class SetFitClassifier:
         self,
         embeddings: np.ndarray,
         labels_arr: np.ndarray,
-        training_data: List[dict],
+        training_data: list[dict],
     ) -> None:
         embeddings = np.asarray(embeddings)
         if self.pca_dims:
@@ -205,7 +204,7 @@ class SetFitClassifier:
         else:
             self.model.model_head = model_head  # type: ignore[union-attr]
 
-    def predict(self, texts: Union[str, List[str]]) -> Union[str, List[str]]:
+    def predict(self, texts: str | list[str]) -> str | list[str]:
         if not self.is_trained or self.model is None:
             raise TrainingError(
                 "Model not trained. Call train() first.",
@@ -279,8 +278,9 @@ class SetFitClassifier:
                 details={"model_name": self.model_name},
             )
         if self._use_sentence_transformer_fallback:
-            from pathlib import Path
             import json
+            from pathlib import Path
+
             import joblib
 
             output_dir = Path(path)
@@ -318,15 +318,15 @@ class SetFitClassifier:
 
     @classmethod
     def load(cls, path: str) -> "SetFitClassifier":
-        from pathlib import Path
         import json
+        from pathlib import Path
 
         model_path = Path(path)
         fallback_metadata = model_path / "fallback_metadata.json"
         if fallback_metadata.exists():
             import joblib
 
-            with open(fallback_metadata, "r", encoding="utf-8") as f:
+            with open(fallback_metadata, encoding="utf-8") as f:
                 metadata = json.load(f)
 
             clf = cls(

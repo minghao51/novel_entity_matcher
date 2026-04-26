@@ -7,8 +7,8 @@ import json
 import sys
 from pathlib import Path
 
-from .storage.review import ProposalReviewManager
 from ..utils.logging_config import get_logger
+from .storage.review import ProposalReviewManager
 
 logger = get_logger(__name__)
 

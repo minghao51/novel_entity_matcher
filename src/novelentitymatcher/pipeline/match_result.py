@@ -4,8 +4,9 @@ Stable matcher metadata contracts used by novelty and pipeline internals.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any
 
 import numpy as np
 
@@ -18,12 +19,12 @@ class MatchRecord:
     predicted_id: str
     confidence: float
     embedding: np.ndarray
-    candidates: List[Any] = field(default_factory=list)
+    candidates: list[Any] = field(default_factory=list)
     raw_result: Any = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    match_method: Optional[str] = None
-    reference_embedding: Optional[np.ndarray] = None
-    distance: Optional[float] = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    match_method: str | None = None
+    reference_embedding: np.ndarray | None = None
+    distance: float | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.embedding, np.ndarray):
@@ -44,13 +45,13 @@ class MatchResultWithMetadata:
     contract for novelty and pipeline stages.
     """
 
-    predictions: List[str]
+    predictions: list[str]
     confidences: np.ndarray
     embeddings: np.ndarray
-    scores: Optional[np.ndarray] = None
-    metadata: Optional[Dict[str, Any]] = None
-    candidate_results: List[List[Any]] = field(default_factory=list)
-    records: List[MatchRecord] = field(default_factory=list)
+    scores: np.ndarray | None = None
+    metadata: dict[str, Any] | None = None
+    candidate_results: list[list[Any]] = field(default_factory=list)
+    records: list[MatchRecord] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not isinstance(self.confidences, np.ndarray):
@@ -85,7 +86,7 @@ class MatchResultWithMetadata:
     def num_samples(self) -> int:
         return len(self.predictions)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "predictions": self.predictions,
             "confidences": self.confidences.tolist(),
@@ -115,7 +116,7 @@ class MatchResultWithMetadata:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "MatchResultWithMetadata":
+    def from_dict(cls, data: dict[str, Any]) -> MatchResultWithMetadata:
         return cls(
             predictions=data["predictions"],
             confidences=np.array(data["confidences"]),
@@ -147,7 +148,7 @@ class MatchResultWithMetadata:
 
 def normalize_candidate_results(
     raw_match_results: Any, num_queries: int
-) -> List[List[Any]]:
+) -> list[list[Any]]:
     """Normalize raw matcher outputs into a stable list-of-lists shape."""
     if raw_match_results is None:
         return [[] for _ in range(num_queries)]
@@ -166,7 +167,7 @@ def normalize_candidate_results(
         return [[raw_match_results] if raw_match_results is not None else []]
 
     if isinstance(raw_match_results, list):
-        normalized: List[List[Any]] = []
+        normalized: list[list[Any]] = []
         for result in raw_match_results:
             if result is None:
                 normalized.append([])
@@ -185,11 +186,11 @@ def build_match_records(
     confidences: np.ndarray,
     embeddings: np.ndarray,
     candidate_results: Sequence[Sequence[Any]],
-    match_method: Optional[str] = None,
-    reference_embeddings: Optional[np.ndarray] = None,
-) -> List[MatchRecord]:
+    match_method: str | None = None,
+    reference_embeddings: np.ndarray | None = None,
+) -> list[MatchRecord]:
     """Build normalized per-query records for downstream pipeline stages."""
-    records: List[MatchRecord] = []
+    records: list[MatchRecord] = []
     for idx, prediction in enumerate(predictions):
         text = texts[idx] if idx < len(texts) else ""
         candidates = (
@@ -200,8 +201,8 @@ def build_match_records(
             if len(candidates) > 1
             else (candidates[0] if candidates else None)
         )
-        distance: Optional[float] = None
-        ref_emb: Optional[np.ndarray] = None
+        distance: float | None = None
+        ref_emb: np.ndarray | None = None
         if reference_embeddings is not None and idx < len(reference_embeddings):
             ref_emb = reference_embeddings[idx]
             if ref_emb is not None and idx < len(embeddings):
@@ -231,9 +232,9 @@ def build_match_result_with_metadata(
     confidences: np.ndarray,
     embeddings: np.ndarray,
     raw_match_results: Any,
-    metadata: Optional[Dict[str, Any]] = None,
-    scores: Optional[np.ndarray] = None,
-    match_method: Optional[str] = None,
+    metadata: dict[str, Any] | None = None,
+    scores: np.ndarray | None = None,
+    match_method: str | None = None,
 ) -> MatchResultWithMetadata:
     """Create a stable metadata result from matcher outputs."""
     candidate_results = normalize_candidate_results(raw_match_results, len(predictions))
@@ -267,7 +268,7 @@ def build_match_result_with_metadata(
 def convert_match_result_to_metadata(
     match_result: Any,
     embeddings: np.ndarray,
-    confidences: Optional[np.ndarray] = None,
+    confidences: np.ndarray | None = None,
 ) -> MatchResultWithMetadata:
     """
     Convert standard match result to metadata-enhanced result.

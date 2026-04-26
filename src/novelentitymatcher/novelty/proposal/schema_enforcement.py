@@ -7,7 +7,8 @@ Pydantic schemas, with structured error feedback for re-prompting.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional, Type
+from collections.abc import Callable
+from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
@@ -22,17 +23,15 @@ class ValidationResult:
     def __init__(
         self,
         is_valid: bool,
-        parsed: Optional[BaseModel] = None,
-        errors: Optional[List[Dict[str, Any]]] = None,
+        parsed: BaseModel | None = None,
+        errors: list[dict[str, Any]] | None = None,
     ):
         self.is_valid = is_valid
         self.parsed = parsed
         self.errors = errors or []
 
     def error_summary(self) -> str:
-        return "; ".join(
-            f"{e['field']}: {e['message']}" for e in self.errors
-        )
+        return "; ".join(f"{e['field']}: {e['message']}" for e in self.errors)
 
 
 class SchemaEnforcer:
@@ -47,12 +46,12 @@ class SchemaEnforcer:
     def __init__(
         self,
         max_retries: int = 2,
-        schema_model: Optional[Type[BaseModel]] = None,
+        schema_model: type[BaseModel] | None = None,
     ):
         self.max_retries = max_retries
         self.schema_model = schema_model
 
-    def validate(self, raw_output: Dict[str, Any]) -> ValidationResult:
+    def validate(self, raw_output: dict[str, Any]) -> ValidationResult:
         """Validate raw LLM output against the configured Pydantic schema.
 
         Args:
@@ -84,10 +83,10 @@ class SchemaEnforcer:
 
     def enforce(
         self,
-        raw_output: Dict[str, Any],
-        proposer_fn: Callable[[Optional[str]], Dict[str, Any]],
-        context: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        raw_output: dict[str, Any],
+        proposer_fn: Callable[[str | None], dict[str, Any]],
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Validate with retry loop. On failure, re-prompt with error feedback.
 
         Args:
@@ -122,15 +121,12 @@ class SchemaEnforcer:
         )
         return raw_output
 
-    def _build_feedback(
-        self, errors: List[Dict[str, Any]], attempt: int
-    ) -> str:
+    def _build_feedback(self, errors: list[dict[str, Any]], attempt: int) -> str:
         """Build structured error feedback for re-prompting."""
         error_lines = []
         for err in errors:
             error_lines.append(
-                f"  - Field '{err['field']}': {err['message']} "
-                f"(got: {err['input']})"
+                f"  - Field '{err['field']}': {err['message']} (got: {err['input']})"
             )
         return (
             f"VALIDATION ERRORS (retry {attempt}):\n"

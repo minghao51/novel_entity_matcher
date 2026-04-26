@@ -1,7 +1,7 @@
 """Ingestion script for IANA timezone data."""
 
-from typing import Any
 import json
+from typing import Any
 
 from .base import BaseFetcher, _fetch_url, resolve_output_dirs
 
@@ -24,7 +24,7 @@ class TimezonesFetcher(BaseFetcher):
             )
 
         data = []
-        with open(output_path, "r", encoding="utf-8") as f:
+        with open(output_path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith("#"):
@@ -89,7 +89,7 @@ class WorldTimeAPIFetcher(BaseFetcher):
                 max_bytes=5 * 1024 * 1024,
             )
 
-        with open(output_path, "r", encoding="utf-8") as f:
+        with open(output_path, encoding="utf-8") as f:
             timezones = json.load(f)
         return [{"timezone": tz} for tz in timezones]
 

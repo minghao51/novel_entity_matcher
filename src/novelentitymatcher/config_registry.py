@@ -1,5 +1,4 @@
-from typing import Any, Dict, Optional
-
+from typing import Any
 
 MODEL_SPECS = {
     "potion-8m": {
@@ -208,7 +207,7 @@ def resolve_model_alias(model_name: str) -> str:
     return MODEL_REGISTRY.get(model_name, model_name)  # type: ignore[return-value]
 
 
-def get_model_spec(model_name: str) -> Optional[Dict[str, Any]]:
+def get_model_spec(model_name: str) -> dict[str, Any] | None:
     if model_name == "default":
         model_name = RETRIEVAL_DEFAULT_MODEL
 

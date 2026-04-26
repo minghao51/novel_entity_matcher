@@ -5,18 +5,19 @@ Supports both benchmark and research evaluation modes with
 comprehensive metrics and reporting.
 """
 
-from typing import Dict, List, Optional, Literal
-import numpy as np
 from datetime import datetime
+from typing import Literal
 
+import numpy as np
+
+from ..schemas.reports import EvaluationReport
 from .metrics import (
-    compute_auroc,
     compute_auprc,
+    compute_auroc,
+    compute_confusion_matrix,
     compute_detection_rates,
     compute_precision_recall_f1,
-    compute_confusion_matrix,
 )
-from ..schemas.reports import EvaluationReport
 
 
 class NoveltyEvaluator:
@@ -36,7 +37,7 @@ class NoveltyEvaluator:
     def __init__(
         self,
         mode: Literal["benchmark", "research"] = "benchmark",
-        metrics: Optional[List[str]] = None,
+        metrics: list[str] | None = None,
     ):
         """
         Initialize the evaluator.
@@ -48,7 +49,7 @@ class NoveltyEvaluator:
         self.mode = mode
         self.metrics = metrics or self._default_metrics_for_mode(mode)
 
-    def _default_metrics_for_mode(self, mode: str) -> List[str]:
+    def _default_metrics_for_mode(self, mode: str) -> list[str]:
         """Get default metrics for evaluation mode."""
         if mode == "benchmark":
             return ["auroc", "auprc", "detection_rate_5"]
@@ -68,8 +69,8 @@ class NoveltyEvaluator:
         self,
         novelty_scores: np.ndarray,
         is_novel_true: np.ndarray,
-        threshold: Optional[float] = None,
-    ) -> Dict[str, float]:
+        threshold: float | None = None,
+    ) -> dict[str, float]:
         """
         Evaluate novelty detection performance.
 
@@ -128,7 +129,7 @@ class NoveltyEvaluator:
         self,
         novelty_scores: np.ndarray,
         is_novel_true: np.ndarray,
-        threshold: Optional[float] = None,
+        threshold: float | None = None,
     ) -> EvaluationReport:
         """
         Create a comprehensive evaluation report.
@@ -180,7 +181,7 @@ class NoveltyEvaluator:
         novelty_scores: np.ndarray,
         is_novel_true: np.ndarray,
         num_thresholds: int = 100,
-    ) -> Dict[str, np.ndarray]:
+    ) -> dict[str, np.ndarray]:
         """
         Sweep across thresholds and compute metrics at each.
 
@@ -201,8 +202,8 @@ class NoveltyEvaluator:
         self,
         novelty_scores: np.ndarray,
         is_novel_true: np.ndarray,
-        thresholds: List[float],
-    ) -> List[Dict[str, float]]:
+        thresholds: list[float],
+    ) -> list[dict[str, float]]:
         """
         Compare metrics at specific thresholds.
 

@@ -1,13 +1,13 @@
 from .evaluator import (
     NoveltyEvaluator,
-    sweep_knn_params,
-    find_optimal_knn_params,
     NoveltySample,
+    find_optimal_knn_params,
+    sweep_knn_params,
 )
 
 __all__ = [
     "NoveltyEvaluator",
-    "sweep_knn_params",
-    "find_optimal_knn_params",
     "NoveltySample",
+    "find_optimal_knn_params",
+    "sweep_knn_params",
 ]

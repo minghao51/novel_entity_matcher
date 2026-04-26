@@ -5,7 +5,8 @@ This module creates rich reports with sample metadata, strategy outputs,
 and novelty scores.
 """
 
-from typing import List, Dict, Set, Any
+from typing import Any
+
 import numpy as np
 
 from ..config.base import DetectionConfig
@@ -22,17 +23,16 @@ class MetadataBuilder:
 
     def __init__(self):
         """Initialize the metadata builder."""
-        pass
 
     def build_report(
         self,
-        texts: List[str],
+        texts: list[str],
         confidences: np.ndarray,
-        predicted_classes: List[str],
-        novel_indices: Set[int],
-        novelty_scores: Dict[int, float],
-        all_metrics: Dict[int, Dict[str, Any]],
-        strategy_outputs: Dict[str, tuple[Set[int], Dict]],
+        predicted_classes: list[str],
+        novel_indices: set[int],
+        novelty_scores: dict[int, float],
+        all_metrics: dict[int, dict[str, Any]],
+        strategy_outputs: dict[str, tuple[set[int], dict]],
         config: DetectionConfig,
     ) -> NovelSampleReport:
         """
@@ -51,8 +51,8 @@ class MetadataBuilder:
         Returns:
             NovelSampleReport with all detection results
         """
-        signal_counts: Dict[str, int] = {}
-        novel_samples: List[NovelSampleMetadata] = []
+        signal_counts: dict[str, int] = {}
+        novel_samples: list[NovelSampleMetadata] = []
 
         for strategy_id, (flags, _) in strategy_outputs.items():
             signal_counts[strategy_id] = len(flags)
@@ -90,7 +90,7 @@ class MetadataBuilder:
             signal_counts=signal_counts,
         )
 
-    def build_summary(self, report: NovelSampleReport) -> Dict[str, Any]:
+    def build_summary(self, report: NovelSampleReport) -> dict[str, Any]:
         """
         Build a summary of the detection report.
 

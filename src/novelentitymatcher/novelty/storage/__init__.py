@@ -5,15 +5,15 @@ This module contains persistence and indexing utilities
 for storing proposals and searching embeddings.
 """
 
-from .persistence import save_proposals, load_proposals, list_proposals
-from .review import ProposalReviewManager
 from .index import ANNBackend, ANNIndex
+from .persistence import list_proposals, load_proposals, save_proposals
+from .review import ProposalReviewManager
 
 __all__ = [
-    "save_proposals",
-    "load_proposals",
-    "list_proposals",
-    "ProposalReviewManager",
     "ANNBackend",
     "ANNIndex",
+    "ProposalReviewManager",
+    "list_proposals",
+    "load_proposals",
+    "save_proposals",
 ]

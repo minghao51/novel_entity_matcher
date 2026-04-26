@@ -6,7 +6,6 @@ Supports HNSWlib and FAISS backends for O(log n) similarity search.
 
 import json
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -52,7 +51,7 @@ class ANNIndex:
         self.backend = backend
         self.max_elements = max_elements
         self._index = None
-        self._labels: List[str] = []
+        self._labels: list[str] = []
         self._vectors = np.empty((0, dim), dtype=np.float32)
 
         if backend == ANNBackend.HNSWLIB:
@@ -97,9 +96,7 @@ class ANNIndex:
                 "Install with: pip install faiss-cpu"
             )
 
-    def add_vectors(
-        self, vectors: np.ndarray, labels: Optional[List[str]] = None
-    ) -> None:
+    def add_vectors(self, vectors: np.ndarray, labels: list[str] | None = None) -> None:
         """
         Add vectors to the index.
 
@@ -136,7 +133,7 @@ class ANNIndex:
             start = len(self._labels)
             self._labels.extend([str(i) for i in range(start, start + len(vectors))])
 
-    def knn_query(self, query: np.ndarray, k: int = 5) -> Tuple[np.ndarray, np.ndarray]:
+    def knn_query(self, query: np.ndarray, k: int = 5) -> tuple[np.ndarray, np.ndarray]:
         """
         Find k-nearest neighbors for query vector(s).
 
@@ -176,7 +173,7 @@ class ANNIndex:
         return top_similarities, top_indices
 
     def get_distance_matrix(
-        self, queries: np.ndarray, targets: Optional[np.ndarray] = None
+        self, queries: np.ndarray, targets: np.ndarray | None = None
     ) -> np.ndarray:
         """
         Get distance matrix between queries and all indexed vectors.
@@ -210,7 +207,7 @@ class ANNIndex:
         norms[norms == 0] = 1  # Avoid division by zero
         return vectors / norms
 
-    def save(self, path: Union[str, Path]) -> None:
+    def save(self, path: str | Path) -> None:
         """Save index to disk."""
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -234,7 +231,7 @@ class ANNIndex:
         )
         np.save(vectors_path, self._vectors)
 
-    def load(self, path: Union[str, Path]) -> None:
+    def load(self, path: str | Path) -> None:
         """Load index from disk."""
         path = Path(path)
         labels_path = path.with_suffix(".labels.json")
@@ -298,6 +295,6 @@ class ANNIndex:
             logger.info("Cleared exact ANN fallback index")
 
     @property
-    def labels(self) -> List[str]:
+    def labels(self) -> list[str]:
         """Return the labels stored alongside indexed vectors."""
         return list(self._labels)

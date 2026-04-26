@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 
 def _format_cell(value: Any) -> str:
@@ -21,7 +21,7 @@ def _format_cell(value: Any) -> str:
     return str(value)
 
 
-def _markdown_table(rows: List[dict], columns: List[str]) -> str:
+def _markdown_table(rows: list[dict], columns: list[str]) -> str:
     header = "| " + " | ".join(columns) + " |"
     divider = "|" + "|".join(["---"] * len(columns)) + "|"
     body = [
@@ -31,7 +31,7 @@ def _markdown_table(rows: List[dict], columns: List[str]) -> str:
     return "\n".join([header, divider, *body])
 
 
-def _render_model_benchmark(rows: List[dict]) -> str:
+def _render_model_benchmark(rows: list[dict]) -> str:
     sections = []
     by_section: dict[str, list[dict]] = {}
     for row in rows:
@@ -40,18 +40,37 @@ def _render_model_benchmark(rows: List[dict]) -> str:
     for section, section_rows in by_section.items():
         sections.append(f"## `{section}`")
         summary_columns = [
-            "track", "mode", "model", "status", "throughput_qps", "avg_latency",
-            "accuracy_split", "base_accuracy", "train_accuracy", "val_accuracy", "test_accuracy",
+            "track",
+            "mode",
+            "model",
+            "status",
+            "throughput_qps",
+            "avg_latency",
+            "accuracy_split",
+            "base_accuracy",
+            "train_accuracy",
+            "val_accuracy",
+            "test_accuracy",
         ]
-        summary_columns = [col for col in summary_columns if any(col in row for row in section_rows)]
+        summary_columns = [
+            col for col in summary_columns if any(col in row for row in section_rows)
+        ]
         sections.append(_markdown_table(section_rows, summary_columns))
 
         perturbation_columns = [
-            "model", "mode", "typo_accuracy", "remove_parenthetical_accuracy",
-            "ampersand_expanded_accuracy", "first_clause_accuracy",
+            "model",
+            "mode",
+            "typo_accuracy",
+            "remove_parenthetical_accuracy",
+            "ampersand_expanded_accuracy",
+            "first_clause_accuracy",
             "normalized_verbatim_accuracy",
         ]
-        perturbation_columns = [col for col in perturbation_columns if any(col in row for row in section_rows)]
+        perturbation_columns = [
+            col
+            for col in perturbation_columns
+            if any(col in row for row in section_rows)
+        ]
         if len(perturbation_columns) > 2:
             sections.append("")
             sections.append("Perturbation breakdown:")
@@ -60,7 +79,7 @@ def _render_model_benchmark(rows: List[dict]) -> str:
     return "\n\n".join(sections)
 
 
-def _render_speed_benchmark(rows: List[dict]) -> str:
+def _render_speed_benchmark(rows: list[dict]) -> str:
     sections = []
     by_section: dict[str, list[dict]] = {}
     for row in rows:
@@ -69,8 +88,16 @@ def _render_speed_benchmark(rows: List[dict]) -> str:
     for section, section_rows in by_section.items():
         sections.append(f"## `{section}`")
         columns = [
-            "mode", "route", "construct_seconds", "fit_seconds", "cold_query_seconds",
-            "match_seconds", "end_to_end_seconds", "qps", "avg_ms_per_query", "end_to_end_ms_per_query",
+            "mode",
+            "route",
+            "construct_seconds",
+            "fit_seconds",
+            "cold_query_seconds",
+            "match_seconds",
+            "end_to_end_seconds",
+            "qps",
+            "avg_ms_per_query",
+            "end_to_end_ms_per_query",
         ]
         columns = [col for col in columns if any(col in row for row in section_rows)]
         sections.append(_markdown_table(section_rows, columns))
@@ -78,7 +105,7 @@ def _render_speed_benchmark(rows: List[dict]) -> str:
     return "\n\n".join(sections)
 
 
-def render_json_to_markdown(rows: List[dict]) -> str:
+def render_json_to_markdown(rows: list[dict]) -> str:
     if not rows:
         return "No benchmark rows found."
     if "route" in rows[0]:
@@ -86,7 +113,7 @@ def render_json_to_markdown(rows: List[dict]) -> str:
     return _render_model_benchmark(rows)
 
 
-def load_json(path: str) -> Dict[str, Any]:
+def load_json(path: str) -> dict[str, Any]:
     with open(path) as f:
         return json.load(f)
 
@@ -108,14 +135,16 @@ def extract_embedding_data(results: Any) -> Any:
         if entry.get("status") == "ok":
             section = entry.get("section", "unknown").split("/")[-1]
             model = model_map.get(entry.get("model", ""), entry.get("model", ""))
-            rows.append({
-                "section": section,
-                "model": model,
-                "throughput_qps": entry.get("throughput_qps", 0),
-                "avg_latency_ms": entry.get("avg_latency", 0) * 1000,
-                "p95_latency_ms": entry.get("p95_latency", 0) * 1000,
-                "accuracy": entry.get("accuracy", 0),
-            })
+            rows.append(
+                {
+                    "section": section,
+                    "model": model,
+                    "throughput_qps": entry.get("throughput_qps", 0),
+                    "avg_latency_ms": entry.get("avg_latency", 0) * 1000,
+                    "p95_latency_ms": entry.get("p95_latency", 0) * 1000,
+                    "accuracy": entry.get("accuracy", 0),
+                }
+            )
     return pd.DataFrame(rows)
 
 
@@ -133,16 +162,18 @@ def extract_training_data(results: Any) -> Any:
         if entry.get("status") == "ok":
             section = entry.get("section", "unknown").split("/")[-1]
             model = model_map.get(entry.get("model", ""), entry.get("model", ""))
-            rows.append({
-                "section": section,
-                "mode": entry.get("mode", "unknown"),
-                "model": model,
-                "throughput_qps": entry.get("throughput_qps", 0),
-                "avg_latency_ms": entry.get("avg_latency", 0) * 1000,
-                "p95_latency_ms": entry.get("p95_latency", 0) * 1000,
-                "accuracy": entry.get("accuracy", 0),
-                "training_time_s": entry.get("training_time", 0),
-            })
+            rows.append(
+                {
+                    "section": section,
+                    "mode": entry.get("mode", "unknown"),
+                    "model": model,
+                    "throughput_qps": entry.get("throughput_qps", 0),
+                    "avg_latency_ms": entry.get("avg_latency", 0) * 1000,
+                    "p95_latency_ms": entry.get("p95_latency", 0) * 1000,
+                    "accuracy": entry.get("accuracy", 0),
+                    "training_time_s": entry.get("training_time", 0),
+                }
+            )
     return pd.DataFrame(rows)
 
 
@@ -164,14 +195,18 @@ def extract_bert_data(results: Any) -> Any:
                     if alias in model_name:
                         short_name = full
                         break
-                rows.append({
-                    "model": short_name,
-                    "training_time_s": metrics.get("training_time", 0),
-                    "memory_peak_mb": metrics.get("memory_peak_mb", 0),
-                    "inference_time_s": metrics.get("inference_time", 0),
-                    "throughput_samples_per_sec": metrics.get("throughput_samples_per_sec", 0),
-                    "accuracy": metrics.get("accuracy", 0),
-                })
+                rows.append(
+                    {
+                        "model": short_name,
+                        "training_time_s": metrics.get("training_time", 0),
+                        "memory_peak_mb": metrics.get("memory_peak_mb", 0),
+                        "inference_time_s": metrics.get("inference_time", 0),
+                        "throughput_samples_per_sec": metrics.get(
+                            "throughput_samples_per_sec", 0
+                        ),
+                        "accuracy": metrics.get("accuracy", 0),
+                    }
+                )
     return pd.DataFrame(rows)
 
 
@@ -203,11 +238,15 @@ def generate_charts(
         pivot_df.plot(kind="bar", ax=ax, rot=45, width=0.8)
         ax.set_xlabel("Dataset", fontsize=12, fontweight="bold")
         ax.set_ylabel("Throughput (QPS)", fontsize=12, fontweight="bold")
-        ax.set_title("Embedding Model Throughput Comparison", fontsize=14, fontweight="bold")
+        ax.set_title(
+            "Embedding Model Throughput Comparison", fontsize=14, fontweight="bold"
+        )
         ax.legend(title="Model", bbox_to_anchor=(1.05, 1), loc="upper left")
         ax.grid(axis="y", alpha=0.3)
         plt.tight_layout()
-        plt.savefig(output_dir / "embeddings_performance.png", dpi=150, bbox_inches="tight")
+        plt.savefig(
+            output_dir / "embeddings_performance.png", dpi=150, bbox_inches="tight"
+        )
         plt.close()
 
         fig, axes = plt.subplots(1, 2, figsize=(16, 6))
@@ -230,31 +269,62 @@ def generate_charts(
         plt.close()
 
     if not embedding_df.empty and not training_df.empty and not bert_df.empty:
-        fig, ax = plt.subplots(figsize=(16, 6))
+        _fig, ax = plt.subplots(figsize=(16, 6))
         data = []
         for model in embedding_df["model"].unique():
             subset = embedding_df[embedding_df["model"] == model]
-            data.append({"model": model, "route": "zero-shot", "accuracy": subset["accuracy"].mean() * 100})
+            data.append(
+                {
+                    "model": model,
+                    "route": "zero-shot",
+                    "accuracy": subset["accuracy"].mean() * 100,
+                }
+            )
         for mode in training_df["mode"].unique():
             for model in training_df[training_df["mode"] == mode]["model"].unique():
-                subset = training_df[(training_df["mode"] == mode) & (training_df["model"] == model)]
-                data.append({"model": model, "route": mode, "accuracy": subset["accuracy"].mean() * 100})
+                subset = training_df[
+                    (training_df["mode"] == mode) & (training_df["model"] == model)
+                ]
+                data.append(
+                    {
+                        "model": model,
+                        "route": mode,
+                        "accuracy": subset["accuracy"].mean() * 100,
+                    }
+                )
         for _, row in bert_df.iterrows():
-            data.append({"model": row["model"], "route": "bert", "accuracy": row["accuracy"] * 100})
+            data.append(
+                {
+                    "model": row["model"],
+                    "route": "bert",
+                    "accuracy": row["accuracy"] * 100,
+                }
+            )
 
         import pandas as pd
-        plot_df = pd.DataFrame(data).groupby(["model", "route"], as_index=False)["accuracy"].mean()
+
+        plot_df = (
+            pd.DataFrame(data)
+            .groupby(["model", "route"], as_index=False)["accuracy"]
+            .mean()
+        )
         pivot = plot_df.pivot(index="model", columns="route", values="accuracy")
         sort_col = "zero-shot" if "zero-shot" in pivot.columns else pivot.columns[0]
         pivot = pivot.sort_values(by=sort_col, ascending=False)
         pivot.plot(kind="bar", ax=ax, width=0.8)
         ax.set_xlabel("Model", fontsize=12, fontweight="bold")
         ax.set_ylabel("Top-1 Accuracy (%)", fontsize=12, fontweight="bold")
-        ax.set_title("Accuracy Comparison Across Routes and Models", fontsize=14, fontweight="bold")
+        ax.set_title(
+            "Accuracy Comparison Across Routes and Models",
+            fontsize=14,
+            fontweight="bold",
+        )
         ax.legend(title="Route", bbox_to_anchor=(1.05, 1), loc="upper left")
         ax.grid(axis="y", alpha=0.3)
         plt.tight_layout()
-        plt.savefig(output_dir / "accuracy_comparison.png", dpi=150, bbox_inches="tight")
+        plt.savefig(
+            output_dir / "accuracy_comparison.png", dpi=150, bbox_inches="tight"
+        )
         plt.close()
 
     print(f"Charts saved to {output_dir}")

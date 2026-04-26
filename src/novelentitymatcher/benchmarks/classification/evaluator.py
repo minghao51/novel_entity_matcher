@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import pandas as pd
 from sklearn.metrics import (
     accuracy_score,
     classification_report,
-    f1_score,
     confusion_matrix,
+    f1_score,
 )
 
 from ..base import BaseEvaluator, EvaluationResult
@@ -46,7 +46,7 @@ class ClassificationEvaluator(BaseEvaluator[pd.DataFrame]):
     ) -> EvaluationResult:
         if len(data) == 0:
             return EvaluationResult(
-                metrics={m: 0.0 for m in self.get_default_metrics()},
+                metrics=dict.fromkeys(self.get_default_metrics(), 0.0),
                 details={"error": "Empty dataset"},
             )
 
@@ -90,7 +90,7 @@ class ClassificationEvaluator(BaseEvaluator[pd.DataFrame]):
             zero_division=0,
         )
         per_class_f1_dict = {
-            str(label): float(f1) for label, f1 in zip(unique_labels, per_class_f1)
+            str(label): float(f1) for label, f1 in zip(unique_labels, per_class_f1, strict=False)
         }
 
         class_names = (

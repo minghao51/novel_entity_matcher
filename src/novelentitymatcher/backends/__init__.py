@@ -1,15 +1,15 @@
 from .base import EmbeddingBackend, RerankerBackend
+from .reranker_st import STReranker
 from .sentencetransformer import HFEmbedding, HFReranker
 from .static_embedding import StaticEmbeddingBackend
-from .reranker_st import STReranker
 
 __all__ = [
     "EmbeddingBackend",
-    "RerankerBackend",
     "HFEmbedding",
     "HFReranker",
-    "StaticEmbeddingBackend",
+    "RerankerBackend",
     "STReranker",
+    "StaticEmbeddingBackend",
     "get_embedding_backend",
     "get_reranker_backend",
 ]

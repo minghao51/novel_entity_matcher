@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable, Optional
+from typing import Any
 
 from ..config import (
     resolve_bert_model_alias,
@@ -24,7 +25,7 @@ class MatcherRuntimeState:
     bert_model_name: str
     threshold: float
     training_mode: str
-    detected_mode: Optional[str] = None
+    detected_mode: str | None = None
     has_training_data: bool = False
 
     @classmethod
@@ -33,8 +34,8 @@ class MatcherRuntimeState:
         *,
         model: str,
         threshold: float,
-        mode: Optional[str],
-    ) -> "MatcherRuntimeState":
+        mode: str | None,
+    ) -> MatcherRuntimeState:
         validated_threshold = validate_threshold(threshold)
         training_mode = cls._coerce_training_mode(mode)
         return cls(
@@ -47,7 +48,7 @@ class MatcherRuntimeState:
         )
 
     @staticmethod
-    def _coerce_training_mode(mode: Optional[str]) -> str:
+    def _coerce_training_mode(mode: str | None) -> str:
         if mode is None or mode == "auto":
             return "auto"
         if mode not in _VALID_TRAINING_MODES:

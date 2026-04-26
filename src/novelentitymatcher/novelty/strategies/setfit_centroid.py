@@ -10,13 +10,13 @@ as contrastive learning creates tight, well-separated class clusters.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 import numpy as np
 
-from .base import NoveltyStrategy
-from ..core.strategies import StrategyRegistry
 from ..config.strategies import SetFitCentroidConfig
+from ..core.strategies import StrategyRegistry
+from .base import NoveltyStrategy
 
 
 @StrategyRegistry.register
@@ -33,15 +33,15 @@ class SetFitCentroidStrategy(NoveltyStrategy):
 
     def __init__(self) -> None:
         self._config: SetFitCentroidConfig | None = None
-        self._centroids: Optional[np.ndarray] = None
-        self._class_labels: Optional[List[str]] = None
-        self._threshold: Optional[float] = None
-        self._setfit_model: Optional[Any] = None
+        self._centroids: np.ndarray | None = None
+        self._class_labels: list[str] | None = None
+        self._threshold: float | None = None
+        self._setfit_model: Any | None = None
 
     def initialize(
         self,
         reference_embeddings: np.ndarray,
-        reference_labels: List[str],
+        reference_labels: list[str],
         config: SetFitCentroidConfig,
     ) -> None:
         """
@@ -79,12 +79,12 @@ class SetFitCentroidStrategy(NoveltyStrategy):
 
     def detect(
         self,
-        texts: List[str],
+        texts: list[str],
         embeddings: np.ndarray,
-        predicted_classes: List[str],
+        predicted_classes: list[str],
         confidences: np.ndarray,
         **kwargs,
-    ) -> tuple[Set[int], Dict[int, Dict[str, Any]]]:
+    ) -> tuple[set[int], dict[int, dict[str, Any]]]:
         """
         Detect novel samples using centroid distance.
 
@@ -100,8 +100,8 @@ class SetFitCentroidStrategy(NoveltyStrategy):
         if self._centroids is None or self._threshold is None:
             return set(), {}
 
-        flags: Set[int] = set()
-        metrics: Dict[int, Dict[str, Any]] = {}
+        flags: set[int] = set()
+        metrics: dict[int, dict[str, Any]] = {}
 
         # Normalize embeddings for cosine distance
         query_norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
@@ -162,7 +162,7 @@ class SetFitCentroidStrategy(NoveltyStrategy):
     def _calibrate_threshold(
         self,
         reference_embeddings: np.ndarray,
-        reference_labels: List[str],
+        reference_labels: list[str],
     ) -> float:
         """
         Calibrate threshold using the reference set.

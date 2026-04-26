@@ -7,19 +7,19 @@ system that supports both use cases.
 
 from .evaluator import NoveltyEvaluator
 from .metrics import (
-    compute_auroc,
     compute_auprc,
+    compute_auroc,
     compute_detection_rates,
     compute_precision_recall_f1,
 )
-from .splitters import OODSplitter, GradualNoveltySplitter
+from .splitters import GradualNoveltySplitter, OODSplitter
 
 __all__ = [
+    "GradualNoveltySplitter",
     "NoveltyEvaluator",
-    "compute_auroc",
+    "OODSplitter",
     "compute_auprc",
+    "compute_auroc",
     "compute_detection_rates",
     "compute_precision_recall_f1",
-    "OODSplitter",
-    "GradualNoveltySplitter",
 ]

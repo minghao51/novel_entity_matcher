@@ -5,7 +5,6 @@ Provides functions for computing AUROC, AUPRC, detection rates,
 precision, recall, F1, and confusion matrices.
 """
 
-from typing import Dict, Optional, Tuple
 import numpy as np
 
 
@@ -57,8 +56,8 @@ def compute_auprc(scores: np.ndarray, labels: np.ndarray) -> float:
 def compute_detection_rates(
     scores: np.ndarray,
     labels: np.ndarray,
-    fpr_thresholds: Tuple[float, ...] = (0.01, 0.05, 0.10),
-) -> Dict[str, float]:
+    fpr_thresholds: tuple[float, ...] = (0.01, 0.05, 0.10),
+) -> dict[str, float]:
     """
     Compute detection rates at specific false positive rates.
 
@@ -92,8 +91,8 @@ def compute_detection_rates(
 def compute_precision_recall_f1(
     scores: np.ndarray,
     labels: np.ndarray,
-    threshold: Optional[float] = None,
-) -> Dict[str, float]:
+    threshold: float | None = None,
+) -> dict[str, float]:
     """
     Compute precision, recall, and F1 score.
 
@@ -169,7 +168,7 @@ def compute_confusion_matrix(
     scores: np.ndarray,
     labels: np.ndarray,
     threshold: float,
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """
     Compute confusion matrix components.
 
@@ -194,8 +193,8 @@ def compute_confusion_matrix(
 def sweep_thresholds(
     scores: np.ndarray,
     labels: np.ndarray,
-    thresholds: Optional[np.ndarray] = None,
-) -> Dict[str, np.ndarray]:
+    thresholds: np.ndarray | None = None,
+) -> dict[str, np.ndarray]:
     """
     Sweep across thresholds and compute metrics at each.
 

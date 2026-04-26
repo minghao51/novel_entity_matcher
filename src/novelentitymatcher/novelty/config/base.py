@@ -6,22 +6,23 @@ NoveltyDetector, containing strategy selection, per-strategy configs,
 and signal combination settings.
 """
 
-from typing import List, Optional, Any
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from .strategies import (
+    ClusteringConfig,
     ConfidenceConfig,
     KNNConfig,
-    UncertaintyConfig,
-    ClusteringConfig,
-    SelfKnowledgeConfig,
-    PatternConfig,
-    OneClassConfig,
-    PrototypicalConfig,
-    SetFitConfig,
-    SetFitCentroidConfig,
-    MahalanobisConfig,
     LOFConfig,
+    MahalanobisConfig,
+    OneClassConfig,
+    PatternConfig,
+    PrototypicalConfig,
+    SelfKnowledgeConfig,
+    SetFitCentroidConfig,
+    SetFitConfig,
+    UncertaintyConfig,
 )
 from .weights import WeightConfig
 
@@ -37,7 +38,7 @@ class DetectionConfig(BaseModel):
     model_config = ConfigDict(validate_assignment=True, arbitrary_types_allowed=True)
 
     # Strategy selection
-    strategies: List[str] = Field(
+    strategies: list[str] = Field(
         default_factory=lambda: ["confidence", "knn_distance", "setfit_centroid"]
     )
     """
@@ -69,44 +70,44 @@ class DetectionConfig(BaseModel):
     """
 
     # Strategy-specific configurations
-    confidence: Optional[ConfidenceConfig] = None
+    confidence: ConfidenceConfig | None = None
     """Configuration for confidence strategy."""
 
-    knn_distance: Optional[KNNConfig] = None
+    knn_distance: KNNConfig | None = None
     """Configuration for kNN distance strategy."""
 
-    uncertainty: Optional[UncertaintyConfig] = None
+    uncertainty: UncertaintyConfig | None = None
     """Configuration for uncertainty strategy."""
 
-    clustering: Optional[ClusteringConfig] = None
+    clustering: ClusteringConfig | None = None
     """Configuration for clustering strategy."""
 
-    self_knowledge: Optional[SelfKnowledgeConfig] = None
+    self_knowledge: SelfKnowledgeConfig | None = None
     """Configuration for self-knowledge strategy."""
 
-    pattern: Optional[PatternConfig] = None
+    pattern: PatternConfig | None = None
     """Configuration for pattern strategy."""
 
-    oneclass: Optional[OneClassConfig] = None
+    oneclass: OneClassConfig | None = None
     """Configuration for One-Class SVM strategy."""
 
-    prototypical: Optional[PrototypicalConfig] = None
+    prototypical: PrototypicalConfig | None = None
     """Configuration for prototypical strategy."""
 
-    setfit: Optional[SetFitConfig] = None
+    setfit: SetFitConfig | None = None
     """Configuration for SetFit strategy."""
 
-    setfit_centroid: Optional[SetFitCentroidConfig] = None
+    setfit_centroid: SetFitCentroidConfig | None = None
     """Configuration for SetFit centroid distance strategy."""
 
-    mahalanobis: Optional[MahalanobisConfig] = None
+    mahalanobis: MahalanobisConfig | None = None
     """Configuration for Mahalanobis distance strategy."""
 
-    lof: Optional[LOFConfig] = None
+    lof: LOFConfig | None = None
     """Configuration for Local Outlier Factor strategy."""
 
     # Signal combination weights
-    weights: Optional[WeightConfig] = None
+    weights: WeightConfig | None = None
     """Weights for signal combination."""
 
     # Global settings
@@ -119,7 +120,7 @@ class DetectionConfig(BaseModel):
     candidate_top_k: int = Field(default=5, ge=1)
     """How many matcher candidates to request when collecting metadata."""
 
-    allowed_maturities: List[str] = Field(
+    allowed_maturities: list[str] = Field(
         default_factory=lambda: ["production", "experimental", "internal"]
     )
     """Allowed strategy maturity levels. Strategies outside these levels are rejected during validation."""

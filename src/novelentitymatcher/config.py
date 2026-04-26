@@ -1,6 +1,7 @@
 import json
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional, Union
+from typing import Any, Union
 
 import yaml
 
@@ -44,6 +45,8 @@ __all__ = [
     "RETRIEVAL_DEFAULT_MODEL",
     "STATIC_MODEL_REGISTRY",
     "TRAINING_DEFAULT_MODEL",
+    # Local exports
+    "Config",
     "get_bert_model_aliases",
     "get_embedding_model_aliases",
     "get_model_spec",
@@ -57,8 +60,6 @@ __all__ = [
     "resolve_reranker_alias",
     "resolve_training_model_alias",
     "supports_training_model",
-    # Local exports
-    "Config",
 ]
 
 PathLike = Union[str, Path]
@@ -67,8 +68,8 @@ PathLike = Union[str, Path]
 class Config:
     """Configuration loader with optional custom override merging."""
 
-    def __init__(self, custom_path: Optional[PathLike] = None):
-        self._config: Dict[str, Any] = self._load_default_config()
+    def __init__(self, custom_path: PathLike | None = None):
+        self._config: dict[str, Any] = self._load_default_config()
         if custom_path:
             self._merge_custom_config(custom_path)
 
@@ -78,7 +79,7 @@ class Config:
         obj._config = dict(data)
         return obj
 
-    def _load_default_config(self) -> Dict[str, Any]:
+    def _load_default_config(self) -> dict[str, Any]:
         for path in self._default_config_candidates():
             if path is None or not path.exists():
                 continue
@@ -87,14 +88,14 @@ class Config:
                 return loaded
         return {}
 
-    def _default_config_candidates(self) -> list[Optional[Path]]:
+    def _default_config_candidates(self) -> list[Path | None]:
         return [
             self._find_repo_root_config(),
             self._package_default_config(),
             self._cwd_config(),
         ]
 
-    def _find_repo_root_config(self) -> Optional[Path]:
+    def _find_repo_root_config(self) -> Path | None:
         current = Path(__file__).resolve().parent
         repo_markers = (".git", "setup.py", "pyproject.toml")
 
@@ -105,7 +106,7 @@ class Config:
                     return config_path
         return None
 
-    def _package_default_config(self) -> Optional[Any]:
+    def _package_default_config(self) -> Any | None:
         try:
             from importlib import resources
 
@@ -115,17 +116,17 @@ class Config:
         except (ImportError, FileNotFoundError, ModuleNotFoundError, TypeError):
             return None
 
-    def _cwd_config(self) -> Optional[Path]:
+    def _cwd_config(self) -> Path | None:
         cwd_path = Path.cwd() / "config.yaml"
         return cwd_path if cwd_path.exists() else None
 
-    def _safe_load_file(self, path: Any) -> Optional[Dict[str, Any]]:
+    def _safe_load_file(self, path: Any) -> dict[str, Any] | None:
         try:
             return self._load_file(path)
         except (OSError, yaml.YAMLError, json.JSONDecodeError, ValueError):
             return None
 
-    def _load_file(self, path: Any) -> Dict[str, Any]:
+    def _load_file(self, path: Any) -> dict[str, Any]:
         if isinstance(path, (str, Path)):
             file_path = Path(path)
             text = file_path.read_text(encoding="utf-8")
@@ -152,7 +153,7 @@ class Config:
         custom_config = self._load_file(path)
         self._deep_update(self._config, custom_config)
 
-    def _deep_update(self, base: Dict[str, Any], update: Mapping[str, Any]):
+    def _deep_update(self, base: dict[str, Any], update: Mapping[str, Any]):
         for key, value in update.items():
             if (
                 key in base
@@ -181,5 +182,5 @@ class Config:
                 return default
         return value
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return dict(self._config)

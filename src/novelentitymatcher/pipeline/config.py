@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-
 
 _VALID_OOD_STRATEGIES = {
     "confidence",
@@ -36,7 +35,7 @@ class PipelineConfig(BaseModel):
 
     # --- OOD detection ---
     ood_enabled: bool = Field(default=True)
-    ood_strategies: List[str] = Field(
+    ood_strategies: list[str] = Field(
         default_factory=lambda: ["confidence", "knn_distance"]
     )
     confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
@@ -53,13 +52,13 @@ class PipelineConfig(BaseModel):
     min_cluster_size: int = Field(default=5, ge=1)
     similarity_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
     clustering_metric: Literal["cosine", "euclidean"] = Field(default="cosine")
-    clustering_min_samples: Optional[int] = Field(default=None, ge=1)
+    clustering_min_samples: int | None = Field(default=None, ge=1)
     clustering_cluster_selection_epsilon: float = Field(default=0.0, ge=0.0)
 
     # --- Evidence extraction ---
     evidence_enabled: bool = Field(default=True)
     evidence_method: Literal["tfidf", "centroid", "combined"] = Field(default="tfidf")
-    use_tfidf: Optional[bool] = Field(default=None)
+    use_tfidf: bool | None = Field(default=None)
     max_keywords: int = Field(default=8, ge=1)
     max_examples: int = Field(default=4, ge=1)
     token_budget: int = Field(default=256, ge=1)
@@ -71,8 +70,8 @@ class PipelineConfig(BaseModel):
     )
     proposal_schema_discovery: bool = Field(default=False)
     proposal_schema_max_attributes: int = Field(default=10, ge=1)
-    llm_provider: Optional[str] = Field(default=None)
-    llm_model: Optional[str] = Field(default=None)
+    llm_provider: str | None = Field(default=None)
+    llm_model: str | None = Field(default=None)
     max_retries: int = Field(default=2, ge=0)
     prefer_cluster_level: bool = Field(default=True)
     proposal_hierarchical: bool = Field(default=True)
@@ -89,7 +88,7 @@ class PipelineConfig(BaseModel):
 
     @field_validator("ood_strategies")
     @classmethod
-    def validate_ood_strategies(cls, v: List[str]) -> List[str]:
+    def validate_ood_strategies(cls, v: list[str]) -> list[str]:
         for strategy in v:
             if strategy not in _VALID_OOD_STRATEGIES:
                 raise ValueError(
@@ -111,17 +110,17 @@ class PipelineConfig(BaseModel):
     # --- Convenience methods ---
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "PipelineConfig":
+    def from_dict(cls, data: dict[str, Any]) -> PipelineConfig:
         """Construct a PipelineConfig from a plain dictionary."""
         return cls(**{k: v for k, v in data.items() if k in cls.model_fields})
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to a plain dictionary."""
         return self.model_dump()
 
-    def stages(self) -> List[str]:
+    def stages(self) -> list[str]:
         """Return an ordered list of enabled stage names."""
-        enabled: List[str] = []
+        enabled: list[str] = []
         if self.match_enabled:
             enabled.append("match")
         if self.ood_enabled:

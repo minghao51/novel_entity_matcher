@@ -13,18 +13,10 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import numpy as np
 
-from .core.detector import NoveltyDetector
-from .clustering.scalable import ScalableClusterer
-from .config.base import DetectionConfig
-from .config.strategies import ClusteringConfig, ConfidenceConfig, KNNConfig
-from .proposal.llm import LLMClassProposer
-from .schemas import NovelClassDiscoveryReport, NovelSampleMetadata, NovelSampleReport
-from .storage.persistence import export_summary, save_proposals
-from .storage.review import ProposalReviewManager
 from ..core.matcher import Matcher
 from ..pipeline.contracts import StageContext
 from ..pipeline.discovery_support import (
@@ -37,6 +29,14 @@ from ..pipeline.match_result import MatchResultWithMetadata
 from ..pipeline.orchestrator import PipelineOrchestrator
 from ..pipeline.pipeline_builder import PipelineBuilder, PipelineStageConfig
 from ..utils.logging_config import get_logger
+from .clustering.scalable import ScalableClusterer
+from .config.base import DetectionConfig
+from .config.strategies import ClusteringConfig, ConfidenceConfig, KNNConfig
+from .core.detector import NoveltyDetector
+from .proposal.llm import LLMClassProposer
+from .schemas import NovelClassDiscoveryReport, NovelSampleMetadata, NovelSampleReport
+from .storage.persistence import export_summary, save_proposals
+from .storage.review import ProposalReviewManager
 
 logger = get_logger(__name__)
 
@@ -72,19 +72,19 @@ class NovelEntityMatcher:
 
     def __init__(
         self,
-        entities: Optional[list[dict[str, Any]]] = None,
+        entities: list[dict[str, Any]] | None = None,
         *,
-        matcher: Optional[Matcher] = None,
+        matcher: Matcher | None = None,
         model: str = "potion-32m",
         mode: str = "zero-shot",
-        acceptance_threshold: Optional[float] = None,
-        detection_config: Optional[Union[DetectionConfig, Dict[str, Any]]] = None,
-        llm_provider: Optional[str] = None,
-        llm_model: Optional[str] = None,
-        llm_api_keys: Optional[Dict[str, str]] = None,
+        acceptance_threshold: float | None = None,
+        detection_config: DetectionConfig | dict[str, Any] | None = None,
+        llm_provider: str | None = None,
+        llm_model: str | None = None,
+        llm_api_keys: dict[str, str] | None = None,
         output_dir: str = "./proposals",
         auto_save: bool = True,
-        match_threshold: Optional[float] = None,
+        match_threshold: float | None = None,
         novelty_strategy: str = "confidence",
         confidence_threshold: float = 0.3,
         knn_k: int = 5,
@@ -149,7 +149,7 @@ class NovelEntityMatcher:
 
     @staticmethod
     def _coerce_detection_config(
-        detection_config: Optional[Union[DetectionConfig, Dict[str, Any]]],
+        detection_config: DetectionConfig | dict[str, Any] | None,
         novelty_strategy: str,
         confidence_threshold: float,
         knn_k: int,
@@ -184,11 +184,11 @@ class NovelEntityMatcher:
 
     def fit(
         self,
-        training_data: Optional[List[dict]] = None,
-        mode: Optional[str] = None,
+        training_data: list[dict] | None = None,
+        mode: str | None = None,
         show_progress: bool = True,
         **kwargs,
-    ) -> "NovelEntityMatcher":
+    ) -> NovelEntityMatcher:
         self.matcher.fit(
             training_data=training_data,
             mode=mode,
@@ -199,11 +199,11 @@ class NovelEntityMatcher:
 
     async def fit_async(
         self,
-        training_data: Optional[List[dict]] = None,
-        mode: Optional[str] = None,
+        training_data: list[dict] | None = None,
+        mode: str | None = None,
         show_progress: bool = True,
         **kwargs,
-    ) -> "NovelEntityMatcher":
+    ) -> NovelEntityMatcher:
         await self.matcher.fit_async(
             training_data=training_data,
             mode=mode,
@@ -212,7 +212,7 @@ class NovelEntityMatcher:
         )
         return self
 
-    def set_threshold(self, threshold: float) -> "NovelEntityMatcher":
+    def set_threshold(self, threshold: float) -> NovelEntityMatcher:
         self.acceptance_threshold = threshold
         self.matcher.set_threshold(threshold)
         return self
@@ -220,7 +220,7 @@ class NovelEntityMatcher:
     def adjust_threshold(self, new_threshold: float) -> None:
         self.set_threshold(new_threshold)
 
-    def get_reference_corpus(self) -> Dict[str, Any]:
+    def get_reference_corpus(self) -> dict[str, Any]:
         return self.matcher.get_reference_corpus()
 
     def set_novelty_detector(self, detector: NoveltyDetector | None) -> None:
@@ -242,8 +242,8 @@ class NovelEntityMatcher:
         }
 
     def _derive_existing_classes(
-        self, existing_classes: Optional[List[str]] = None
-    ) -> List[str]:
+        self, existing_classes: list[str] | None = None
+    ) -> list[str]:
         return derive_existing_classes(
             entities=self.entities,
             get_reference_corpus=self.get_reference_corpus,
@@ -251,8 +251,8 @@ class NovelEntityMatcher:
         )
 
     async def _collect_match_result_async(
-        self, queries: List[str]
-    ) -> tuple[MatchResultWithMetadata, Dict[str, Any]]:
+        self, queries: list[str]
+    ) -> tuple[MatchResultWithMetadata, dict[str, Any]]:
         return await collect_match_result_async(
             self.matcher,
             queries,
@@ -260,8 +260,8 @@ class NovelEntityMatcher:
         )
 
     def _collect_match_result_sync(
-        self, queries: List[str]
-    ) -> tuple[MatchResultWithMetadata, Dict[str, Any]]:
+        self, queries: list[str]
+    ) -> tuple[MatchResultWithMetadata, dict[str, Any]]:
         return collect_match_result_sync(
             self.matcher,
             queries,
@@ -271,8 +271,8 @@ class NovelEntityMatcher:
     def _build_orchestrator(
         self,
         *,
-        existing_classes: Optional[List[str]] = None,
-        context: Optional[str] = None,
+        existing_classes: list[str] | None = None,
+        context: str | None = None,
         run_llm_proposal: bool = True,
     ) -> PipelineOrchestrator:
         clustering_cfg = self.detection_config.clustering
@@ -332,7 +332,7 @@ class NovelEntityMatcher:
         self,
         text: str,
         return_alternatives: bool = False,
-        existing_classes: Optional[List[str]] = None,
+        existing_classes: list[str] | None = None,
     ) -> NovelEntityMatchResult:
         match_result, reference_corpus = self._collect_match_result_sync([text])
         return build_novel_match_result(
@@ -350,7 +350,7 @@ class NovelEntityMatcher:
         self,
         text: str,
         return_alternatives: bool = False,
-        existing_classes: Optional[List[str]] = None,
+        existing_classes: list[str] | None = None,
     ) -> NovelEntityMatchResult:
         match_result, reference_corpus = await self._collect_match_result_async([text])
         return build_novel_match_result(
@@ -368,7 +368,7 @@ class NovelEntityMatcher:
         self,
         texts: list[str],
         return_alternatives: bool = False,
-        existing_classes: Optional[List[str]] = None,
+        existing_classes: list[str] | None = None,
     ) -> list[NovelEntityMatchResult]:
         match_result, reference_corpus = self._collect_match_result_sync(texts)
         return [
@@ -399,9 +399,9 @@ class NovelEntityMatcher:
 
     async def discover_novel_classes(
         self,
-        queries: List[str],
-        existing_classes: Optional[List[str]] = None,
-        context: Optional[str] = None,
+        queries: list[str],
+        existing_classes: list[str] | None = None,
+        context: str | None = None,
         return_metadata: bool = True,
         run_llm_proposal: bool = True,
     ) -> NovelClassDiscoveryReport:
@@ -469,10 +469,10 @@ class NovelEntityMatcher:
 
     def batch_discover(
         self,
-        queries_batch: List[List[str]],
-        existing_classes: Optional[List[str]] = None,
-        context: Optional[str] = None,
-    ) -> List[NovelClassDiscoveryReport]:
+        queries_batch: list[list[str]],
+        existing_classes: list[str] | None = None,
+        context: str | None = None,
+    ) -> list[NovelClassDiscoveryReport]:
         async def run_all():
             tasks = [
                 self.discover_novel_classes(
@@ -494,7 +494,7 @@ class NovelEntityMatcher:
         except RuntimeError:
             return asyncio.run(run_all())
 
-    def _get_matcher_config(self) -> Dict[str, Any]:
+    def _get_matcher_config(self) -> dict[str, Any]:
         config = {
             "matcher_type": self.matcher.__class__.__name__,
         }
@@ -503,13 +503,13 @@ class NovelEntityMatcher:
         if hasattr(self.matcher, "threshold"):
             config["threshold"] = str(self.matcher.threshold)
         if hasattr(self.matcher, "_training_mode"):
-            config["mode"] = getattr(self.matcher, "_training_mode")
+            config["mode"] = self.matcher._training_mode
         return config
 
     def export_metrics(
         self,
         format: str = "json",
-        path: Optional[str] = None,
+        path: str | None = None,
     ) -> Path:
         """Export collected metrics to file.
 
@@ -533,7 +533,7 @@ class NovelEntityMatcher:
         if hasattr(self.matcher, "model_name"):
             metrics["model_name"] = str(self.matcher.model_name)
         if hasattr(self.matcher, "_training_mode"):
-            metrics["training_mode"] = getattr(self.matcher, "_training_mode")
+            metrics["training_mode"] = self.matcher._training_mode
 
         return export_pipeline_metrics(metrics=metrics, format=format, path=path)
 

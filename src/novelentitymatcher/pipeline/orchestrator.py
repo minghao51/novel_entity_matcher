@@ -5,7 +5,7 @@ Internal pipeline orchestrator.
 from __future__ import annotations
 
 import time
-from typing import Iterable, List
+from collections.abc import Iterable
 
 from .contracts import PipelineRunResult, PipelineStage, StageContext
 
@@ -14,7 +14,7 @@ class PipelineOrchestrator:
     """Runs an ordered list of internal stages against a shared context."""
 
     def __init__(self, stages: Iterable[PipelineStage]):
-        self.stages: List[PipelineStage] = list(stages)
+        self.stages: list[PipelineStage] = list(stages)
 
     def run(self, context: StageContext) -> PipelineRunResult:
         stage_results = []

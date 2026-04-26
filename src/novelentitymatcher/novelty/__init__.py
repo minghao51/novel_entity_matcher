@@ -12,42 +12,52 @@ The restructured module provides:
 """
 
 # Core detection
-from .core.detector import NoveltyDetector
-from .core.strategies import StrategyRegistry
-from .strategies.base import NoveltyStrategy
+# Clustering
+from .clustering.scalable import ScalableClusterer
+from .clustering.validation import ClusterValidator
 
 # Configuration
 from .config.base import DetectionConfig
 from .config.strategies import (
+    ClusteringConfig,
     ConfidenceConfig,
     KNNConfig,
-    ClusteringConfig,
-    SelfKnowledgeConfig,
-    PatternConfig,
-    OneClassConfig,
-    PrototypicalConfig,
-    SetFitConfig,
-    MahalanobisConfig,
     LOFConfig,
+    MahalanobisConfig,
+    OneClassConfig,
+    PatternConfig,
+    PrototypicalConfig,
+    SelfKnowledgeConfig,
     SetFitCentroidConfig,
+    SetFitConfig,
 )
 from .config.weights import WeightConfig
+from .core.detector import NoveltyDetector
+from .core.strategies import StrategyRegistry
 
 # Evaluation
 from .evaluation.evaluator import NoveltyEvaluator
 from .evaluation.metrics import (
-    compute_auroc,
     compute_auprc,
+    compute_auroc,
     compute_detection_rates,
     compute_precision_recall_f1,
 )
-from .evaluation.splitters import OODSplitter, GradualNoveltySplitter
+from .evaluation.splitters import GradualNoveltySplitter, OODSplitter
+
+# Extraction
+from .extraction import ClusterEvidenceExtractor
+
+# Proposers
+from .proposal.llm import LLMClassProposer
+from .proposal.retrieval import RetrievalAugmentedProposer
+from .proposal.schema_enforcement import SchemaEnforcer
 
 # Results and reports
 from .schemas import (
+    ClassProposal,
     ClusterEvidence,
     DiscoveryCluster,
-    ClassProposal,
     NovelClassAnalysis,
     NovelClassDiscoveryReport,
     NovelSampleMetadata,
@@ -55,85 +65,73 @@ from .schemas import (
     ProposalReviewRecord,
 )
 from .schemas.results import EvaluationReport
+from .storage.index import ANNBackend, ANNIndex
 
 # Storage and indexing
 from .storage.persistence import (
     export_summary,
-    save_proposals,
-    load_proposals,
     list_proposals,
+    load_proposals,
+    save_proposals,
 )
-from .storage.index import ANNBackend, ANNIndex
 from .storage.review import ProposalReviewManager
-
-# Clustering
-from .clustering.scalable import ScalableClusterer
-from .clustering.validation import ClusterValidator
-
-# Proposers
-from .proposal.llm import LLMClassProposer
-from .proposal.retrieval import RetrievalAugmentedProposer
-from .proposal.schema_enforcement import SchemaEnforcer
-
-# Extraction
-from .extraction import ClusterEvidenceExtractor
-
 from .strategies import _register_all
+from .strategies.base import NoveltyStrategy
 
 _register_all()
 
 __all__ = [
-    # Core
-    "NoveltyDetector",
-    "StrategyRegistry",
-    "NoveltyStrategy",
+    "ANNBackend",
+    "ANNIndex",
+    "ClassProposal",
+    "ClusterEvidence",
+    # Extraction
+    "ClusterEvidenceExtractor",
+    "ClusterValidator",
+    "ClusteringConfig",
+    "ConfidenceConfig",
     # Configuration
     "DetectionConfig",
-    "ConfidenceConfig",
-    "KNNConfig",
-    "ClusteringConfig",
-    "SelfKnowledgeConfig",
-    "PatternConfig",
-    "OneClassConfig",
-    "PrototypicalConfig",
-    "SetFitConfig",
-    "SetFitCentroidConfig",
-    "MahalanobisConfig",
-    "LOFConfig",
-    "WeightConfig",
-    # Evaluation
-    "NoveltyEvaluator",
-    "compute_auroc",
-    "compute_auprc",
-    "compute_detection_rates",
-    "compute_precision_recall_f1",
-    "OODSplitter",
+    "DiscoveryCluster",
+    "EvaluationReport",
     "GradualNoveltySplitter",
+    "KNNConfig",
+    # Proposers
+    "LLMClassProposer",
+    "LOFConfig",
+    "MahalanobisConfig",
+    "NovelClassAnalysis",
+    "NovelClassDiscoveryReport",
     # Results
     "NovelSampleMetadata",
     "NovelSampleReport",
-    "ClusterEvidence",
-    "DiscoveryCluster",
-    "ClassProposal",
-    "NovelClassAnalysis",
-    "NovelClassDiscoveryReport",
-    "ProposalReviewRecord",
-    "EvaluationReport",
-    # Storage
-    "save_proposals",
-    "load_proposals",
-    "list_proposals",
-    "export_summary",
+    # Core
+    "NoveltyDetector",
+    # Evaluation
+    "NoveltyEvaluator",
+    "NoveltyStrategy",
+    "OODSplitter",
+    "OneClassConfig",
+    "PatternConfig",
     "ProposalReviewManager",
-    "ANNBackend",
-    "ANNIndex",
+    "ProposalReviewRecord",
+    "PrototypicalConfig",
+    "RetrievalAugmentedProposer",
     # Clustering
     "ScalableClusterer",
-    "ClusterValidator",
-    # Proposers
-    "LLMClassProposer",
-    "RetrievalAugmentedProposer",
     "SchemaEnforcer",
-    # Extraction
-    "ClusterEvidenceExtractor",
+    "SelfKnowledgeConfig",
+    "SetFitCentroidConfig",
+    "SetFitConfig",
+    "StrategyRegistry",
+    "WeightConfig",
+    "compute_auprc",
+    "compute_auroc",
+    "compute_detection_rates",
+    "compute_precision_recall_f1",
+    "export_summary",
+    "list_proposals",
+    "load_proposals",
+    # Storage
+    "save_proposals",
 ]

@@ -4,7 +4,7 @@ Strategy-specific configuration classes.
 Each strategy has its own configuration with sensible defaults.
 """
 
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -194,7 +194,7 @@ class SetFitConfig(BaseModel):
 class SetFitCentroidConfig(BaseModel):
     """Configuration for SetFit centroid distance strategy."""
 
-    threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    threshold: float | None = Field(default=None, ge=0.0, le=1.0)
     """
     Cosine distance threshold for novelty detection.
     Samples with min centroid distance above this are flagged as novel.

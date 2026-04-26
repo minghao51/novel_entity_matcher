@@ -7,8 +7,6 @@ representation space using sparse autoencoder-learned directions.
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
-
 import numpy as np
 
 from ...utils.logging_config import get_logger
@@ -52,12 +50,12 @@ class SparseAutoencoder:
         self.decoder_activation = decoder_activation
         self.random_state = random_state
 
-        self.encoder_weights: Optional[np.ndarray] = None
-        self.encoder_bias: Optional[np.ndarray] = None
-        self.decoder_weights: Optional[np.ndarray] = None
-        self.decoder_bias: Optional[np.ndarray] = None
+        self.encoder_weights: np.ndarray | None = None
+        self.encoder_bias: np.ndarray | None = None
+        self.decoder_weights: np.ndarray | None = None
+        self.decoder_bias: np.ndarray | None = None
         self._is_fitted = False
-        self._input_dim: Optional[int] = None
+        self._input_dim: int | None = None
         self._sparsity_target = 0.1
 
     def _init_weights(self, input_dim: int) -> None:
@@ -107,7 +105,7 @@ class SparseAutoencoder:
         else:
             return np.ones_like(x)
 
-    def _encode(self, x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def _encode(self, x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Forward pass through encoder."""
         h_pre = np.dot(x, self.encoder_weights) + self.encoder_bias
         h = self._activate(h_pre, self.encoder_activation)
@@ -125,7 +123,7 @@ class SparseAutoencoder:
         batch_size: int = 256,
         learning_rate: float = 0.001,
         verbose: bool = False,
-    ) -> "SparseAutoencoder":
+    ) -> SparseAutoencoder:
         """
         Train autoencoder on known entity embeddings.
 
@@ -253,7 +251,7 @@ class SparseAutoencoder:
     def compute_knowledge_score(
         self,
         embeddings: np.ndarray,
-        normalizer: Optional[str] = "minmax",
+        normalizer: str | None = "minmax",
     ) -> np.ndarray:
         """
         Compute knowledge score (0-1, higher = more known).
@@ -326,7 +324,7 @@ class SparseAutoencoder:
         logger.info(f"SparseAE saved to {path}")
 
     @classmethod
-    def load(cls, path: str) -> "SparseAutoencoder":
+    def load(cls, path: str) -> SparseAutoencoder:
         """Load trained autoencoder from disk."""
         data = np.load(path, allow_pickle=False)
         instance = cls(
@@ -382,15 +380,15 @@ class SelfKnowledgeDetector:
         self.autoencoder_batch_size = autoencoder_batch_size
         self.normalization = normalization
 
-        self.autoencoder: Optional[SparseAutoencoder] = None
+        self.autoencoder: SparseAutoencoder | None = None
         self._is_fitted = False
-        self._reference_embeddings: Optional[np.ndarray] = None
+        self._reference_embeddings: np.ndarray | None = None
 
     def fit(
         self,
         known_embeddings: np.ndarray,
         verbose: bool = False,
-    ) -> "SelfKnowledgeDetector":
+    ) -> SelfKnowledgeDetector:
         """
         Train autoencoder on known embeddings.
 
@@ -418,9 +416,9 @@ class SelfKnowledgeDetector:
     def detect_novel_samples(
         self,
         embeddings: np.ndarray,
-        threshold: Optional[float] = None,
+        threshold: float | None = None,
         return_scores: bool = True,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         Detect novel samples based on knowledge scores.
 
@@ -491,8 +489,8 @@ class SelfKnowledgeDetector:
     def fit_transform(
         self,
         known_embeddings: np.ndarray,
-        query_embeddings: Optional[np.ndarray] = None,
-    ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+        query_embeddings: np.ndarray | None = None,
+    ) -> tuple[np.ndarray, np.ndarray | None]:
         """
         Fit on known embeddings and optionally score query embeddings.
 

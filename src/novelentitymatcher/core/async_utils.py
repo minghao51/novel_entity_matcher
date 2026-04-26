@@ -1,8 +1,9 @@
 import asyncio
-import os
-from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable, List, Optional
 import functools
+import os
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any
 
 
 class AsyncExecutor:
@@ -13,7 +14,7 @@ class AsyncExecutor:
     allowing async code to proceed without blocking the event loop.
     """
 
-    def __init__(self, max_workers: Optional[int] = None):
+    def __init__(self, max_workers: int | None = None):
         """
         Initialize the async executor.
 
@@ -23,7 +24,7 @@ class AsyncExecutor:
         """
         if max_workers is None:
             max_workers = min(32, (os.cpu_count() or 1) * 2)
-        self._executor: Optional[ThreadPoolExecutor] = ThreadPoolExecutor(
+        self._executor: ThreadPoolExecutor | None = ThreadPoolExecutor(
             max_workers=max_workers
         )
         self._is_shutdown = False
@@ -54,8 +55,8 @@ class AsyncExecutor:
         )
 
     async def run_in_thread_batch(
-        self, func: Callable, items: List[Any], batch_size: int = 32
-    ) -> List[Any]:
+        self, func: Callable, items: list[Any], batch_size: int = 32
+    ) -> list[Any]:
         """
         Run sync function on batches concurrently.
 

@@ -31,7 +31,6 @@ from .shared import (
     prepare_binary_labels,
 )
 
-
 DATASET_CONFIGS = {
     "ag_news": {
         "hf_path": "ag_news",
@@ -44,12 +43,34 @@ DATASET_CONFIGS = {
         "label_col": "labels",
         "text_col": "text",
         "classes": [
-            "admiration", "amusement", "anger", "annoyance", "approval",
-            "caring", "confusion", "curiosity", "desire", "disappointment",
-            "disapproval", "disgust", "embarrassment", "excitement", "fear",
-            "gratitude", "grief", "joy", "love", "nervousness",
-            "optimism", "pride", "realization", "relief", "remorse",
-            "sadness", "surprise", "neutral",
+            "admiration",
+            "amusement",
+            "anger",
+            "annoyance",
+            "approval",
+            "caring",
+            "confusion",
+            "curiosity",
+            "desire",
+            "disappointment",
+            "disapproval",
+            "disgust",
+            "embarrassment",
+            "excitement",
+            "fear",
+            "gratitude",
+            "grief",
+            "joy",
+            "love",
+            "nervousness",
+            "optimism",
+            "pride",
+            "realization",
+            "relief",
+            "remorse",
+            "sadness",
+            "surprise",
+            "neutral",
         ],
     },
 }
@@ -84,6 +105,7 @@ def load_and_split_data(
     random_seed: int = DEFAULT_RANDOM_SEED,
 ) -> SplitData:
     import random
+
     from datasets import load_dataset
     from sklearn.model_selection import train_test_split
 
@@ -92,14 +114,18 @@ def load_and_split_data(
 
     cfg = DATASET_CONFIGS.get(ds_name)
     if cfg is None:
-        raise ValueError(f"Unknown dataset: {ds_name}. Available: {list(DATASET_CONFIGS.keys())}")
+        raise ValueError(
+            f"Unknown dataset: {ds_name}. Available: {list(DATASET_CONFIGS.keys())}"
+        )
 
     ds = load_dataset(cfg["hf_path"])
     split_key = "test" if "test" in ds else "train"
     df = pd.DataFrame(ds[split_key])
 
     if ds_name == "go_emotions":
-        df = df[df[cfg["label_col"]].apply(lambda x: isinstance(x, list) and len(x) == 1)].copy()
+        df = df[
+            df[cfg["label_col"]].apply(lambda x: isinstance(x, list) and len(x) == 1)
+        ].copy()
         df[cfg["label_col"]] = df[cfg["label_col"]].apply(lambda x: int(x[0]))
 
     unique_labels = sorted(df[cfg["label_col"]].unique())
@@ -110,11 +136,19 @@ def load_and_split_data(
     known_df = df[df[cfg["label_col"]].isin(known_labels)]
     ood_df = df[df[cfg["label_col"]].isin(ood_labels)]
 
-    train_df, temp_known = train_test_split(known_df, test_size=0.4, random_state=random_seed)
-    val_df, test_known_df = train_test_split(temp_known, test_size=0.5, random_state=random_seed)
+    train_df, temp_known = train_test_split(
+        known_df, test_size=0.4, random_state=random_seed
+    )
+    val_df, test_known_df = train_test_split(
+        temp_known, test_size=0.5, random_state=random_seed
+    )
 
-    train_ood_df, temp_ood = train_test_split(ood_df, test_size=0.5, random_state=random_seed)
-    val_ood_df, test_ood_df = train_test_split(temp_ood, test_size=0.5, random_state=random_seed)
+    _train_ood_df, temp_ood = train_test_split(
+        ood_df, test_size=0.5, random_state=random_seed
+    )
+    val_ood_df, test_ood_df = train_test_split(
+        temp_ood, test_size=0.5, random_state=random_seed
+    )
 
     classes = cfg["classes"]
     text_col = cfg["text_col"]
@@ -128,11 +162,21 @@ def load_and_split_data(
     train_texts = train_df[text_col].head(max_train).tolist()
     train_labels = [str(x) for x in train_df[label_col].head(max_train).tolist()]
 
-    val_texts = val_df[text_col].head(max_val).tolist() + val_ood_df[text_col].head(max_val).tolist()
-    val_labels = [str(x) for x in val_df[label_col].head(max_val).tolist()] + ["__OOD__"] * min(len(val_ood_df), max_val)
+    val_texts = (
+        val_df[text_col].head(max_val).tolist()
+        + val_ood_df[text_col].head(max_val).tolist()
+    )
+    val_labels = [str(x) for x in val_df[label_col].head(max_val).tolist()] + [
+        "__OOD__"
+    ] * min(len(val_ood_df), max_val)
 
-    test_texts = test_known_df[text_col].head(max_test).tolist() + test_ood_df[text_col].head(max_test).tolist()
-    test_labels = [str(x) for x in test_known_df[label_col].head(max_test).tolist()] + ["__OOD__"] * min(len(test_ood_df), max_test)
+    test_texts = (
+        test_known_df[text_col].head(max_test).tolist()
+        + test_ood_df[text_col].head(max_test).tolist()
+    )
+    test_labels = [str(x) for x in test_known_df[label_col].head(max_test).tolist()] + [
+        "__OOD__"
+    ] * min(len(test_ood_df), max_test)
 
     known_class_names = [_resolve_label(lbl) for lbl in known_labels]
 
@@ -148,7 +192,9 @@ def load_and_split_data(
     )
 
 
-def _compute_knn_novelty(train_emb: np.ndarray, query_emb: np.ndarray, k: int = 5) -> np.ndarray:
+def _compute_knn_novelty(
+    train_emb: np.ndarray, query_emb: np.ndarray, k: int = 5
+) -> np.ndarray:
     from sklearn.metrics.pairwise import cosine_similarity
 
     sims = cosine_similarity(query_emb, train_emb)
@@ -194,7 +240,11 @@ def _build_strategy_outputs(
     train_emb: np.ndarray,
     train_labels: list[str],
 ) -> tuple[dict[str, tuple], dict[int, dict]]:
-    from ..novelty.config.strategies import ConfidenceConfig, KNNConfig, SetFitCentroidConfig
+    from ..novelty.config.strategies import (
+        ConfidenceConfig,
+        KNNConfig,
+        SetFitCentroidConfig,
+    )
     from ..novelty.strategies.confidence import ConfidenceStrategy
     from ..novelty.strategies.knn_distance import KNNDistanceStrategy
     from ..novelty.strategies.pattern_impl import PatternScorer
@@ -254,18 +304,35 @@ class NoveltyBenchmark:
     def encode_texts(self, texts: list[str]) -> np.ndarray:
         return self.model.encode(texts, show_progress_bar=False)
 
-    def _make_result(self, strategy: str, params: dict, val_m: dict, test_m: dict,
-                     train_time: float = 0.0, inference_time: float = 0.0) -> StrategyResult:
+    def _make_result(
+        self,
+        strategy: str,
+        params: dict,
+        val_m: dict,
+        test_m: dict,
+        train_time: float = 0.0,
+        inference_time: float = 0.0,
+    ) -> StrategyResult:
         return StrategyResult(
-            strategy=strategy, params=params,
-            train_time=train_time, inference_time=inference_time,
-            val_auroc=val_m["auroc"], val_auprc=val_m["auprc"],
-            val_dr_1fp=val_m["dr_1fp"], val_dr_5fp=val_m["dr_5fp"], val_dr_10fp=val_m["dr_10fp"],
-            test_auroc=test_m["auroc"], test_auprc=test_m["auprc"],
-            test_dr_1fp=test_m["dr_1fp"], test_dr_5fp=test_m["dr_5fp"], test_dr_10fp=test_m["dr_10fp"],
+            strategy=strategy,
+            params=params,
+            train_time=train_time,
+            inference_time=inference_time,
+            val_auroc=val_m["auroc"],
+            val_auprc=val_m["auprc"],
+            val_dr_1fp=val_m["dr_1fp"],
+            val_dr_5fp=val_m["dr_5fp"],
+            val_dr_10fp=val_m["dr_10fp"],
+            test_auroc=test_m["auroc"],
+            test_auprc=test_m["auprc"],
+            test_dr_1fp=test_m["dr_1fp"],
+            test_dr_5fp=test_m["dr_5fp"],
+            test_dr_10fp=test_m["dr_10fp"],
         )
 
-    def benchmark_knn(self, split: SplitData, k_values: list[int] | None = None) -> list[StrategyResult]:
+    def benchmark_knn(
+        self, split: SplitData, k_values: list[int] | None = None
+    ) -> list[StrategyResult]:
         if k_values is None:
             k_values = [3, 5, 10, 20, 30]
 
@@ -304,7 +371,9 @@ class NoveltyBenchmark:
         test_m = compute_ood_metrics(test_true, test_novelty)
         return [self._make_result("mahalanobis", {}, val_m, test_m)]
 
-    def benchmark_lof(self, split: SplitData, n_neighbors_list: list[int] | None = None) -> list[StrategyResult]:
+    def benchmark_lof(
+        self, split: SplitData, n_neighbors_list: list[int] | None = None
+    ) -> list[StrategyResult]:
         from sklearn.neighbors import LocalOutlierFactor
 
         if n_neighbors_list is None:
@@ -324,12 +393,16 @@ class NoveltyBenchmark:
                 test_scores = -lof.score_samples(test_emb)
                 val_m = compute_ood_metrics(val_true, val_scores)
                 test_m = compute_ood_metrics(test_true, test_scores)
-                results.append(self._make_result("lof", {"n_neighbors": n}, val_m, test_m))
+                results.append(
+                    self._make_result("lof", {"n_neighbors": n}, val_m, test_m)
+                )
             except (ValueError, RuntimeError):
                 pass
         return results
 
-    def benchmark_oneclass_svm(self, split: SplitData, nu_values: list[float] | None = None) -> list[StrategyResult]:
+    def benchmark_oneclass_svm(
+        self, split: SplitData, nu_values: list[float] | None = None
+    ) -> list[StrategyResult]:
         from sklearn.svm import OneClassSVM
 
         if nu_values is None:
@@ -352,7 +425,11 @@ class NoveltyBenchmark:
                 test_scores = -ocsvm.decision_function(test_emb)
                 val_m = compute_ood_metrics(val_true, val_scores)
                 test_m = compute_ood_metrics(test_true, test_scores)
-                results.append(self._make_result("oneclass_svm", {"nu": nu}, val_m, test_m, train_time=train_time))
+                results.append(
+                    self._make_result(
+                        "oneclass_svm", {"nu": nu}, val_m, test_m, train_time=train_time
+                    )
+                )
             except (ValueError, RuntimeError):
                 pass
         return results
@@ -369,7 +446,9 @@ class NoveltyBenchmark:
         results = []
         for n_est in [50, 100]:
             start = time.perf_counter()
-            iso = IsolationForest(n_estimators=n_est, contamination=0.1, random_state=42)
+            iso = IsolationForest(
+                n_estimators=n_est, contamination=0.1, random_state=42
+            )
             iso.fit(train_emb)
             train_time = time.perf_counter() - start
 
@@ -377,7 +456,15 @@ class NoveltyBenchmark:
             test_scores = -iso.score_samples(test_emb)
             val_m = compute_ood_metrics(val_true, val_scores)
             test_m = compute_ood_metrics(test_true, test_scores)
-            results.append(self._make_result("isolation_forest", {"n_estimators": n_est}, val_m, test_m, train_time=train_time))
+            results.append(
+                self._make_result(
+                    "isolation_forest",
+                    {"n_estimators": n_est},
+                    val_m,
+                    test_m,
+                    train_time=train_time,
+                )
+            )
         return results
 
     def benchmark_pattern(self, split: SplitData) -> list[StrategyResult]:
@@ -394,7 +481,9 @@ class NoveltyBenchmark:
         return [self._make_result("pattern", {}, val_m, test_m)]
 
     def benchmark_setfit_centroid(
-        self, split: SplitData, percentile_values: list[float] | None = None,
+        self,
+        split: SplitData,
+        percentile_values: list[float] | None = None,
     ) -> list[StrategyResult]:
         from ..novelty.config.strategies import SetFitCentroidConfig
         from ..novelty.strategies.setfit_centroid import SetFitCentroidStrategy
@@ -412,25 +501,40 @@ class NoveltyBenchmark:
             strategy.initialize(train_emb, split.train_labels, config)
 
             _, val_metrics = strategy.detect(
-                split.val_texts, val_emb,
+                split.val_texts,
+                val_emb,
                 ["unknown"] * len(split.val_texts),
                 np.ones(len(split.val_texts)) * 0.5,
             )
             _, test_metrics = strategy.detect(
-                split.test_texts, test_emb,
+                split.test_texts,
+                test_emb,
                 ["unknown"] * len(split.test_texts),
                 np.ones(len(split.test_texts)) * 0.5,
             )
 
-            val_novelty = np.array([val_metrics[i].get("setfit_centroid_novelty_score", 0.0) for i in range(len(split.val_texts))])
-            test_novelty = np.array([test_metrics[i].get("setfit_centroid_novelty_score", 0.0) for i in range(len(split.test_texts))])
+            val_novelty = np.array(
+                [
+                    val_metrics[i].get("setfit_centroid_novelty_score", 0.0)
+                    for i in range(len(split.val_texts))
+                ]
+            )
+            test_novelty = np.array(
+                [
+                    test_metrics[i].get("setfit_centroid_novelty_score", 0.0)
+                    for i in range(len(split.test_texts))
+                ]
+            )
             val_m = compute_ood_metrics(val_true, val_novelty)
             test_m = compute_ood_metrics(test_true, test_novelty)
-            results.append(self._make_result("setfit_centroid", {"percentile": pct}, val_m, test_m))
+            results.append(
+                self._make_result("setfit_centroid", {"percentile": pct}, val_m, test_m)
+            )
         return results
 
     def benchmark_uncertainty(
-        self, split: SplitData,
+        self,
+        split: SplitData,
         margin_thresholds: list[float] | None = None,
         entropy_thresholds: list[float] | None = None,
     ) -> list[StrategyResult]:
@@ -452,28 +556,52 @@ class NoveltyBenchmark:
 
         for margin_t in margins:
             for entropy_t in entropies:
-                config = UncertaintyConfig(margin_threshold=margin_t, entropy_threshold=entropy_t)
+                config = UncertaintyConfig(
+                    margin_threshold=margin_t, entropy_threshold=entropy_t
+                )
                 strategy = UncertaintyStrategy()
                 strategy.initialize(train_emb, split.train_labels, config)
 
                 _, val_metrics = strategy.detect(
-                    split.val_texts, val_emb, dummy_classes[:len(split.val_texts)], dummy_conf[:len(split.val_texts)],
+                    split.val_texts,
+                    val_emb,
+                    dummy_classes[: len(split.val_texts)],
+                    dummy_conf[: len(split.val_texts)],
                 )
                 _, test_metrics = strategy.detect(
-                    split.test_texts, test_emb, dummy_classes[:len(split.test_texts)], dummy_conf[:len(split.test_texts)],
+                    split.test_texts,
+                    test_emb,
+                    dummy_classes[: len(split.test_texts)],
+                    dummy_conf[: len(split.test_texts)],
                 )
 
-                val_novelty = np.array([val_metrics[i].get("uncertainty_score", 0.0) for i in range(len(split.val_texts))])
-                test_novelty = np.array([test_metrics[i].get("uncertainty_score", 0.0) for i in range(len(split.test_texts))])
+                val_novelty = np.array(
+                    [
+                        val_metrics[i].get("uncertainty_score", 0.0)
+                        for i in range(len(split.val_texts))
+                    ]
+                )
+                test_novelty = np.array(
+                    [
+                        test_metrics[i].get("uncertainty_score", 0.0)
+                        for i in range(len(split.test_texts))
+                    ]
+                )
                 val_m = compute_ood_metrics(val_true, val_novelty)
                 test_m = compute_ood_metrics(test_true, test_novelty)
-                results.append(self._make_result(
-                    "uncertainty", {"margin_threshold": margin_t, "entropy_threshold": entropy_t}, val_m, test_m,
-                ))
+                results.append(
+                    self._make_result(
+                        "uncertainty",
+                        {"margin_threshold": margin_t, "entropy_threshold": entropy_t},
+                        val_m,
+                        test_m,
+                    )
+                )
         return results
 
     def benchmark_self_knowledge(
-        self, split: SplitData,
+        self,
+        split: SplitData,
         hidden_dims: list[int] | None = None,
         epoch_values: list[int] | None = None,
     ) -> list[StrategyResult]:
@@ -504,25 +632,48 @@ class NoveltyBenchmark:
                     train_time = time.perf_counter() - start
 
                     _, val_metrics = strategy.detect(
-                        split.val_texts, val_emb, dummy_classes[:len(split.val_texts)], dummy_conf[:len(split.val_texts)],
+                        split.val_texts,
+                        val_emb,
+                        dummy_classes[: len(split.val_texts)],
+                        dummy_conf[: len(split.val_texts)],
                     )
                     _, test_metrics = strategy.detect(
-                        split.test_texts, test_emb, dummy_classes[:len(split.test_texts)], dummy_conf[:len(split.test_texts)],
+                        split.test_texts,
+                        test_emb,
+                        dummy_classes[: len(split.test_texts)],
+                        dummy_conf[: len(split.test_texts)],
                     )
 
-                    val_novelty = np.array([val_metrics[i].get("self_knowledge_novelty_score", 0.0) for i in range(len(split.val_texts))])
-                    test_novelty = np.array([test_metrics[i].get("self_knowledge_novelty_score", 0.0) for i in range(len(split.test_texts))])
+                    val_novelty = np.array(
+                        [
+                            val_metrics[i].get("self_knowledge_novelty_score", 0.0)
+                            for i in range(len(split.val_texts))
+                        ]
+                    )
+                    test_novelty = np.array(
+                        [
+                            test_metrics[i].get("self_knowledge_novelty_score", 0.0)
+                            for i in range(len(split.test_texts))
+                        ]
+                    )
                     val_m = compute_ood_metrics(val_true, val_novelty)
                     test_m = compute_ood_metrics(test_true, test_novelty)
-                    results.append(self._make_result(
-                        "self_knowledge", {"hidden_dim": hd, "epochs": ep}, val_m, test_m, train_time=train_time,
-                    ))
+                    results.append(
+                        self._make_result(
+                            "self_knowledge",
+                            {"hidden_dim": hd, "epochs": ep},
+                            val_m,
+                            test_m,
+                            train_time=train_time,
+                        )
+                    )
                 except (ValueError, RuntimeError) as e:
                     print(f"  self_knowledge hidden_dim={hd} epochs={ep} failed: {e}")
         return results
 
     def benchmark_prototypical(
-        self, split: SplitData,
+        self,
+        split: SplitData,
         distance_thresholds: list[float] | None = None,
     ) -> list[StrategyResult]:
         from ..novelty.config.strategies import PrototypicalConfig
@@ -539,7 +690,9 @@ class NoveltyBenchmark:
 
         for dt in thresholds:
             try:
-                config = PrototypicalConfig(distance_threshold=dt, model_name=self.model_name)
+                config = PrototypicalConfig(
+                    distance_threshold=dt, model_name=self.model_name
+                )
                 strategy = PrototypicalStrategy()
 
                 start = time.perf_counter()
@@ -547,29 +700,48 @@ class NoveltyBenchmark:
                 train_time = time.perf_counter() - start
 
                 _, val_metrics = strategy.detect(
-                    split.val_texts, val_emb,
+                    split.val_texts,
+                    val_emb,
                     ["unknown"] * len(split.val_texts),
                     np.ones(len(split.val_texts)) * 0.5,
                 )
                 _, test_metrics = strategy.detect(
-                    split.test_texts, test_emb,
+                    split.test_texts,
+                    test_emb,
                     ["unknown"] * len(split.test_texts),
                     np.ones(len(split.test_texts)) * 0.5,
                 )
 
-                val_novelty = np.array([val_metrics[i].get("prototypical_novelty_score", 0.0) for i in range(len(split.val_texts))])
-                test_novelty = np.array([test_metrics[i].get("prototypical_novelty_score", 0.0) for i in range(len(split.test_texts))])
+                val_novelty = np.array(
+                    [
+                        val_metrics[i].get("prototypical_novelty_score", 0.0)
+                        for i in range(len(split.val_texts))
+                    ]
+                )
+                test_novelty = np.array(
+                    [
+                        test_metrics[i].get("prototypical_novelty_score", 0.0)
+                        for i in range(len(split.test_texts))
+                    ]
+                )
                 val_m = compute_ood_metrics(val_true, val_novelty)
                 test_m = compute_ood_metrics(test_true, test_novelty)
-                results.append(self._make_result(
-                    "prototypical", {"distance_threshold": dt}, val_m, test_m, train_time=train_time,
-                ))
+                results.append(
+                    self._make_result(
+                        "prototypical",
+                        {"distance_threshold": dt},
+                        val_m,
+                        test_m,
+                        train_time=train_time,
+                    )
+                )
             except (ValueError, RuntimeError) as e:
                 print(f"  prototypical threshold={dt} failed: {e}")
         return results
 
     def benchmark_setfit(
-        self, split: SplitData,
+        self,
+        split: SplitData,
         margin_values: list[float] | None = None,
     ) -> list[StrategyResult]:
         from ..novelty.config.strategies import SetFitConfig
@@ -594,29 +766,48 @@ class NoveltyBenchmark:
                 train_time = time.perf_counter() - start
 
                 _, val_metrics = strategy.detect(
-                    split.val_texts, val_emb,
+                    split.val_texts,
+                    val_emb,
                     ["unknown"] * len(split.val_texts),
                     np.ones(len(split.val_texts)) * 0.5,
                 )
                 _, test_metrics = strategy.detect(
-                    split.test_texts, test_emb,
+                    split.test_texts,
+                    test_emb,
                     ["unknown"] * len(split.test_texts),
                     np.ones(len(split.test_texts)) * 0.5,
                 )
 
-                val_novelty = np.array([val_metrics[i].get("setfit_novelty_score", 0.0) for i in range(len(split.val_texts))])
-                test_novelty = np.array([test_metrics[i].get("setfit_novelty_score", 0.0) for i in range(len(split.test_texts))])
+                val_novelty = np.array(
+                    [
+                        val_metrics[i].get("setfit_novelty_score", 0.0)
+                        for i in range(len(split.val_texts))
+                    ]
+                )
+                test_novelty = np.array(
+                    [
+                        test_metrics[i].get("setfit_novelty_score", 0.0)
+                        for i in range(len(split.test_texts))
+                    ]
+                )
                 val_m = compute_ood_metrics(val_true, val_novelty)
                 test_m = compute_ood_metrics(test_true, test_novelty)
-                results.append(self._make_result(
-                    "setfit", {"margin": margin}, val_m, test_m, train_time=train_time,
-                ))
+                results.append(
+                    self._make_result(
+                        "setfit",
+                        {"margin": margin},
+                        val_m,
+                        test_m,
+                        train_time=train_time,
+                    )
+                )
             except (ValueError, RuntimeError) as e:
                 print(f"  setfit margin={margin} failed: {e}")
         return results
 
     def benchmark_mahalanobis_conformal(
-        self, split: SplitData,
+        self,
+        split: SplitData,
         calibration_methods: list[str] | None = None,
         alpha_values: list[float] | None = None,
     ) -> list[StrategyResult]:
@@ -648,33 +839,51 @@ class NoveltyBenchmark:
                     train_time = time.perf_counter() - start
 
                     _, val_metrics = strategy.detect(
-                        split.val_texts, val_emb,
+                        split.val_texts,
+                        val_emb,
                         ["unknown"] * len(split.val_texts),
                         np.ones(len(split.val_texts)) * 0.5,
                     )
                     _, test_metrics = strategy.detect(
-                        split.test_texts, test_emb,
+                        split.test_texts,
+                        test_emb,
                         ["unknown"] * len(split.test_texts),
                         np.ones(len(split.test_texts)) * 0.5,
                     )
 
-                    val_scores = np.array([
-                        val_metrics[i].get("p_value", val_metrics[i].get("mahalanobis_novelty_score", 0.0))
-                        for i in range(len(split.val_texts))
-                    ])
-                    test_scores = np.array([
-                        test_metrics[i].get("p_value", test_metrics[i].get("mahalanobis_novelty_score", 0.0))
-                        for i in range(len(split.test_texts))
-                    ])
+                    val_scores = np.array(
+                        [
+                            val_metrics[i].get(
+                                "p_value",
+                                val_metrics[i].get("mahalanobis_novelty_score", 0.0),
+                            )
+                            for i in range(len(split.val_texts))
+                        ]
+                    )
+                    test_scores = np.array(
+                        [
+                            test_metrics[i].get(
+                                "p_value",
+                                test_metrics[i].get("mahalanobis_novelty_score", 0.0),
+                            )
+                            for i in range(len(split.test_texts))
+                        ]
+                    )
                     val_m = compute_ood_metrics(val_true, val_scores)
                     test_m = compute_ood_metrics(test_true, test_scores)
-                    results.append(self._make_result(
-                        "mahalanobis_conformal",
-                        {"method": method, "alpha": alpha},
-                        val_m, test_m, train_time=train_time,
-                    ))
+                    results.append(
+                        self._make_result(
+                            "mahalanobis_conformal",
+                            {"method": method, "alpha": alpha},
+                            val_m,
+                            test_m,
+                            train_time=train_time,
+                        )
+                    )
                 except (ValueError, RuntimeError) as e:
-                    print(f"  mahalanobis_conformal method={method} alpha={alpha} failed: {e}")
+                    print(
+                        f"  mahalanobis_conformal method={method} alpha={alpha} failed: {e}"
+                    )
         return results
 
     def benchmark_ensemble(self, split: SplitData) -> list[StrategyResult]:
@@ -683,22 +892,41 @@ class NoveltyBenchmark:
         test_true = prepare_binary_labels(split.test_labels, "__OOD__")
 
         val_outputs, val_all_metrics = _build_strategy_outputs(
-            self.model, split.val_texts, split.train_texts, train_emb, split.train_labels
+            self.model,
+            split.val_texts,
+            split.train_texts,
+            train_emb,
+            split.train_labels,
         )
         test_outputs, test_all_metrics = _build_strategy_outputs(
-            self.model, split.test_texts, split.train_texts, train_emb, split.train_labels
+            self.model,
+            split.test_texts,
+            split.train_texts,
+            train_emb,
+            split.train_labels,
         )
 
         results = []
         for method in ["weighted", "voting"]:
-            val_m = _run_strategies_for_split(val_outputs, val_all_metrics, val_true, method)
-            test_m = _run_strategies_for_split(test_outputs, test_all_metrics, test_true, method)
-            results.append(self._make_result(f"ensemble_{method}", {"method": method}, val_m, test_m))
+            val_m = _run_strategies_for_split(
+                val_outputs, val_all_metrics, val_true, method
+            )
+            test_m = _run_strategies_for_split(
+                test_outputs, test_all_metrics, test_true, method
+            )
+            results.append(
+                self._make_result(
+                    f"ensemble_{method}", {"method": method}, val_m, test_m
+                )
+            )
 
         return results
 
     def benchmark_ensemble_adaptive(self, split: SplitData) -> list[StrategyResult]:
-        from ..novelty.core.adaptive_weights import compute_characteristics, adaptive_weights
+        from ..novelty.core.adaptive_weights import (
+            adaptive_weights,
+            compute_characteristics,
+        )
 
         train_emb = self.encode_texts(split.train_texts)
         val_true = prepare_binary_labels(split.val_labels, "__OOD__")
@@ -708,22 +936,47 @@ class NoveltyBenchmark:
         adjusted_weights = adaptive_weights(characteristics)
 
         val_outputs, val_all_metrics = _build_strategy_outputs(
-            self.model, split.val_texts, split.train_texts, train_emb, split.train_labels
+            self.model,
+            split.val_texts,
+            split.train_texts,
+            train_emb,
+            split.train_labels,
         )
         test_outputs, test_all_metrics = _build_strategy_outputs(
-            self.model, split.test_texts, split.train_texts, train_emb, split.train_labels
+            self.model,
+            split.test_texts,
+            split.train_texts,
+            train_emb,
+            split.train_labels,
         )
 
-        val_m = _run_strategies_for_split(val_outputs, val_all_metrics, val_true, "weighted", config=adjusted_weights)
-        test_m = _run_strategies_for_split(test_outputs, test_all_metrics, test_true, "weighted", config=adjusted_weights)
-        return [self._make_result("ensemble_adaptive", {
-            "confidence": adjusted_weights.confidence,
-            "knn": adjusted_weights.knn,
-            "pattern": adjusted_weights.pattern,
-            "setfit_centroid": adjusted_weights.setfit_centroid,
-        }, val_m, test_m)]
+        val_m = _run_strategies_for_split(
+            val_outputs, val_all_metrics, val_true, "weighted", config=adjusted_weights
+        )
+        test_m = _run_strategies_for_split(
+            test_outputs,
+            test_all_metrics,
+            test_true,
+            "weighted",
+            config=adjusted_weights,
+        )
+        return [
+            self._make_result(
+                "ensemble_adaptive",
+                {
+                    "confidence": adjusted_weights.confidence,
+                    "knn": adjusted_weights.knn,
+                    "pattern": adjusted_weights.pattern,
+                    "setfit_centroid": adjusted_weights.setfit_centroid,
+                },
+                val_m,
+                test_m,
+            )
+        ]
 
-    def benchmark_signal_combiner(self, split: SplitData, method: str = "weighted") -> list[StrategyResult]:
+    def benchmark_signal_combiner(
+        self, split: SplitData, method: str = "weighted"
+    ) -> list[StrategyResult]:
         from ..novelty.config.base import DetectionConfig
         from ..novelty.config.weights import WeightConfig
         from ..novelty.core.signal_combiner import SignalCombiner
@@ -733,10 +986,18 @@ class NoveltyBenchmark:
         test_true = prepare_binary_labels(split.test_labels, "__OOD__")
 
         val_outputs, val_all_metrics = _build_strategy_outputs(
-            self.model, split.val_texts, split.train_texts, train_emb, split.train_labels
+            self.model,
+            split.val_texts,
+            split.train_texts,
+            train_emb,
+            split.train_labels,
         )
         test_outputs, test_all_metrics = _build_strategy_outputs(
-            self.model, split.test_texts, split.train_texts, train_emb, split.train_labels
+            self.model,
+            split.test_texts,
+            split.train_texts,
+            train_emb,
+            split.train_labels,
         )
 
         weights = WeightConfig()
@@ -751,16 +1012,26 @@ class NoveltyBenchmark:
                 train_features.append(feats)
                 train_labels_arr.append(val_true[idx])
             if len(set(train_labels_arr)) > 1:
-                combiner.train_meta_learner(np.array(train_features), np.array(train_labels_arr))
+                combiner.train_meta_learner(
+                    np.array(train_features), np.array(train_labels_arr)
+                )
 
         _, val_scores = combiner.combine(val_outputs, val_all_metrics)
         _, test_scores = combiner.combine(test_outputs, test_all_metrics)
-        val_novelty = np.array([val_scores.get(i, 0.0) for i in range(len(split.val_texts))])
-        test_novelty = np.array([test_scores.get(i, 0.0) for i in range(len(split.test_texts))])
+        val_novelty = np.array(
+            [val_scores.get(i, 0.0) for i in range(len(split.val_texts))]
+        )
+        test_novelty = np.array(
+            [test_scores.get(i, 0.0) for i in range(len(split.test_texts))]
+        )
 
         val_m = compute_ood_metrics(val_true, val_novelty)
         test_m = compute_ood_metrics(test_true, test_novelty)
-        return [self._make_result(f"signal_combiner_{method}", {"method": method}, val_m, test_m)]
+        return [
+            self._make_result(
+                f"signal_combiner_{method}", {"method": method}, val_m, test_m
+            )
+        ]
 
     def run_depth(
         self,
@@ -777,7 +1048,9 @@ class NoveltyBenchmark:
             all_results.append(r)
         if results:
             best = max(results, key=lambda x: x.val_auroc)
-            print(f"  Best k={best.params['k']}: Val AUROC={best.val_auroc:.3f}, Test AUROC={best.test_auroc:.3f}")
+            print(
+                f"  Best k={best.params['k']}: Val AUROC={best.val_auroc:.3f}, Test AUROC={best.test_auroc:.3f}"
+            )
 
         print("\n--- Mahalanobis ---")
         results = self.benchmark_mahalanobis(split)
@@ -785,7 +1058,9 @@ class NoveltyBenchmark:
             r.dataset = ds_name
             all_results.append(r)
         if results:
-            print(f"  Val AUROC={results[0].val_auroc:.3f}, Test AUROC={results[0].test_auroc:.3f}")
+            print(
+                f"  Val AUROC={results[0].val_auroc:.3f}, Test AUROC={results[0].test_auroc:.3f}"
+            )
 
         print("\n--- LOF ---")
         results = self.benchmark_lof(split)
@@ -813,8 +1088,10 @@ class NoveltyBenchmark:
                 all_results.append(r)
             if results:
                 best = max(results, key=lambda x: x.val_auroc)
-                print(f"  Best: margin={best.params.get('margin_threshold')}, entropy={best.params.get('entropy_threshold')}, "
-                      f"Val AUROC={best.val_auroc:.3f}, Test AUROC={best.test_auroc:.3f}")
+                print(
+                    f"  Best: margin={best.params.get('margin_threshold')}, entropy={best.params.get('entropy_threshold')}, "
+                    f"Val AUROC={best.val_auroc:.3f}, Test AUROC={best.test_auroc:.3f}"
+                )
         except (ValueError, RuntimeError) as e:
             print(f"  Failed: {e}")
 
@@ -826,8 +1103,10 @@ class NoveltyBenchmark:
                 all_results.append(r)
             if results:
                 best = max(results, key=lambda x: x.val_auroc)
-                print(f"  Best: hidden_dim={best.params.get('hidden_dim')}, epochs={best.params.get('epochs')}, "
-                      f"Val AUROC={best.val_auroc:.3f}, Test AUROC={best.test_auroc:.3f}")
+                print(
+                    f"  Best: hidden_dim={best.params.get('hidden_dim')}, epochs={best.params.get('epochs')}, "
+                    f"Val AUROC={best.val_auroc:.3f}, Test AUROC={best.test_auroc:.3f}"
+                )
         except (ValueError, RuntimeError) as e:
             print(f"  Failed: {e}")
 
@@ -855,8 +1134,10 @@ class NoveltyBenchmark:
                     all_results.append(r)
                 if results:
                     best = max(results, key=lambda x: x.val_auroc)
-                    print(f"  Best threshold={best.params.get('distance_threshold')}: "
-                          f"Val AUROC={best.val_auroc:.3f}, Test AUROC={best.test_auroc:.3f}")
+                    print(
+                        f"  Best threshold={best.params.get('distance_threshold')}: "
+                        f"Val AUROC={best.val_auroc:.3f}, Test AUROC={best.test_auroc:.3f}"
+                    )
             except (ValueError, RuntimeError) as e:
                 print(f"  Failed: {e}")
 
@@ -868,8 +1149,10 @@ class NoveltyBenchmark:
                     all_results.append(r)
                 if results:
                     best = max(results, key=lambda x: x.val_auroc)
-                    print(f"  Best margin={best.params.get('margin')}: "
-                          f"Val AUROC={best.val_auroc:.3f}, Test AUROC={best.test_auroc:.3f}")
+                    print(
+                        f"  Best margin={best.params.get('margin')}: "
+                        f"Val AUROC={best.val_auroc:.3f}, Test AUROC={best.test_auroc:.3f}"
+                    )
             except (ValueError, RuntimeError) as e:
                 print(f"  Failed: {e}")
 
@@ -881,8 +1164,10 @@ class NoveltyBenchmark:
                     all_results.append(r)
                 if results:
                     best = max(results, key=lambda x: x.val_auroc)
-                    print(f"  Best: method={best.params.get('method')}, alpha={best.params.get('alpha')}, "
-                          f"Val AUROC={best.val_auroc:.3f}, Test AUROC={best.test_auroc:.3f}")
+                    print(
+                        f"  Best: method={best.params.get('method')}, alpha={best.params.get('alpha')}, "
+                        f"Val AUROC={best.val_auroc:.3f}, Test AUROC={best.test_auroc:.3f}"
+                    )
             except (ValueError, RuntimeError) as e:
                 print(f"  Failed: {e}")
 
@@ -951,7 +1236,9 @@ def run_benchmark(
             print(f"{'=' * 80}")
 
             split = load_and_split_data(ds_name, max_train, max_val, max_test)
-            print(f"Train: {len(split.train_texts)}, Val: {len(split.val_texts)}, Test: {len(split.test_texts)}")
+            print(
+                f"Train: {len(split.train_texts)}, Val: {len(split.val_texts)}, Test: {len(split.test_texts)}"
+            )
             print(f"Known: {split.known_classes}, OOD: {split.ood_classes}")
 
             results = benchmark.run_depth(split, depth=depth, ds_name=ds_name)
@@ -982,7 +1269,9 @@ def run_benchmark(
     print(f"\n{'=' * 80}")
     print("SUMMARY")
     print(f"{'=' * 80}")
-    print(f"{'Strategy':<25} {'Model':<20} {'Val AUROC':>10} {'Test AUROC':>12} {'Test DR@1%':>12}")
+    print(
+        f"{'Strategy':<25} {'Model':<20} {'Val AUROC':>10} {'Test AUROC':>12} {'Test DR@1%':>12}"
+    )
     print("-" * 80)
     by_key: dict[str, list[StrategyResult]] = {}
     for r in all_results:
@@ -991,7 +1280,9 @@ def run_benchmark(
     for key, results in sorted(by_key.items()):
         best = max(results, key=lambda x: x.val_auroc)
         strategy, model = key.split("|", 1)
-        print(f"{strategy:<25} {model[-20:]:<20} {best.val_auroc:>10.3f} {best.test_auroc:>12.3f} {best.test_dr_1fp:>12.3f}")
+        print(
+            f"{strategy:<25} {model[-20:]:<20} {best.val_auroc:>10.3f} {best.test_auroc:>12.3f} {best.test_dr_1fp:>12.3f}"
+        )
 
     if output:
         df.to_csv(output, index=False)
@@ -1012,8 +1303,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-train", type=int, default=200)
     parser.add_argument("--max-val", type=int, default=200)
     parser.add_argument("--max-test", type=int, default=500)
-    parser.add_argument("--model", default=DEFAULT_MODEL_NAME, help="Single model to benchmark")
-    parser.add_argument("--models", nargs="+", default=None, help="Multiple models to benchmark (overrides --model)")
+    parser.add_argument(
+        "--model", default=DEFAULT_MODEL_NAME, help="Single model to benchmark"
+    )
+    parser.add_argument(
+        "--models",
+        nargs="+",
+        default=None,
+        help="Multiple models to benchmark (overrides --model)",
+    )
     parser.add_argument("--output", default=None, help="Output CSV path")
 
     args = parser.parse_args(argv)

@@ -17,49 +17,41 @@ Usage:
     all_results = runner.run_all()
 """
 
-from .registry import (
-    DATASET_REGISTRY,
-    DatasetConfig,
-    CacheConfig,
-    get_dataset_config,
-    get_datasets_by_task,
-    get_default_datasets,
-)
-
-from .loader import DatasetLoader
-
-from .runner import BenchmarkRunner
-
-from .entity_resolution import (
-    EntityResolutionEvaluator,
-    sweep_threshold,
-    find_optimal_threshold,
-    MatchPair,
-)
-
-from .classification import (
-    ClassificationEvaluator,
-    sweep_num_classes,
-    evaluate_by_class_count,
-    ClassificationSample,
-)
-
-from .novelty import (
-    NoveltyEvaluator,
-    sweep_knn_params,
-    find_optimal_knn_params,
-    NoveltySample,
-)
-
 from ..novelty.entity_matcher import (
     NovelEntityMatcher,
     NovelEntityMatchResult,
     NoveltyMatchResult,
     create_novel_entity_matcher,
 )
-
 from .base import BaseEvaluator, EvaluationResult
-
+from .classification import (
+    ClassificationEvaluator,
+    ClassificationSample,
+    evaluate_by_class_count,
+    sweep_num_classes,
+)
+from .entity_resolution import (
+    EntityResolutionEvaluator,
+    MatchPair,
+    find_optimal_threshold,
+    sweep_threshold,
+)
+from .loader import DatasetLoader
+from .novelty import (
+    NoveltyEvaluator,
+    NoveltySample,
+    find_optimal_knn_params,
+    sweep_knn_params,
+)
+from .registry import (
+    DATASET_REGISTRY,
+    CacheConfig,
+    DatasetConfig,
+    get_dataset_config,
+    get_datasets_by_task,
+    get_default_datasets,
+)
+from .runner import BenchmarkRunner
 from .shared import (
     DEFAULT_MODEL_NAME,
     DEFAULT_OOD_RATIO,
@@ -75,39 +67,39 @@ from .shared import (
 
 __all__ = [
     "DATASET_REGISTRY",
-    "DatasetConfig",
-    "CacheConfig",
-    "get_dataset_config",
-    "get_datasets_by_task",
-    "get_default_datasets",
-    "DatasetLoader",
-    "BenchmarkRunner",
-    "BaseEvaluator",
-    "EvaluationResult",
     "DEFAULT_MODEL_NAME",
     "DEFAULT_OOD_RATIO",
     "DEFAULT_RANDOM_SEED",
-    "SplitData",
-    "timer",
-    "compute_ood_metrics",
-    "prepare_binary_labels",
-    "generate_synthetic_data",
-    "benchmark_training",
-    "benchmark_inference",
-    "EntityResolutionEvaluator",
-    "sweep_threshold",
-    "find_optimal_threshold",
-    "MatchPair",
+    "BaseEvaluator",
+    "BenchmarkRunner",
+    "CacheConfig",
     "ClassificationEvaluator",
-    "sweep_num_classes",
-    "evaluate_by_class_count",
     "ClassificationSample",
-    "NoveltyEvaluator",
-    "sweep_knn_params",
-    "find_optimal_knn_params",
-    "NoveltySample",
-    "NovelEntityMatcher",
+    "DatasetConfig",
+    "DatasetLoader",
+    "EntityResolutionEvaluator",
+    "EvaluationResult",
+    "MatchPair",
     "NovelEntityMatchResult",
+    "NovelEntityMatcher",
+    "NoveltyEvaluator",
     "NoveltyMatchResult",
+    "NoveltySample",
+    "SplitData",
+    "benchmark_inference",
+    "benchmark_training",
+    "compute_ood_metrics",
     "create_novel_entity_matcher",
+    "evaluate_by_class_count",
+    "find_optimal_knn_params",
+    "find_optimal_threshold",
+    "generate_synthetic_data",
+    "get_dataset_config",
+    "get_datasets_by_task",
+    "get_default_datasets",
+    "prepare_binary_labels",
+    "sweep_knn_params",
+    "sweep_num_classes",
+    "sweep_threshold",
+    "timer",
 ]

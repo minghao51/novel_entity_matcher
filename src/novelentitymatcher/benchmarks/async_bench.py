@@ -13,21 +13,22 @@ import argparse
 import asyncio
 import json
 import time
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any
 
 from .. import Matcher
 from ..utils.benchmarks import load_processed_sections
 
 
-def _build_queries(seed_queries: List[str], multiplier: int) -> List[str]:
+def _build_queries(seed_queries: list[str], multiplier: int) -> list[str]:
     return seed_queries * multiplier
 
 
 def _resolve_training_data(
-    section_data: Dict[str, Any],
+    section_data: dict[str, Any],
     mode: str,
-) -> Optional[List[Dict[str, Any]]]:
+) -> list[dict[str, Any]] | None:
     if mode == "zero-shot":
         return None
     return section_data.get("training_data", [])
@@ -44,8 +45,8 @@ def _metric(
     construct_elapsed: float,
     fit_elapsed: float,
     cold_elapsed: float,
-    concurrency: Optional[int] = None,
-) -> Dict[str, Any]:
+    concurrency: int | None = None,
+) -> dict[str, Any]:
     end_to_end = construct_elapsed + fit_elapsed + cold_elapsed + elapsed
     return {
         "route": label,
@@ -59,20 +60,24 @@ def _metric(
         "end_to_end_seconds": round(end_to_end, 6),
         "queries": query_count,
         "qps": round(query_count / elapsed, 2) if elapsed > 0 else float("inf"),
-        "avg_ms_per_query": round((elapsed / query_count) * 1000, 4) if query_count else 0.0,
-        "end_to_end_ms_per_query": round((end_to_end / query_count) * 1000, 4) if query_count else 0.0,
+        "avg_ms_per_query": round((elapsed / query_count) * 1000, 4)
+        if query_count
+        else 0.0,
+        "end_to_end_ms_per_query": round((end_to_end / query_count) * 1000, 4)
+        if query_count
+        else 0.0,
         "concurrency": concurrency,
     }
 
 
 def benchmark_sync(
-    entities: List[Dict[str, Any]],
-    queries: List[str],
-    training_data: Optional[List[Dict[str, Any]]],
+    entities: list[dict[str, Any]],
+    queries: list[str],
+    training_data: list[dict[str, Any]] | None,
     section: str,
     model: str,
     mode: str,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     construct_start = time.perf_counter()
     matcher = Matcher(entities=entities, model=model, mode=mode)
     construct_elapsed = time.perf_counter() - construct_start
@@ -119,14 +124,14 @@ def benchmark_sync(
 
 
 async def benchmark_async(
-    entities: List[Dict[str, Any]],
-    queries: List[str],
-    training_data: Optional[List[Dict[str, Any]]],
+    entities: list[dict[str, Any]],
+    queries: list[str],
+    training_data: list[dict[str, Any]] | None,
     concurrency: int,
     section: str,
     model: str,
     mode: str,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     construct_start = time.perf_counter()
     matcher = Matcher(entities=entities, model=model, mode=mode)
     construct_elapsed = time.perf_counter() - construct_start
@@ -196,7 +201,7 @@ async def benchmark_async(
     return [sequential, concurrent, batch]
 
 
-def _iter_modes(raw_modes: Iterable[str]) -> List[str]:
+def _iter_modes(raw_modes: Iterable[str]) -> list[str]:
     valid = []
     seen = set()
     for mode in raw_modes:
@@ -241,15 +246,24 @@ def main(argv: list[str] | None = None) -> int:
 
         results.extend(
             benchmark_sync(
-                section_data["entities"], queries, training_data,
-                section_data["section"], args.model, mode,
+                section_data["entities"],
+                queries,
+                training_data,
+                section_data["section"],
+                args.model,
+                mode,
             )
         )
         results.extend(
             asyncio.run(
                 benchmark_async(
-                    section_data["entities"], queries, training_data,
-                    args.concurrency, section_data["section"], args.model, mode,
+                    section_data["entities"],
+                    queries,
+                    training_data,
+                    args.concurrency,
+                    section_data["section"],
+                    args.model,
+                    mode,
                 )
             )
         )

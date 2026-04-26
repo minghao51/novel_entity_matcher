@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, List, Optional
 
 
 @dataclass
@@ -30,7 +29,7 @@ class MetricEvent:
     name: str
     value: float
     unit: str
-    labels: Dict[str, str]
+    labels: dict[str, str]
     timestamp: datetime
 
 
@@ -59,7 +58,7 @@ def create_metric(
     name: str,
     value: float,
     unit: str,
-    labels: Optional[Dict[str, str]] = None,
+    labels: dict[str, str] | None = None,
 ) -> MetricEvent:
     """Helper to create MetricEvent with current timestamp.
 
@@ -81,7 +80,7 @@ def create_metric(
     )
 
 
-def get_metric_summary(events: List[MetricEvent]) -> Dict[str, Dict[str, float]]:
+def get_metric_summary(events: list[MetricEvent]) -> dict[str, dict[str, float]]:
     """Summarize metric events by name.
 
     Args:
@@ -93,12 +92,12 @@ def get_metric_summary(events: List[MetricEvent]) -> Dict[str, Dict[str, float]]
     """
     from collections import defaultdict
 
-    grouped: Dict[str, List[float]] = defaultdict(list)
+    grouped: dict[str, list[float]] = defaultdict(list)
 
     for event in events:
         grouped[event.name].append(event.value)
 
-    summary: Dict[str, Dict[str, float]] = {}
+    summary: dict[str, dict[str, float]] = {}
     for name, values in grouped.items():
         summary[name] = {
             "count": len(values),

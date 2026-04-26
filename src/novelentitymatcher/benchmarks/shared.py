@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import time
 import tracemalloc
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Generator, List, Tuple
 
 import numpy as np
 from sklearn.metrics import average_precision_score, roc_auc_score
@@ -104,7 +104,7 @@ def prepare_binary_labels(
 def generate_synthetic_data(
     num_entities: int = 10,
     samples_per_entity: int = 50,
-) -> Tuple[List[dict], List[dict]]:
+) -> tuple[list[dict], list[dict]]:
     entities = [f"ENTITY_{i}" for i in range(num_entities)]
 
     training_data = []
@@ -117,17 +117,15 @@ def generate_synthetic_data(
     test_data = []
     for entity in entities:
         for i in range(samples_per_entity // 10):
-            test_data.append(
-                {"text": f"{entity} test variant {i}", "label": entity}
-            )
+            test_data.append({"text": f"{entity} test variant {i}", "label": entity})
 
     return training_data, test_data
 
 
 def benchmark_training(
     classifier_class,
-    training_data: List[dict],
-    labels: List[str],
+    training_data: list[dict],
+    labels: list[str],
     num_epochs: int = 3,
     **classifier_kwargs,
 ) -> dict[str, float]:
@@ -150,7 +148,7 @@ def benchmark_training(
 
 def benchmark_inference(
     classifier,
-    test_data: List[dict],
+    test_data: list[dict],
 ) -> dict[str, float]:
     texts = [item["text"] for item in test_data]
     true_labels = [item["label"] for item in test_data]
@@ -160,7 +158,7 @@ def benchmark_inference(
     elapsed = time.perf_counter() - start_time
 
     throughput = len(texts) / elapsed
-    correct = sum(1 for pred, true in zip(predictions, true_labels) if pred == true)
+    correct = sum(1 for pred, true in zip(predictions, true_labels, strict=False) if pred == true)
     accuracy = correct / len(true_labels)
 
     return {

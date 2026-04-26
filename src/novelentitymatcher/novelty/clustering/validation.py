@@ -5,7 +5,6 @@ This module provides utilities for validating clustering results
 and assessing cluster quality for novelty detection.
 """
 
-from typing import Dict
 import numpy as np
 
 
@@ -153,7 +152,7 @@ class ClusterValidator:
         self,
         embeddings: np.ndarray,
         labels: np.ndarray,
-    ) -> Dict[int, Dict[str, float]]:
+    ) -> dict[int, dict[str, float]]:
         """
         Compute statistics for all clusters.
 

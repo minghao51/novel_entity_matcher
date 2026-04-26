@@ -4,12 +4,13 @@ Uncertainty-based novelty detection strategy.
 Flags samples based on prediction uncertainty using margin and entropy.
 """
 
-from typing import Dict, List, Set, Any, Optional
+from typing import Any
+
 import numpy as np
 
-from .base import NoveltyStrategy
-from ..core.strategies import StrategyRegistry
 from ..config.strategies import UncertaintyConfig
+from ..core.strategies import StrategyRegistry
+from .base import NoveltyStrategy
 
 
 @StrategyRegistry.register
@@ -30,7 +31,7 @@ class UncertaintyStrategy(NoveltyStrategy):
     def initialize(
         self,
         reference_embeddings: np.ndarray,
-        reference_labels: List[str],
+        reference_labels: list[str],
         config: UncertaintyConfig,
     ) -> None:
         """
@@ -45,12 +46,12 @@ class UncertaintyStrategy(NoveltyStrategy):
 
     def detect(
         self,
-        texts: List[str],
+        texts: list[str],
         embeddings: np.ndarray,
-        predicted_classes: List[str],
+        predicted_classes: list[str],
         confidences: np.ndarray,
         **kwargs,
-    ) -> tuple[Set[int], Dict[int, Dict[str, Any]]]:
+    ) -> tuple[set[int], dict[int, dict[str, Any]]]:
         """
         Detect novel samples using uncertainty metrics.
 
@@ -93,8 +94,8 @@ class UncertaintyStrategy(NoveltyStrategy):
         self,
         idx: int,
         confidence: float,
-        probs: Optional[np.ndarray] = None,
-    ) -> Dict[str, Any]:
+        probs: np.ndarray | None = None,
+    ) -> dict[str, Any]:
         """
         Compute uncertainty metrics for a single sample.
 

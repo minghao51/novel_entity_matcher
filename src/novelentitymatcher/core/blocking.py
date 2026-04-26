@@ -2,11 +2,11 @@
 
 from abc import ABC, abstractmethod
 from hashlib import md5
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 from rank_bm25 import BM25Okapi
-from rapidfuzz import process, fuzz
+from rapidfuzz import fuzz, process
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 
@@ -15,8 +15,8 @@ class BlockingStrategy(ABC):
 
     @abstractmethod
     def block(
-        self, query: str, entities: List[Dict[str, Any]], top_k: int
-    ) -> List[Dict[str, Any]]:
+        self, query: str, entities: list[dict[str, Any]], top_k: int
+    ) -> list[dict[str, Any]]:
         """
         Return top_k candidate entities for the query.
 
@@ -28,7 +28,6 @@ class BlockingStrategy(ABC):
         Returns:
             List of candidate entities (top_k or fewer)
         """
-        pass
 
 
 class NoOpBlocking(BlockingStrategy):
@@ -39,8 +38,8 @@ class NoOpBlocking(BlockingStrategy):
     """
 
     def block(
-        self, query: str, entities: List[Dict[str, Any]], top_k: int
-    ) -> List[Dict[str, Any]]:
+        self, query: str, entities: list[dict[str, Any]], top_k: int
+    ) -> list[dict[str, Any]]:
         """Return all entities or top_k if smaller."""
         if len(entities) <= top_k:
             return entities
@@ -65,11 +64,11 @@ class BM25Blocking(BlockingStrategy):
         """
         self.k1 = k1
         self.b = b
-        self.bm25: Optional[BM25Okapi] = None
-        self.cached_entities: Optional[List[Dict[str, Any]]] = None
-        self._entity_hash: Optional[str] = None
+        self.bm25: BM25Okapi | None = None
+        self.cached_entities: list[dict[str, Any]] | None = None
+        self._entity_hash: str | None = None
 
-    def build_index(self, entities: List[Dict[str, Any]]):
+    def build_index(self, entities: list[dict[str, Any]]):
         """Build BM25 index from entities."""
         self.cached_entities = entities
         self._entity_hash = _compute_entity_hash(entities)
@@ -80,8 +79,8 @@ class BM25Blocking(BlockingStrategy):
         self.bm25 = BM25Okapi(tokenized_corpus, k1=self.k1, b=self.b)
 
     def block(
-        self, query: str, entities: List[Dict[str, Any]], top_k: int
-    ) -> List[Dict[str, Any]]:
+        self, query: str, entities: list[dict[str, Any]], top_k: int
+    ) -> list[dict[str, Any]]:
         """Return top_k candidates using BM25 scores."""
         current_hash = _compute_entity_hash(entities)
 
@@ -99,12 +98,12 @@ class BM25Blocking(BlockingStrategy):
         return [entities[i] for i in top_indices]
 
     @staticmethod
-    def _tokenize(text: str) -> List[str]:
+    def _tokenize(text: str) -> list[str]:
         """Simple tokenization - lowercase and split."""
         return text.lower().split()
 
 
-def _compute_entity_hash(entities: List[Dict[str, Any]]) -> str:
+def _compute_entity_hash(entities: list[dict[str, Any]]) -> str:
     """Compute efficient content hash for entity list.
 
     Uses MD5 of sorted serialized entities for O(n) hashing
@@ -132,13 +131,13 @@ class TFIDFBlocking(BlockingStrategy):
 
     def __init__(self):
         """Initialize TF-IDF blocking."""
-        self.vectorizer: Optional[TfidfVectorizer] = None
-        self.matrix: Optional[Any] = None
-        self.cached_entities: Optional[List[Dict[str, Any]]] = None
-        self._entity_hash: Optional[str] = None
-        self._vocabulary: Optional[Dict[str, int]] = None
+        self.vectorizer: TfidfVectorizer | None = None
+        self.matrix: Any | None = None
+        self.cached_entities: list[dict[str, Any]] | None = None
+        self._entity_hash: str | None = None
+        self._vocabulary: dict[str, int] | None = None
 
-    def build_index(self, entities: List[Dict[str, Any]]):
+    def build_index(self, entities: list[dict[str, Any]]):
         """Build TF-IDF index from entities."""
         self.cached_entities = entities
         self._entity_hash = _compute_entity_hash(entities)
@@ -154,8 +153,8 @@ class TFIDFBlocking(BlockingStrategy):
             self.matrix = self.vectorizer.fit_transform(texts)
 
     def block(
-        self, query: str, entities: List[Dict[str, Any]], top_k: int
-    ) -> List[Dict[str, Any]]:
+        self, query: str, entities: list[dict[str, Any]], top_k: int
+    ) -> list[dict[str, Any]]:
         """Return top_k candidates using TF-IDF scores."""
         current_hash = _compute_entity_hash(entities)
 
@@ -192,8 +191,8 @@ class FuzzyBlocking(BlockingStrategy):
         self.score_cutoff = score_cutoff
 
     def block(
-        self, query: str, entities: List[Dict[str, Any]], top_k: int
-    ) -> List[Dict[str, Any]]:
+        self, query: str, entities: list[dict[str, Any]], top_k: int
+    ) -> list[dict[str, Any]]:
         """Return top_k candidates using fuzzy matching."""
         texts = [e.get("text", e.get("name", "")) for e in entities]
 

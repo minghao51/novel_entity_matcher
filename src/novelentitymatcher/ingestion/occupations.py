@@ -1,11 +1,13 @@
 """Ingestion script for SOC occupation codes (O*NET)."""
 
-from typing import Any
 import csv
+from typing import Any
+
 import requests
 
-from .base import BaseFetcher, resolve_output_dirs
 from novelentitymatcher.utils.logging_config import get_logger
+
+from .base import BaseFetcher, resolve_output_dirs
 
 logger = get_logger(__name__)
 
@@ -84,8 +86,8 @@ class OccupationsFetcher(BaseFetcher):
 
     def fetch(self) -> list[dict[str, Any]]:
         """Download occupation data from O*NET."""
-        import zipfile
         import io
+        import zipfile
 
         output_path = self.raw_dir / "occupation_data.zip"
 

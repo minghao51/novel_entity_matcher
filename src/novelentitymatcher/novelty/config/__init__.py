@@ -7,26 +7,26 @@ including the main DetectionConfig and per-strategy configurations.
 
 from .base import DetectionConfig
 from .strategies import (
+    ClusteringConfig,
     ConfidenceConfig,
     KNNConfig,
-    ClusteringConfig,
-    SelfKnowledgeConfig,
-    PatternConfig,
     OneClassConfig,
+    PatternConfig,
     PrototypicalConfig,
+    SelfKnowledgeConfig,
     SetFitConfig,
 )
 from .weights import WeightConfig
 
 __all__ = [
-    "DetectionConfig",
-    "ConfidenceConfig",
-    "KNNConfig",
     "ClusteringConfig",
-    "SelfKnowledgeConfig",
-    "PatternConfig",
+    "ConfidenceConfig",
+    "DetectionConfig",
+    "KNNConfig",
     "OneClassConfig",
+    "PatternConfig",
     "PrototypicalConfig",
+    "SelfKnowledgeConfig",
     "SetFitConfig",
     "WeightConfig",
 ]
