@@ -15,19 +15,19 @@ Tests are marked with pytest markers to enable selective test execution:
 
 ```bash
 # Run all tests except llm (actual API calls)
-pytest -m "not llm"
+uv run pytest -m "not llm"
 
 # Run only llm_mocked tests
-pytest -m llm_mocked
+uv run pytest -m llm_mocked
 
 # Run e2e tests
-pytest -m e2e
+uv run pytest -m e2e
 
 # Run everything including actual LLM calls (requires API key)
-pytest -m llm
+uv run pytest -m llm
 
 # Run unit tests only
-pytest -m "unit and not llm_mocked"
+uv run pytest -m "unit and not llm_mocked"
 ```
 
 ## Test Organization
@@ -36,54 +36,53 @@ pytest -m "unit and not llm_mocked"
 
 Tests that make **actual** LLM API calls. These are skipped by default.
 
-| File | Test | Notes |
+| Path | Test | Notes |
 |------|------|-------|
-| `tests/test_integration.py` | `TestLLMIntegration::test_llm_proposal_generation` | Skipped by default, requires manual enable |
+| `tests/integration/test_integration.py` | `TestLLMIntegration::test_llm_proposal_generation` | Skipped by default, requires manual enable |
 
 ### LLM Mocked Tests (`llm_mocked`)
 
 Tests that involve LLM logic but use mocks instead of real API calls.
 
-| File | Tests |
+| Path | Tests |
 |------|-------|
-| `tests/test_llm_proposer.py` | All 20+ tests - parsing, fallback, config, litellm mocking |
-| `tests/test_discovery_pipeline.py` | `test_discovery_pipeline_creates_review_records` - mocks `llm_proposer.propose_from_clusters` |
+| `tests/unit/test_llm_proposer.py` | Parsing, fallback, config, litellm mocking |
+| `tests/unit/test_discovery_pipeline.py` | `test_discovery_pipeline_creates_review_records` - mocks `llm_proposer.propose_from_clusters` |
 
 ### E2E / Feature Tests (`e2e`)
 
 Complex multi-component tests exercising full pipelines.
 
-| File | Description |
+| Path | Description |
 |------|-------------|
-| `tests/test_integration.py` | `TestNovelClassDetectionIntegration` - full discovery pipeline, async paths, file persistence, batch |
-| `tests/test_discovery_pipeline.py` | Pipeline + review lifecycle tests |
-| `tests/test_integration_extended.py` | `TestAsyncAPIIntegration`, `TestErrorHandlingIntegration` |
-| `tests/test_novel_entity_matcher.py` | High-level matcher integration |
+| `tests/integration/test_integration.py` | `TestNovelClassDetectionIntegration` - full discovery pipeline, async paths, file persistence, batch |
+| `tests/unit/test_discovery_pipeline.py` | Pipeline + review lifecycle tests |
+| `tests/integration/test_integration_extended.py` | `TestAsyncAPIIntegration`, `TestErrorHandlingIntegration` |
+| `tests/integration/test_novel_entity_matcher.py` | High-level matcher integration |
 
 ### Unit Tests
 
 Fast, isolated tests - all other test files.
 
-| File | Description |
+| Path | Description |
 |------|-------------|
-| `tests/test_signal_combiner.py` | Logic only, no I/O |
-| `tests/test_persistence.py` | File I/O but isolated |
-| `tests/test_pipeline_orchestrator.py` | Orchestration logic |
-| `tests/test_review_manager.py` | State transitions |
-| `tests/test_schema_validation.py` | Schema validation |
-| `tests/test_novelty_detector.py` | Detector logic |
-| `tests/test_novelty_detector_lifecycle.py` | Lifecycle logic |
-| `tests/test_prototypical_strategy.py` | Prototypical strategy |
-| `tests/test_oneclass_strategy.py` | One-class strategy |
-| `tests/test_pattern_strategy.py` | Pattern strategy |
-| `tests/test_setfit_novelty.py` | SetFit novelty |
-| `tests/test_ann_index.py` | ANN index operations |
-| `tests/test_config.py` | Config parsing |
-| `tests/test_backends/*.py` | Backend contracts and implementations |
-| `tests/test_core/*.py` | Core utilities |
-| `tests/test_utils/*.py` | Utility functions |
-| `tests/test_ingestion/*.py` | Ingestion CLI and timezone handling |
-| `tests/test_packaging.py` | Packaging tests |
+| `tests/unit/novelty/test_signal_combiner.py` | Logic only, no I/O |
+| `tests/unit/pipeline/test_pipeline_orchestrator.py` | Orchestration logic |
+| `tests/unit/pipeline/test_review_manager.py` | State transitions |
+| `tests/unit/pipeline/test_schema_validation.py` | Schema validation |
+| `tests/unit/novelty/test_novelty_detector.py` | Detector logic |
+| `tests/unit/novelty/test_novelty_detector_lifecycle.py` | Lifecycle logic |
+| `tests/unit/novelty/test_prototypical_strategy.py` | Prototypical strategy |
+| `tests/unit/novelty/test_oneclass_strategy.py` | One-class strategy |
+| `tests/unit/novelty/test_pattern_strategy.py` | Pattern strategy |
+| `tests/unit/novelty/test_setfit_novelty.py` | SetFit novelty |
+| `tests/unit/novelty/test_ann_index.py` | ANN index operations |
+| `tests/unit/test_config.py` | Config parsing |
+| `tests/unit/backends/*.py` | Backend contracts and implementations |
+| `tests/unit/core/*.py` | Core utilities |
+| `tests/unit/utils/*.py` | Utility functions |
+| `tests/unit/ingestion/*.py` | Ingestion CLI and timezone handling |
+| `tests/unit/test_packaging.py` | Packaging tests |
 
 ## Marker Configuration
 
