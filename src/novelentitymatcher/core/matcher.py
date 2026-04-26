@@ -1,14 +1,13 @@
 import asyncio
-import inspect
 import os
 import platform
 from collections import defaultdict
-from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING, Union
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .matching_strategy import MatchingStrategy
 
-import numpy as np
 from sentence_transformers import SentenceTransformer
 
 # Enable CPU fallback for unsupported MPS ops before torch/sentence-transformers import.
@@ -16,276 +15,40 @@ if platform.system() == "Darwin" and platform.machine() == "arm64":
     os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
 
+from ..config import (
+    is_bert_model,
+    supports_training_model,
+)
+from ..exceptions import ModeError, ValidationError
+from ..pipeline.match_result import build_match_result_with_metadata
+from ..utils.logging_config import configure_logging, get_logger
+from ..utils.validation import (
+    validate_entities,
+    validate_threshold,
+)
 from .embedding_matcher import EmbeddingMatcher
 from .matcher_components import MatcherComponentFactory
+from .matcher_engines import _BatchEngine, _DiagnosisEngine, _HybridEngine
+from .matcher_entity import _EntityMatcher
 from .matcher_runtime import MatcherRuntimeState
 from .matcher_shared import (
     TextInput,
     coerce_texts,
     extract_top_prediction_metadata,
-    normalize_texts,
-    normalize_training_data,
     resolve_threshold,
-    unwrap_single,
 )
 from .matching_strategy import MatcherFacade
-from ..pipeline.match_result import build_match_result_with_metadata
-from .normalizer import TextNormalizer
-from ..config import (
-    is_bert_model,
-    supports_training_model,
-)
-from ..exceptions import ModeError, TrainingError, ValidationError
-from ..utils.logging_config import configure_logging, get_logger
-from ..utils.validation import (
-    validate_entities,
-    validate_model_name,
-    validate_threshold,
-)
 
 if TYPE_CHECKING:
     from .async_utils import AsyncExecutor
-    from .bert_classifier import BERTClassifier
-    from .classifier import SetFitClassifier
 
 EmbeddingModel = SentenceTransformer
-__all__ = ["EmbeddingMatcher", "EmbeddingModel", "Matcher"]
+__all__ = ["EmbeddingMatcher", "EmbeddingModel", "Matcher", "_EntityMatcher"]
 
 # Backwards-compatible aliases for internal helpers that some callers may import.
 _coerce_texts = coerce_texts
 _extract_top_prediction_metadata = extract_top_prediction_metadata
 _resolve_threshold = resolve_threshold
-
-
-class _EntityMatcher:
-    """SetFit-based or BERT-based entity matching with optional text normalization."""
-
-    def __init__(
-        self,
-        entities: List[Dict[str, Any]],
-        model_name: str = "sentence-transformers/paraphrase-mpnet-base-v2",
-        threshold: float = 0.7,
-        normalize: bool = True,
-        classifier_type: str = "setfit",
-    ):
-        validate_entities(entities)
-        validate_model_name(model_name)
-
-        self.entities = entities
-        self.model_name = model_name
-        self.threshold = validate_threshold(threshold)
-        self.normalize = normalize
-        self.classifier_type = classifier_type
-
-        self.normalizer = TextNormalizer() if normalize else None
-        self.logger = get_logger(__name__)
-        self.classifier: Optional[Union[SetFitClassifier, BERTClassifier]] = None
-        self.is_trained = False
-        self._async_executor: Optional[Any] = None
-        self._reference_texts: List[str] = []
-        self._reference_labels: List[str] = []
-        self._reference_embeddings: Optional[np.ndarray] = None
-
-    def _ensure_async_executor(self):
-        if self._async_executor is None:
-            from .async_utils import AsyncExecutor
-
-            self._async_executor = AsyncExecutor()
-        return self._async_executor
-
-    def _get_training_data(self, training_data: List[dict]) -> List[dict]:
-        return normalize_training_data(training_data, self.normalizer, self.normalize)
-
-    def train(
-        self,
-        training_data: List[dict],
-        num_epochs: int = 4,
-        batch_size: int = 16,
-        show_progress: bool = True,
-        weight_decay: float = 0.01,
-        head_c: float = 1.0,
-        num_iterations: int = 5,
-        pca_dims: Optional[int] = None,
-        skip_body_training: bool = False,
-    ):
-        normalized_data = self._get_training_data(training_data)
-        labels = list(dict.fromkeys(item["label"] for item in normalized_data))
-
-        if self.classifier_type == "bert":
-            from .bert_classifier import BERTClassifier
-
-            self.classifier = BERTClassifier(
-                labels=labels,
-                model_name=self.model_name,
-                num_epochs=num_epochs,
-                batch_size=batch_size,
-            )
-        else:
-            from .classifier import SetFitClassifier
-
-            self.classifier = SetFitClassifier(
-                labels=labels,
-                model_name=self.model_name,
-                num_epochs=num_epochs,
-                batch_size=batch_size,
-                weight_decay=weight_decay,
-                head_c=head_c,
-                num_iterations=num_iterations,
-                pca_dims=pca_dims,
-                skip_body_training=skip_body_training,
-            )
-
-        self.classifier.train(
-            normalized_data,
-            num_epochs=num_epochs,
-            batch_size=batch_size,
-            show_progress=show_progress,
-        )
-        self.is_trained = True
-        self._reference_texts = [item["text"] for item in normalized_data]
-        self._reference_labels = [item["label"] for item in normalized_data]
-        self._reference_embeddings = None
-
-    def predict(self, texts: TextInput) -> Union[Optional[str], List[Optional[str]]]:
-        if not self.is_trained or self.classifier is None:
-            raise RuntimeError("Model not trained. Call train() first.")
-
-        matches = self.match(texts, top_k=1)
-        if isinstance(matches, list):
-            return [match["id"] if match else None for match in matches]
-        return matches["id"] if matches else None
-
-    def match(
-        self,
-        texts: TextInput,
-        candidates: Optional[List[Dict[str, Any]]] = None,
-        top_k: int = 1,
-        threshold_override: Optional[float] = None,
-    ) -> Any:
-        if not self.is_trained or self.classifier is None:
-            raise RuntimeError("Model not trained. Call train() first.")
-        if top_k < 1:
-            raise ValueError("top_k must be >= 1")
-
-        texts, single_input = coerce_texts(texts)
-        texts = normalize_texts(texts, self.normalizer, self.normalize)
-        entity_lookup = {entity["id"]: entity for entity in self.entities}
-        candidate_ids = None
-        effective_threshold = resolve_threshold(threshold_override, self.threshold)
-        if candidates is not None:
-            candidate_ids = {candidate["id"] for candidate in candidates}
-
-        results: List[Any] = []
-        for text in texts:
-            try:
-                proba = self.classifier.predict_proba(text)
-                ranked_matches = sorted(
-                    zip(self.classifier.labels, proba),
-                    key=lambda item: item[1],
-                    reverse=True,
-                )
-                matches: List[Dict[str, Any]] = []
-                for label, score in ranked_matches:
-                    score = float(score)
-                    if score < effective_threshold:
-                        continue
-                    if candidate_ids is not None and label not in candidate_ids:
-                        continue
-                    entity = entity_lookup.get(label, {})
-                    matches.append(
-                        {
-                            "id": label,
-                            "score": score,
-                            "text": entity.get("name", ""),
-                        }
-                    )
-                    if len(matches) >= top_k:
-                        break
-                if top_k == 1:
-                    results.append(matches[0] if matches else None)
-                else:
-                    results.append(matches)
-            except (ValueError, RuntimeError) as exc:
-                self.logger.warning("Match prediction failed for text sample: %s", exc)
-                results.append(None if top_k == 1 else [])
-
-        return unwrap_single(results, single_input)
-
-    async def train_async(
-        self,
-        training_data: List[dict],
-        num_epochs: int = 4,
-        batch_size: int = 16,
-        show_progress: bool = True,
-    ):
-        await self._ensure_async_executor().run_in_thread(
-            self.train,
-            training_data,
-            num_epochs,
-            batch_size,
-            show_progress,
-        )
-
-    async def match_async(
-        self,
-        texts: TextInput,
-        candidates: Optional[List[Dict[str, Any]]] = None,
-        top_k: int = 1,
-        threshold_override: Optional[float] = None,
-    ) -> Any:
-        if not self.is_trained or self.classifier is None:
-            raise RuntimeError(
-                "Model not trained. Call train() or train_async() first."
-            )
-
-        return await self._ensure_async_executor().run_in_thread(
-            self.match,
-            texts=texts,
-            candidates=candidates,
-            top_k=top_k,
-            threshold_override=threshold_override,
-        )
-
-    async def predict_async(
-        self, texts: TextInput
-    ) -> Union[Optional[str], List[Optional[str]]]:
-        if not self.is_trained or self.classifier is None:
-            raise RuntimeError(
-                "Model not trained. Call train() or train_async() first."
-            )
-
-        matches = await self.match_async(texts, top_k=1)
-        if isinstance(matches, list):
-            return [match["id"] if match else None for match in matches]
-        return matches["id"] if matches else None
-
-    def get_reference_corpus(self, encoder: Optional[Any] = None) -> Dict[str, Any]:
-        if not self._reference_texts or not self._reference_labels:
-            raise RuntimeError(
-                "No reference corpus available. Train the matcher before novelty detection."
-            )
-
-        if self._reference_embeddings is None:
-            encode_model = encoder
-            if encode_model is None and self.classifier is not None:
-                encode_model = getattr(self.classifier, "model", None)
-            if encode_model is None or not hasattr(encode_model, "encode"):
-                raise RuntimeError(
-                    "Could not derive reference embeddings from the trained matcher. "
-                    "Provide an embedding-capable encoder or use a matcher mode with "
-                    "reference embeddings."
-                )
-            embeddings = encode_model.encode(self._reference_texts)
-            if isinstance(embeddings, list):
-                embeddings = np.array(embeddings)
-            self._reference_embeddings = embeddings
-
-        return {
-            "texts": list(self._reference_texts),
-            "labels": list(self._reference_labels),
-            "embeddings": self._reference_embeddings,
-            "source": "training_examples",
-        }
 
 
 class Matcher:
@@ -300,15 +63,15 @@ class Matcher:
 
     def __init__(
         self,
-        entities: List[Dict[str, Any]],
+        entities: list[dict[str, Any]],
         model: str = "default",
         threshold: float = 0.7,
         normalize: bool = True,
-        mode: Optional[str] = None,
-        blocking_strategy: Optional[Any] = None,
+        mode: str | None = None,
+        blocking_strategy: Any | None = None,
         reranker_model: str = "default",
         verbose: bool = False,
-        metrics_callback: Optional[Callable] = None,
+        metrics_callback: Callable | None = None,
     ):
         validate_entities(entities)
         validate_threshold(threshold)
@@ -339,30 +102,26 @@ class Matcher:
         self._verbose = verbose
         self._metrics_callback = metrics_callback
 
-        self._async_executor: Optional["AsyncExecutor"] = None
+        self._async_executor: AsyncExecutor | None = None
         self._async_fit_lock = asyncio.Lock()
 
         self._training_mode = self._runtime_state.training_mode
         self._components = MatcherComponentFactory(self)
         self._has_training_data = self._runtime_state.has_training_data
-        self._active_matcher: Optional[Any] = None
-        self._detected_mode: Optional[str] = self._runtime_state.detected_mode
+        self._active_matcher: Any | None = None
+        self._detected_mode: str | None = self._runtime_state.detected_mode
+
+        self._hybrid_engine = _HybridEngine(self)
+        self._batch_engine = _BatchEngine(self)
+        self._diagnosis_engine = _DiagnosisEngine(self)
 
     def _emit_metric(
         self,
         name: str,
         value: float,
         unit: str,
-        labels: Optional[Dict[str, str]] = None,
+        labels: dict[str, str] | None = None,
     ) -> None:
-        """Emit a metric event if callback is registered.
-
-        Args:
-            name: Metric name
-            value: Numeric value
-            unit: Unit of measurement
-            labels: Optional labels dictionary
-        """
         if self._metrics_callback is None:
             return
 
@@ -385,13 +144,10 @@ class Matcher:
         )
 
     @staticmethod
-    def _resolve_threshold(
-        threshold_override: Optional[float], default: float
-    ) -> float:
+    def _resolve_threshold(threshold_override: float | None, default: float) -> float:
         return resolve_threshold(threshold_override, default)
 
     def _get_strategy(self) -> "MatchingStrategy":
-        """Get the matching strategy for the current training mode."""
         from .matching_strategy import StrategyConfig
 
         config = StrategyConfig(
@@ -413,15 +169,12 @@ class Matcher:
         self,
         texts: TextInput,
         top_k: int = 1,
-        threshold_override: Optional[float] = None,
+        threshold_override: float | None = None,
         **kwargs,
     ) -> Any:
         if self._training_mode == "hybrid":
-            return self._match_hybrid(
-                texts,
-                top_k=top_k,
-                threshold_override=threshold_override,
-                **kwargs,
+            return self._hybrid_engine.match(
+                texts, top_k=top_k, threshold_override=threshold_override, **kwargs
             )
         return self._get_strategy().match(
             texts,
@@ -434,7 +187,7 @@ class Matcher:
         self,
         texts: TextInput,
         top_k: int = 1,
-        threshold_override: Optional[float] = None,
+        threshold_override: float | None = None,
         **kwargs,
     ):
         texts_list, single_input = coerce_texts(texts)
@@ -479,7 +232,7 @@ class Matcher:
         self,
         texts: TextInput,
         top_k: int = 1,
-        threshold_override: Optional[float] = None,
+        threshold_override: float | None = None,
         **kwargs,
     ):
         executor = self._ensure_async_executor()
@@ -525,15 +278,12 @@ class Matcher:
         self,
         texts: TextInput,
         top_k: int = 1,
-        threshold_override: Optional[float] = None,
+        threshold_override: float | None = None,
         **kwargs,
     ) -> Any:
         if self._training_mode == "hybrid":
-            return await self._match_hybrid_async(
-                texts,
-                top_k=top_k,
-                threshold_override=threshold_override,
-                **kwargs,
+            return await self._hybrid_engine.match_async(
+                texts, top_k=top_k, threshold_override=threshold_override, **kwargs
             )
         return await self._get_strategy().match_async(
             texts,
@@ -590,7 +340,7 @@ class Matcher:
     def _hybrid_matcher(self, value: Any) -> None:
         self._components._hybrid_matcher = value
 
-    def get_reference_corpus(self) -> Dict[str, Any]:
+    def get_reference_corpus(self) -> dict[str, Any]:
         if self._training_mode in ("zero-shot", "hybrid", "auto"):
             matcher = self.embedding_matcher
             if matcher.embeddings is None or matcher.model is None:
@@ -615,11 +365,11 @@ class Matcher:
             f"Reference corpus is not available for matcher mode '{self._training_mode}'"
         )
 
-    def _detect_training_mode(self, training_data: Optional[List[dict]]) -> str:
+    def _detect_training_mode(self, training_data: list[dict] | None) -> str:
         if training_data is None:
             detected = "zero-shot"
         else:
-            entity_counts: Dict[str, int] = defaultdict(int)
+            entity_counts: dict[str, int] = defaultdict(int)
             for item in training_data:
                 entity_counts[item["label"]] += 1
 
@@ -660,8 +410,8 @@ class Matcher:
 
     def fit(
         self,
-        training_data: Optional[List[dict]] = None,
-        mode: Optional[str] = None,
+        training_data: list[dict] | None = None,
+        mode: str | None = None,
         show_progress: bool = True,
         **kwargs,
     ) -> "Matcher":
@@ -743,8 +493,8 @@ class Matcher:
 
     async def fit_async(
         self,
-        training_data: Optional[List[dict]] = None,
-        mode: Optional[str] = None,
+        training_data: list[dict] | None = None,
+        mode: str | None = None,
         show_progress: bool = True,
         **kwargs,
     ) -> "Matcher":
@@ -815,7 +565,7 @@ class Matcher:
         self,
         texts: TextInput,
         **kwargs,
-    ) -> Union[Optional[str], List[Optional[str]]]:
+    ) -> str | None | list[str | None]:
         results = self.match(texts, top_k=1, **kwargs)
         if isinstance(results, list):
             return [result["id"] if result else None for result in results]
@@ -825,182 +575,28 @@ class Matcher:
         self._apply_threshold(threshold)
         return self
 
-    def _match_hybrid(
-        self,
-        texts: TextInput,
-        top_k: int = 1,
-        threshold_override: Optional[float] = None,
-        **kwargs,
-    ) -> Any:
-        blocking_top_k = kwargs.get("blocking_top_k", 1000)
-        retrieval_top_k = kwargs.get("retrieval_top_k", max(50, top_k))
-        final_top_k = kwargs.get("final_top_k", top_k)
-        n_jobs = kwargs.get("n_jobs", -1)
-        chunk_size = kwargs.get("chunk_size")
-        effective_threshold = self._resolve_threshold(
-            threshold_override, self.threshold
-        )
-
-        texts, single_input = coerce_texts(texts)
-        if single_input:
-            raw_results = self.hybrid_matcher.match(
-                texts[0],
-                blocking_top_k=blocking_top_k,
-                retrieval_top_k=retrieval_top_k,
-                final_top_k=final_top_k,
-            )
-            return self._format_hybrid_results(
-                raw_results,
-                top_k=top_k,
-                threshold=effective_threshold,
-            )
-
-        raw_results = self.hybrid_matcher.match_bulk(
-            texts,
-            blocking_top_k=blocking_top_k,
-            retrieval_top_k=retrieval_top_k,
-            final_top_k=final_top_k,
-            n_jobs=n_jobs,
-            chunk_size=chunk_size,
-        )
-        return [
-            self._format_hybrid_results(
-                results,
-                top_k=top_k,
-                threshold=effective_threshold,
-            )
-            for results in raw_results
-        ]
-
-    async def _match_hybrid_async(
-        self,
-        texts: TextInput,
-        top_k: int = 1,
-        threshold_override: Optional[float] = None,
-        **kwargs,
-    ) -> Any:
-        executor = self._ensure_async_executor()
-        effective_threshold = self._resolve_threshold(
-            threshold_override, self.threshold
-        )
-
-        texts, single_input = coerce_texts(texts)
-        if single_input:
-            raw_results = await executor.run_in_thread(
-                self.hybrid_matcher.match,
-                texts[0],
-                kwargs.get("blocking_top_k", 1000),
-                kwargs.get("retrieval_top_k", max(50, top_k)),
-                kwargs.get("final_top_k", top_k),
-            )
-            return self._format_hybrid_results(
-                raw_results,
-                top_k=top_k,
-                threshold=effective_threshold,
-            )
-
-        raw_results = await executor.run_in_thread(
-            self.hybrid_matcher.match_bulk,
-            texts,
-            kwargs.get("blocking_top_k", 1000),
-            kwargs.get("retrieval_top_k", max(50, top_k)),
-            kwargs.get("final_top_k", top_k),
-            kwargs.get("n_jobs", -1),
-            kwargs.get("chunk_size"),
-        )
-        return [
-            self._format_hybrid_results(
-                results,
-                top_k=top_k,
-                threshold=effective_threshold,
-            )
-            for results in raw_results
-        ]
-
     async def match_batch_async(
         self,
-        queries: List[str],
-        threshold: Optional[float] = None,
+        queries: list[str],
+        threshold: float | None = None,
         top_k: int = 1,
         batch_size: int = 32,
-        on_progress: Optional[Callable[[int, int], None]] = None,
+        on_progress: Callable[[int, int], None] | None = None,
         **kwargs,
-    ) -> List[Any]:
+    ) -> list[Any]:
         if self._active_matcher is None:
             await self.fit_async()
 
-        executor = self._ensure_async_executor()
-        return await self._match_batch_async_impl(
-            executor,
+        return await self._batch_engine.match_batch(
             queries,
-            top_k,
-            batch_size,
-            on_progress,
-            threshold_override=threshold,
+            threshold=threshold,
+            top_k=top_k,
+            batch_size=batch_size,
+            on_progress=on_progress,
             **kwargs,
         )
 
-    async def _match_batch_async_impl(
-        self,
-        executor: Any,
-        queries: List[str],
-        top_k: int,
-        batch_size: int,
-        on_progress: Optional[Callable[[int, int], None]],
-        threshold_override: Optional[float] = None,
-        **kwargs,
-    ) -> List[Any]:
-        total = len(queries)
-        results = []
-        completed = 0
-
-        for index in range(0, total, batch_size):
-            current_task = asyncio.current_task()
-            if current_task is not None and current_task.cancelled():
-                raise asyncio.CancelledError()
-
-            batch = queries[index : index + batch_size]
-            batch_results = await executor.run_in_thread(
-                self.match,
-                batch,
-                top_k,
-                _threshold_override=threshold_override,
-                **kwargs,
-            )
-
-            if isinstance(batch_results, dict):
-                batch_results = [batch_results]
-            elif not isinstance(batch_results, list):
-                batch_results = list(batch_results)
-
-            results.extend(batch_results)
-            completed += len(batch)
-
-            if on_progress:
-                if inspect.iscoroutinefunction(on_progress):
-                    await on_progress(completed, total)
-                else:
-                    on_progress(completed, total)
-
-        return results
-
-    def _format_hybrid_results(
-        self,
-        results: Optional[List[Dict[str, Any]]],
-        top_k: int,
-        threshold: Optional[float] = None,
-    ) -> Any:
-        effective_threshold = self._resolve_threshold(threshold, self.threshold)
-        filtered = [
-            result
-            for result in (results or [])
-            if result.get("score", 0.0) >= effective_threshold
-        ]
-        if top_k == 1:
-            return filtered[0] if filtered else None
-        return filtered[:top_k]
-
-    def get_training_info(self) -> Dict[str, Any]:
+    def get_training_info(self) -> dict[str, Any]:
         return {
             "mode": self._training_mode,
             "detected_mode": self._detected_mode,
@@ -1012,7 +608,7 @@ class Matcher:
             "threshold": self.threshold,
         }
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         stats = {
             "num_entities": len(self.entities),
             "model_name": self.model_name,
@@ -1053,161 +649,25 @@ class Matcher:
 
         return stats
 
-    def _build_explanation(
-        self, query: str, results: Any, query_normalized: Optional[str]
-    ) -> Dict[str, Any]:
-        evaluation_threshold = self.threshold
-
-        if results is None:
-            result_list = []
-        elif isinstance(results, list):
-            result_list = results
-        else:
-            result_list = [results]
-
-        best = result_list[0] if result_list else None
-        matched = bool(best and best.get("score", 0) >= evaluation_threshold)
-
-        return {
-            "query": query,
-            "query_normalized": query_normalized,
-            "matched": matched,
-            "best_match": best,
-            "top_k": result_list,
-            "threshold": evaluation_threshold,
-            "mode": self._training_mode,
-        }
-
-    def _explain_match_impl(self, query: str, top_k: int) -> Dict[str, Any]:
-        if not self._active_matcher:
-            raise TrainingError(
-                "Matcher not ready. Call fit() first.",
-                details={"mode": self._training_mode},
-            )
-
-        results = self.match(query, top_k=top_k, _threshold_override=0.0)
-
-        query_normalized = None
-        if self.normalize:
-            normalizer = TextNormalizer()
-            query_normalized = normalizer.normalize(query)
-
-        return self._build_explanation(query, results, query_normalized)
-
     def explain_match(
         self,
         query: str,
         top_k: int = 5,
-    ) -> Dict[str, Any]:
-        return self._explain_match_impl(query, top_k)
+    ) -> dict[str, Any]:
+        return self._diagnosis_engine.explain(query, top_k)
 
     async def explain_match_async(
         self,
         query: str,
         top_k: int = 5,
-    ) -> Dict[str, Any]:
-        executor = self._ensure_async_executor()
+    ) -> dict[str, Any]:
+        return await self._diagnosis_engine.explain_async(query, top_k)
 
-        if not self._active_matcher:
-            raise TrainingError(
-                "Matcher not ready. Call fit() or fit_async() first.",
-                details={"mode": self._training_mode},
-            )
+    def diagnose(self, query: str) -> dict[str, Any]:
+        return self._diagnosis_engine.diagnose(query)
 
-        results = await self.match_async(query, top_k=top_k, _threshold_override=0.0)
-
-        query_normalized = None
-        if self.normalize:
-            normalizer = TextNormalizer()
-            query_normalized = await executor.run_in_thread(normalizer.normalize, query)
-
-        return self._build_explanation(query, results, query_normalized)
-
-    def diagnose(self, query: str) -> Dict[str, Any]:
-        diagnosis = {
-            "query": query,
-            "matcher_ready": self._active_matcher is not None,
-            "active_matcher": (
-                type(self._active_matcher).__name__ if self._active_matcher else None
-            ),
-        }
-
-        if not self._active_matcher:
-            diagnosis["issue"] = "Matcher not ready"
-            diagnosis["suggestion"] = "Call matcher.fit() to initialize the matcher"
-            return diagnosis
-
-        try:
-            explanation = self.explain_match(query, top_k=3)
-            diagnosis.update(explanation)
-
-            if not explanation["matched"]:
-                if explanation["best_match"]:
-                    score = explanation["best_match"].get("score", 0)
-                    threshold = explanation["threshold"]
-                    diagnosis["issue"] = (
-                        f"Score {score:.2f} below threshold {threshold}"
-                    )
-                    suggested_threshold = max(0.1, threshold - 0.1)
-                    diagnosis["suggestion"] = (
-                        f"Lower threshold with matcher.set_threshold({suggested_threshold:.1f}) "
-                        f"or add more training examples"
-                    )
-                else:
-                    diagnosis["issue"] = "No candidates found"
-                    diagnosis["suggestion"] = (
-                        "Check entity data and text normalization. "
-                        "Ensure entities have relevant names/aliases."
-                    )
-        except (ValueError, TypeError, RuntimeError, KeyError) as exc:
-            diagnosis["error"] = str(exc)
-            diagnosis["suggestion"] = "Check input format and entity configuration"
-
-        return diagnosis
-
-    async def diagnose_async(self, query: str) -> Dict[str, Any]:
-        diagnosis = {
-            "query": query,
-            "matcher_ready": self._active_matcher is not None,
-            "active_matcher": (
-                type(self._active_matcher).__name__ if self._active_matcher else None
-            ),
-        }
-
-        if not self._active_matcher:
-            diagnosis["issue"] = "Matcher not ready"
-            diagnosis["suggestion"] = (
-                "Call matcher.fit() or matcher.fit_async() to initialize"
-            )
-            return diagnosis
-
-        try:
-            explanation = await self.explain_match_async(query, top_k=3)
-            diagnosis.update(explanation)
-
-            if not explanation["matched"]:
-                if explanation["best_match"]:
-                    score = explanation["best_match"].get("score", 0)
-                    threshold = explanation["threshold"]
-                    diagnosis["issue"] = (
-                        f"Score {score:.2f} below threshold {threshold}"
-                    )
-                    suggested_threshold = max(0.1, threshold - 0.1)
-                    diagnosis["suggestion"] = (
-                        f"Lower threshold with matcher.set_threshold({suggested_threshold:.1f}) "
-                        f"or add more training examples"
-                    )
-                else:
-                    diagnosis["issue"] = "No candidates found"
-                    diagnosis["suggestion"] = (
-                        "Check entity data and text normalization. "
-                        "Ensure entities have relevant names/aliases."
-                    )
-        except (ValueError, TypeError, RuntimeError, KeyError) as exc:
-            diagnosis["error"] = str(exc)
-            diagnosis["suggestion"] = "Check input format and entity configuration"
-
-        return diagnosis
+    async def diagnose_async(self, query: str) -> dict[str, Any]:
+        return await self._diagnosis_engine.diagnose_async(query)
 
     def __repr__(self) -> str:
         status = "trained" if self._active_matcher else "untrained"
