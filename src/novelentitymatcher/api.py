@@ -19,109 +19,43 @@ Usage:
 from __future__ import annotations
 
 # --- Core matching ---
-from novelentitymatcher import (
-    Matcher,
-    SetFitClassifier,
-    TextNormalizer,
-    CrossEncoderReranker,
-    HierarchicalMatcher,
-    BlockingStrategy,
-    BM25Blocking,
-    TFIDFBlocking,
-    FuzzyBlocking,
-    NoOpBlocking,
-)
-
 # --- Novelty-aware orchestration ---
-from novelentitymatcher import (
-    NovelEntityMatcher,
-    NoveltyDetector,
-    LLMClassProposer,
-)
-
 # --- Pipeline ---
-from novelentitymatcher import (
-    DiscoveryPipeline,
-    PipelineConfig,
-    PipelineStage,
-    StageContext,
-    StageResult,
-    PipelineRunResult,
-)
-
 # --- Clustering ---
-from novelentitymatcher import (
-    ClusteringBackend,
-    ClusteringBackendRegistry,
-)
-
 # --- Exceptions ---
 from novelentitymatcher import (
-    SemanticMatcherError,
-    ValidationError,
-    TrainingError,
+    BlockingStrategy,
+    BM25Blocking,
+    ClusteringBackend,
+    ClusteringBackendRegistry,
+    CrossEncoderReranker,
+    DiscoveryPipeline,
+    FuzzyBlocking,
+    HierarchicalMatcher,
+    LLMClassProposer,
+    Matcher,
     MatchingError,
     ModeError,
+    NoOpBlocking,
+    NovelEntityMatcher,
+    NoveltyDetector,
+    PipelineConfig,
+    PipelineRunResult,
+    PipelineStage,
+    SemanticMatcherError,
+    SetFitClassifier,
+    StageContext,
+    StageResult,
+    TextNormalizer,
+    TFIDFBlocking,
+    TrainingError,
+    ValidationError,
 )
 
-# --- Schemas ---
-from novelentitymatcher.novelty.schemas.models import (
-    NovelSampleMetadata,
-    NovelSampleReport,
-    ClusterEvidence,
-    DiscoveryCluster,
-    ClassProposal,
-    NovelClassAnalysis,
-    ProposalReviewRecord,
-    NovelClassDiscoveryReport,
-)
-
-from novelentitymatcher.novelty.schemas.results import (
-    StrategyMetrics,
-    SampleMetrics,
-    DetectionReport,
-    EvaluationReport,
-)
-
-# --- Configs ---
-from novelentitymatcher.novelty.config.base import DetectionConfig
-from novelentitymatcher.novelty.config.strategies import (
-    ConfidenceConfig,
-    KNNConfig,
-    UncertaintyConfig,
-    ClusteringConfig,
-    SelfKnowledgeConfig,
-    PatternConfig,
-    OneClassConfig,
-    PrototypicalConfig,
-    MahalanobisConfig,
-    LOFConfig,
-    SetFitConfig,
-)
-from novelentitymatcher.novelty.config.weights import WeightConfig
-
-# --- Novelty strategies ---
-from novelentitymatcher.novelty.strategies.base import NoveltyStrategy
-from novelentitymatcher.novelty.strategies.confidence import ConfidenceStrategy
-from novelentitymatcher.novelty.strategies.knn_distance import KNNDistanceStrategy
-from novelentitymatcher.novelty.strategies.uncertainty import UncertaintyStrategy
-from novelentitymatcher.novelty.strategies.clustering import ClusteringStrategy
-from novelentitymatcher.novelty.strategies.self_knowledge import SelfKnowledgeStrategy
-from novelentitymatcher.novelty.strategies.pattern import PatternStrategy
-from novelentitymatcher.novelty.strategies.oneclass import OneClassStrategy
-from novelentitymatcher.novelty.strategies.prototypical import PrototypicalStrategy
-from novelentitymatcher.novelty.strategies.lof import LOFStrategy
-from novelentitymatcher.novelty.strategies.mahalanobis import (
-    MahalanobisDistanceStrategy,
-)
-
-# --- Novelty entity matcher ---
-from novelentitymatcher.novelty.entity_matcher import NovelEntityMatchResult
-
-# --- Novelty core ---
-from novelentitymatcher.novelty.core.strategies import StrategyRegistry
-from novelentitymatcher.novelty.core.signal_combiner import SignalCombiner
-from novelentitymatcher.novelty.core.metadata import MetadataBuilder
+# --- Core extras ---
+from novelentitymatcher.core.bert_classifier import BERTClassifier
+from novelentitymatcher.core.embedding_matcher import EmbeddingMatcher
+from novelentitymatcher.core.hierarchy import HierarchicalScoring, HierarchyIndex
 
 # --- Clustering backends ---
 from novelentitymatcher.novelty.clustering.backends import (
@@ -132,134 +66,187 @@ from novelentitymatcher.novelty.clustering.backends import (
 from novelentitymatcher.novelty.clustering.scalable import ScalableClusterer
 from novelentitymatcher.novelty.clustering.validation import ClusterValidator
 
-# --- Pipeline helpers ---
-from novelentitymatcher.pipeline.match_result import (
-    MatchRecord,
-    MatchResultWithMetadata,
+# --- Configs ---
+from novelentitymatcher.novelty.config.base import DetectionConfig
+from novelentitymatcher.novelty.config.strategies import (
+    ClusteringConfig,
+    ConfidenceConfig,
+    KNNConfig,
+    LOFConfig,
+    MahalanobisConfig,
+    OneClassConfig,
+    PatternConfig,
+    PrototypicalConfig,
+    SelfKnowledgeConfig,
+    SetFitConfig,
+    UncertaintyConfig,
 )
+from novelentitymatcher.novelty.config.weights import WeightConfig
+from novelentitymatcher.novelty.core.metadata import MetadataBuilder
+from novelentitymatcher.novelty.core.signal_combiner import SignalCombiner
 
-# --- Core extras ---
-from novelentitymatcher.core.bert_classifier import BERTClassifier
-from novelentitymatcher.core.embedding_matcher import EmbeddingMatcher
-from novelentitymatcher.core.hierarchy import HierarchyIndex, HierarchicalScoring
+# --- Novelty core ---
+from novelentitymatcher.novelty.core.strategies import StrategyRegistry
+
+# --- Novelty entity matcher ---
+from novelentitymatcher.novelty.entity_matcher import NovelEntityMatchResult
+from novelentitymatcher.novelty.evaluation.evaluator import NoveltyEvaluator
 
 # --- Evaluation ---
 from novelentitymatcher.novelty.evaluation.splitters import (
-    OODSplitter,
     GradualNoveltySplitter,
+    OODSplitter,
 )
-from novelentitymatcher.novelty.evaluation.evaluator import NoveltyEvaluator
+
+# --- Proposal ---
+from novelentitymatcher.novelty.proposal.retrieval import (
+    BGERetriever,
+    RetrievalAugmentedProposer,
+)
+
+# --- Schemas ---
+from novelentitymatcher.novelty.schemas.models import (
+    ClassProposal,
+    ClusterEvidence,
+    DiscoveryCluster,
+    NovelClassAnalysis,
+    NovelClassDiscoveryReport,
+    NovelSampleMetadata,
+    NovelSampleReport,
+    ProposalReviewRecord,
+)
+from novelentitymatcher.novelty.schemas.results import (
+    DetectionReport,
+    EvaluationReport,
+    SampleMetrics,
+    StrategyMetrics,
+)
+from novelentitymatcher.novelty.storage.index import ANNBackend, ANNIndex
 
 # --- Storage ---
 from novelentitymatcher.novelty.storage.review import (
     PromotionResult,
     ProposalReviewManager,
 )
-from novelentitymatcher.novelty.storage.index import ANNBackend, ANNIndex
 
-# --- Proposal ---
-from novelentitymatcher.novelty.proposal.retrieval import (
-    RetrievalAugmentedProposer,
-    BGERetriever,
+# --- Novelty strategies ---
+from novelentitymatcher.novelty.strategies.base import NoveltyStrategy
+from novelentitymatcher.novelty.strategies.clustering import ClusteringStrategy
+from novelentitymatcher.novelty.strategies.confidence import ConfidenceStrategy
+from novelentitymatcher.novelty.strategies.knn_distance import KNNDistanceStrategy
+from novelentitymatcher.novelty.strategies.lof import LOFStrategy
+from novelentitymatcher.novelty.strategies.mahalanobis import (
+    MahalanobisDistanceStrategy,
+)
+from novelentitymatcher.novelty.strategies.oneclass import OneClassStrategy
+from novelentitymatcher.novelty.strategies.pattern import PatternStrategy
+from novelentitymatcher.novelty.strategies.prototypical import PrototypicalStrategy
+from novelentitymatcher.novelty.strategies.self_knowledge import SelfKnowledgeStrategy
+from novelentitymatcher.novelty.strategies.uncertainty import UncertaintyStrategy
+
+# --- Pipeline helpers ---
+from novelentitymatcher.pipeline.match_result import (
+    MatchRecord,
+    MatchResultWithMetadata,
 )
 
 __all__ = [
-    # Matching
-    "Matcher",
-    "SetFitClassifier",
+    "ANNBackend",
+    "ANNIndex",
     "BERTClassifier",
-    "TextNormalizer",
-    "CrossEncoderReranker",
-    "HierarchicalMatcher",
-    "HierarchyIndex",
-    "HierarchicalScoring",
-    "EmbeddingMatcher",
-    "BlockingStrategy",
+    "BGERetriever",
     "BM25Blocking",
-    "TFIDFBlocking",
-    "FuzzyBlocking",
-    "NoOpBlocking",
-    # Novelty orchestration
-    "NovelEntityMatcher",
-    "NovelEntityMatchResult",
-    "NoveltyDetector",
-    "LLMClassProposer",
-    # Pipeline
-    "DiscoveryPipeline",
-    "PipelineConfig",
-    "PipelineStage",
-    "StageContext",
-    "StageResult",
-    "PipelineRunResult",
-    "MatchRecord",
-    "MatchResultWithMetadata",
+    "BlockingStrategy",
+    "ClassProposal",
+    "ClusterEvidence",
+    "ClusterValidator",
     # Clustering
     "ClusteringBackend",
     "ClusteringBackendRegistry",
+    "ClusteringConfig",
+    "ClusteringStrategy",
+    "ConfidenceConfig",
+    "ConfidenceStrategy",
+    "CrossEncoderReranker",
+    # Configs
+    "DetectionConfig",
+    "DetectionReport",
+    "DiscoveryCluster",
+    # Pipeline
+    "DiscoveryPipeline",
+    "EmbeddingMatcher",
+    "EvaluationReport",
+    "FuzzyBlocking",
+    "GradualNoveltySplitter",
     "HDBSCANBackend",
-    "SOPTICSBackend",
-    "UMAPHDBSCANBackend",
-    "ScalableClusterer",
-    "ClusterValidator",
-    # Exceptions
-    "SemanticMatcherError",
-    "ValidationError",
-    "TrainingError",
+    "HierarchicalMatcher",
+    "HierarchicalScoring",
+    "HierarchyIndex",
+    "KNNConfig",
+    "KNNDistanceStrategy",
+    "LLMClassProposer",
+    "LOFConfig",
+    "LOFStrategy",
+    "MahalanobisConfig",
+    "MahalanobisDistanceStrategy",
+    "MatchRecord",
+    "MatchResultWithMetadata",
+    # Matching
+    "Matcher",
     "MatchingError",
+    "MetadataBuilder",
     "ModeError",
+    "NoOpBlocking",
+    "NovelClassAnalysis",
+    "NovelClassDiscoveryReport",
+    "NovelEntityMatchResult",
+    # Novelty orchestration
+    "NovelEntityMatcher",
     # Schemas
     "NovelSampleMetadata",
     "NovelSampleReport",
-    "ClusterEvidence",
-    "DiscoveryCluster",
-    "ClassProposal",
-    "NovelClassAnalysis",
-    "ProposalReviewRecord",
-    "NovelClassDiscoveryReport",
-    "StrategyMetrics",
-    "SampleMetrics",
-    "DetectionReport",
-    "EvaluationReport",
-    # Configs
-    "DetectionConfig",
-    "ConfidenceConfig",
-    "KNNConfig",
-    "UncertaintyConfig",
-    "ClusteringConfig",
-    "SelfKnowledgeConfig",
-    "PatternConfig",
-    "OneClassConfig",
-    "PrototypicalConfig",
-    "MahalanobisConfig",
-    "LOFConfig",
-    "SetFitConfig",
-    "WeightConfig",
+    "NoveltyDetector",
+    "NoveltyEvaluator",
     # Novelty strategies
     "NoveltyStrategy",
-    "ConfidenceStrategy",
-    "KNNDistanceStrategy",
-    "UncertaintyStrategy",
-    "ClusteringStrategy",
-    "SelfKnowledgeStrategy",
-    "PatternStrategy",
-    "OneClassStrategy",
-    "PrototypicalStrategy",
-    "LOFStrategy",
-    "MahalanobisDistanceStrategy",
-    # Novelty core
-    "StrategyRegistry",
-    "SignalCombiner",
-    "MetadataBuilder",
     # Evaluation
     "OODSplitter",
-    "GradualNoveltySplitter",
-    "NoveltyEvaluator",
+    "OneClassConfig",
+    "OneClassStrategy",
+    "PatternConfig",
+    "PatternStrategy",
+    "PipelineConfig",
+    "PipelineRunResult",
+    "PipelineStage",
     # Storage
     "PromotionResult",
     "ProposalReviewManager",
-    "ANNBackend",
-    "ANNIndex",
+    "ProposalReviewRecord",
+    "PrototypicalConfig",
+    "PrototypicalStrategy",
     # Proposal
     "RetrievalAugmentedProposer",
-    "BGERetriever",
+    "SOPTICSBackend",
+    "SampleMetrics",
+    "ScalableClusterer",
+    "SelfKnowledgeConfig",
+    "SelfKnowledgeStrategy",
+    # Exceptions
+    "SemanticMatcherError",
+    "SetFitClassifier",
+    "SetFitConfig",
+    "SignalCombiner",
+    "StageContext",
+    "StageResult",
+    "StrategyMetrics",
+    # Novelty core
+    "StrategyRegistry",
+    "TFIDFBlocking",
+    "TextNormalizer",
+    "TrainingError",
+    "UMAPHDBSCANBackend",
+    "UncertaintyConfig",
+    "UncertaintyStrategy",
+    "ValidationError",
+    "WeightConfig",
 ]

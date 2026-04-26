@@ -10,8 +10,9 @@ For new projects, prefer DiscoveryPipeline for discovery workflows.
 NovelEntityMatcher remains supported for matcher-first patterns.
 """
 
-from importlib import import_module
 import os
+from importlib import import_module
+from typing import Any
 
 # Configure logging early, before other imports
 # Check NOVEL_ENTITY_MATCHER_VERBOSE environment variable
@@ -32,32 +33,32 @@ except Exception:  # pragma: no cover - fallback for local source usage
     __version__ = "0.1.0"
 
 __all__ = [
-    "Matcher",
-    "SetFitClassifier",
-    "TextNormalizer",
-    "CrossEncoderReranker",
-    "HierarchicalMatcher",
-    "BlockingStrategy",
     "BM25Blocking",
-    "TFIDFBlocking",
-    "FuzzyBlocking",
-    "NoOpBlocking",
-    "NovelEntityMatcher",
-    "DiscoveryPipeline",
-    "NoveltyDetector",
-    "LLMClassProposer",
-    "SemanticMatcherError",
-    "ValidationError",
-    "TrainingError",
-    "MatchingError",
-    "ModeError",
-    "PipelineConfig",
-    "PipelineStage",
-    "StageContext",
-    "StageResult",
-    "PipelineRunResult",
+    "BlockingStrategy",
     "ClusteringBackend",
     "ClusteringBackendRegistry",
+    "CrossEncoderReranker",
+    "DiscoveryPipeline",
+    "FuzzyBlocking",
+    "HierarchicalMatcher",
+    "LLMClassProposer",
+    "Matcher",
+    "MatchingError",
+    "ModeError",
+    "NoOpBlocking",
+    "NovelEntityMatcher",
+    "NoveltyDetector",
+    "PipelineConfig",
+    "PipelineRunResult",
+    "PipelineStage",
+    "SemanticMatcherError",
+    "SetFitClassifier",
+    "StageContext",
+    "StageResult",
+    "TFIDFBlocking",
+    "TextNormalizer",
+    "TrainingError",
+    "ValidationError",
 ]
 
 _EXPORTS = {
@@ -93,7 +94,7 @@ _EXPORTS = {
 }
 
 
-def __getattr__(name):
+def __getattr__(name: str) -> Any:
     if name not in _EXPORTS:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
