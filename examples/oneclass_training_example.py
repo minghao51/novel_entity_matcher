@@ -92,7 +92,7 @@ def main():
     results = detector.score_batch(batch_entities)
 
     print(f"\nProcessed {len(batch_entities)} entities:")
-    for entity, (is_novel, confidence) in zip(batch_entities, results):
+    for entity, (is_novel, confidence) in zip(batch_entities, results, strict=False):
         status = "NOVEL" if is_novel else "KNOWN"
         print(f"  {entity:25s} -> {status:8s} (conf: {confidence:.3f})")
 

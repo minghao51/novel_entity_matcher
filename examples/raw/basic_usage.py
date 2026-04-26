@@ -58,7 +58,7 @@ def basic_entity_matching():
 
     predictions = model.predict(test_queries)
 
-    for query, pred in zip(test_queries, predictions):
+    for query, pred in zip(test_queries, predictions, strict=False):
         print(f"{query:20} → {pred}")
 
     # Output:

@@ -46,7 +46,7 @@ def multilingual_example():
     ]
 
     predictions = model.predict(test_cases)
-    for text, pred in zip(test_cases, predictions):
+    for text, pred in zip(test_cases, predictions, strict=False):
         print(f"{text:10} → {pred}")
 
 

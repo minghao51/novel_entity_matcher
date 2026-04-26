@@ -79,7 +79,7 @@ def main():
     scores = score_batch_novelty(batch_entities, strategy)
 
     print(f"\nProcessed {len(batch_entities)} entities:")
-    for entity, score in zip(batch_entities, scores):
+    for entity, score in zip(batch_entities, scores, strict=False):
         print(f"  {entity:25s} -> {score:.3f}")
 
     # Pattern analysis

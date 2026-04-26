@@ -6,8 +6,8 @@ Run with: uv run python examples/async_examples.py
 """
 
 import asyncio
-from novelentitymatcher import Matcher
 
+from novelentitymatcher import Matcher
 
 # Sample entities
 SAMPLE_ENTITIES = [
