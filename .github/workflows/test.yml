@@ -18,17 +18,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.11"
-
-      - uses: astral-sh/setup-uv@v4
+          enable-cache: true
 
       - name: Install dependencies
         run: uv sync --frozen --group dev
 
+      - name: Run smoke tests
+        run: uv run pytest -q -m smoke --maxfail=3
+
       - name: Run fast tests (exclude network/model-heavy)
-        run: uv run python -m pytest -q -m "not integration and not slow"
+        run: uv run pytest -q -m "not integration and not slow"
 
   test-fast-branch-push:
     if: github.event_name == 'push' && github.ref != 'refs/heads/main'
@@ -37,17 +39,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.11"
-
-      - uses: astral-sh/setup-uv@v4
+          enable-cache: true
 
       - name: Install dependencies
         run: uv sync --frozen --group dev
 
+      - name: Run smoke tests
+        run: uv run pytest -q -m smoke --maxfail=3
+
       - name: Run fast tests (exclude network/model-heavy)
-        run: uv run python -m pytest -q -m "not integration and not slow"
+        run: uv run pytest -q -m "not integration and not slow"
 
   test-fast-main-matrix:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
@@ -55,22 +59,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12"]
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
-
-      - uses: astral-sh/setup-uv@v4
+          enable-cache: true
 
       - name: Install dependencies
         run: uv sync --frozen --group dev
 
       - name: Run fast tests (exclude network/model-heavy)
-        run: uv run python -m pytest -q -m "not integration and not slow"
+        run: uv run pytest -q -m "not integration and not slow"
 
   test-heavy:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
@@ -79,14 +82,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.11"
-
-      - uses: astral-sh/setup-uv@v4
+          enable-cache: true
 
       - name: Install dependencies
         run: uv sync --frozen --group dev
 
       - name: Run heavy integration tests
-        run: uv run python -m pytest -q -m "integration or slow"
+        run: uv run pytest -q -m "integration or slow"
