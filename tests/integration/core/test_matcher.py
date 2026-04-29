@@ -1,4 +1,5 @@
 import warnings
+from typing import ClassVar
 
 import numpy as np
 import pytest
@@ -200,7 +201,7 @@ class TestUnifiedMatcher:
     @staticmethod
     def _build_trained_matcher(sample_entities, threshold=0.4):
         class FakeClassifier:
-            labels = ["DE", "FR", "US"]
+            labels: ClassVar[list[str]] = ["DE", "FR", "US"]
 
             def predict_proba(self, text):
                 assert text == "deutschland"

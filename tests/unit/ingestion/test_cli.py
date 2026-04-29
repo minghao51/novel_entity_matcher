@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from novelentitymatcher.ingestion import cli
 
 
@@ -56,12 +58,9 @@ def test_cli_all_exits_non_zero_on_failure(monkeypatch, capsys):
         },
     )
 
-    try:
+    with pytest.raises(SystemExit) as exc_info:
         cli.main(["all"])
-    except SystemExit as exc:
-        assert exc.code == 1
-    else:
-        raise AssertionError("Expected SystemExit(1)")
+    assert exc_info.value.code == 1
 
     assert calls == ["ok", "fail"]
 

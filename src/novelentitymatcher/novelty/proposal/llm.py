@@ -24,21 +24,21 @@ try:
         wait_exponential_jitter,
     )
 except ImportError:  # pragma: no cover - optional dependency
-    RetryCallState = Any  # type: ignore[misc,assignment]
+    RetryCallState = Any
 
-    def retry(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[no-redef]
+    def retry(*_args: Any, **_kwargs: Any) -> Any:
         def _decorator(func: Any) -> Any:
             return func
 
         return _decorator
 
-    def wait_exponential_jitter(*_args: Any, **_kwargs: Any) -> None:  # type: ignore[no-redef]
+    def wait_exponential_jitter(*_args: Any, **_kwargs: Any) -> None:
         return None
 
-    def retry_if_exception_type(*_args: Any, **_kwargs: Any) -> None:  # type: ignore[no-redef]
+    def retry_if_exception_type(*_args: Any, **_kwargs: Any) -> None:
         return None
 
-    def before_sleep_log(*_args: Any, **_kwargs: Any) -> None:  # type: ignore[misc]
+    def before_sleep_log(*_args: Any, **_kwargs: Any) -> None:
         return None
 
 

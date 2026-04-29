@@ -87,10 +87,14 @@ class TestPerformanceMonitor:
 
     def test_track_context_manager_exception_still_records(self):
         monitor = PerformanceMonitor()
-        with pytest.raises(ValueError):
+
+        def _raise_inside_track():
             with monitor.track("failing_op"):
                 time.sleep(0.01)
                 raise ValueError("boom")
+
+        with pytest.raises(ValueError, match="boom"):
+            _raise_inside_track()
         assert "failing_op" in monitor.metrics
         assert len(monitor.metrics["failing_op"]) == 1
 

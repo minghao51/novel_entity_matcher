@@ -33,6 +33,7 @@ dependencies = [
     "transformers>=4.45.0,<5.0.0",
     "nltk>=3.9.4",
     "requests>=2.31.0",
+    "pydantic>=2.0.0",
     "rank-bm25>=0.2.2",
     "rapidfuzz>=3.0.0",
     "pyyaml>=6.0.0",
@@ -189,6 +190,9 @@ fixable = ["ALL"]
 [tool.ruff.format]
 quote-style = "double"
 
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["DTZ"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["--strict-markers", "-ra", "--durations=10", "--import-mode=importlib"]
@@ -257,6 +261,7 @@ module = [
     "seaborn.*",
     "aiobreaker.*",
     "pydantic_settings.*",
+    "tenacity.*",
     "novelentitymatcher.backends.*",
 ]
 ignore_missing_imports = true
@@ -268,6 +273,7 @@ module = [
     "novelentitymatcher.novelty.clustering.*",
     "novelentitymatcher.novelty.storage.*",
     "novelentitymatcher.novelty.storage.index.*",
+    "novelentitymatcher.core.hybrid",
 ]
 no_implicit_optional = false
 ignore_errors = true

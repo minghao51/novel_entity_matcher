@@ -3,6 +3,7 @@
 import pytest
 
 from novelentitymatcher import Matcher
+from novelentitymatcher.exceptions import ValidationError
 
 
 class TestAsyncAPIIntegration:
@@ -87,14 +88,14 @@ class TestErrorHandlingIntegration:
 
     def test_match_with_empty_entities(self):
         """Test matcher handles empty entities gracefully."""
-        with pytest.raises(Exception):  # Should raise validation error
+        with pytest.raises(ValidationError):
             Matcher(entities=[], model="minilm")
 
     def test_match_with_invalid_threshold(self):
         """Test matcher handles invalid threshold."""
         entities = [{"id": "1", "name": "Test"}]
 
-        with pytest.raises(Exception):  # Should raise validation error
+        with pytest.raises(ValidationError):
             Matcher(entities=entities, model="minilm", threshold=1.5)
 
     def test_match_without_training(self):

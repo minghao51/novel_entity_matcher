@@ -3,6 +3,7 @@
 import json
 from datetime import datetime
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import MagicMock
 
 import pytest
@@ -80,9 +81,9 @@ def test_create_records_assigns_unique_review_ids(tmp_path: Path):
     manager = ProposalReviewManager(tmp_path / "records.json")
 
     class MultiProposalReport:
-        discovery_id = "disc1"
-        timestamp = datetime.now()
-        diagnostics = {}
+        discovery_id: ClassVar[str] = "disc1"
+        timestamp: ClassVar[datetime] = datetime.now()
+        diagnostics: ClassVar[dict] = {}
         class_proposals = NovelClassAnalysis(
             proposed_classes=[
                 ClassProposal(
