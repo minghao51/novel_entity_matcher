@@ -29,15 +29,11 @@ jobs:
           python-version: "3.11"
           enable-cache: true
 
-      - name: Install doc dependencies
-        run: |
-          uv pip install --system \
-            mkdocs>=1.6.0 \
-            mkdocs-material>=9.5.0 \
-            mkdocstrings[python]>=0.25.0
+      - name: Install dependencies
+        run: uv sync --extra docs
 
       - name: Build site
-        run: mkdocs build
+        run: uv run mkdocs build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
