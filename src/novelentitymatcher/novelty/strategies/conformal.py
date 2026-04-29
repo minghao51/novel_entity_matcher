@@ -170,7 +170,9 @@ class ConformalCalibrator:
             else self._nonconformity_scores
         )
 
-        for i, (score, pred_class) in enumerate(zip(scores, predicted_classes, strict=False)):
+        for i, (score, pred_class) in enumerate(
+            zip(scores, predicted_classes, strict=False)
+        ):
             class_cal = self._class_scores.get(str(pred_class))
             if class_cal is not None and len(class_cal) > 0:
                 pvalues[i] = self._compute_pvalues(np.array([score]), class_cal)[0]

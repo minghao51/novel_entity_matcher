@@ -130,7 +130,7 @@ class BERTClassifier:
             raise TrainingError(
                 f"Failed to load model/tokenizer: {e}",
                 details={"model_name": self.model_name},
-            )
+            ) from e
 
         # Prepare dataset
         try:
@@ -167,7 +167,7 @@ class BERTClassifier:
             raise TrainingError(
                 f"Failed to prepare training data: {e}",
                 details={"num_examples": len(training_data)},
-            )
+            ) from e
 
         # Determine if we should use fp16 (disable for MPS due to compatibility)
         use_fp16 = self.use_fp16
@@ -181,7 +181,8 @@ class BERTClassifier:
 
                     warnings.warn(
                         "Disabling fp16 on MPS (Apple Silicon) due to compatibility. "
-                        "This may slightly slow down training but will not affect accuracy.", stacklevel=2
+                        "This may slightly slow down training but will not affect accuracy.",
+                        stacklevel=2,
                     )
                     use_fp16 = False
             except ImportError:

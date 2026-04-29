@@ -34,7 +34,9 @@ def test_smoke_core_matcher_zero_shot_path(monkeypatch):
                 texts = [texts]
             return np.asarray([vectors.get(t.lower(), [0.0, 0.0]) for t in texts])
 
-    monkeypatch.setattr("novelentitymatcher.core.matcher.SentenceTransformer", FakeModel)
+    monkeypatch.setattr(
+        "novelentitymatcher.core.matcher.SentenceTransformer", FakeModel
+    )
 
     matcher = Matcher(
         entities=[

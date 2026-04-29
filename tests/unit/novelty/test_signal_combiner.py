@@ -185,7 +185,9 @@ class TestSignalCombinerVoting:
             "oneclass": ({1}, {}),
         }
 
-        _novel_indices, novelty_scores = detector._combiner.combine(strategy_outputs, {})
+        _novel_indices, novelty_scores = detector._combiner.combine(
+            strategy_outputs, {}
+        )
 
         assert novelty_scores[0] == 3 / 4
         assert novelty_scores[1] == 1 / 4

@@ -5,14 +5,16 @@ on:
     branches: ["**"]
   pull_request:
 
-jobs:
-  lint:
-    runs-on: ubuntu-latest
+permissions:
+  contents: read
 
+jobs:
+  pre-commit:
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.11"
           enable-cache: true
@@ -20,17 +22,36 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --group dev
 
-      - name: Verify optional extras resolve
-        run: uv sync --frozen --extra all
+      - uses: pre-commit/action@v3.0.1
 
-      - name: Ruff check
-        run: uv run ruff check .
+  typecheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Ruff format check
-        run: uv run ruff format --check .
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen --group dev
 
       - name: Mypy type check
         run: uv run mypy src/novelentitymatcher
+
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Verify optional extras resolve
+        run: uv sync --frozen --extra all
 
       - name: Build package
         run: uv run python -m build --sdist --wheel
@@ -38,10 +59,22 @@ jobs:
       - name: Validate distributions
         run: uv run python -m twine check dist/*
 
+  security:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen --group dev
+
       - name: Scan dependencies for known vulnerabilities
-        # Temporary risk acceptance (patch-only batch, revisit by 2026-06-30):
-        # - CVE-2026-1839: requires transformers 5.x (major upgrade).
-        # - CVE-2026-3219: pip toolchain advisory outside runtime library surface.
-        # - GHSA-xqmj-j6mv-4862: litellm is pinned to >=1.83.7, but pip-audit
-        #   can still report stale metadata in some environments.
-        run: uv run pip-audit --ignore-vuln CVE-2026-1839 --ignore-vuln CVE-2026-3219 --ignore-vuln GHSA-xqmj-j6mv-4862
+        run: >
+          uv run pip-audit
+          --ignore-vuln CVE-2026-1839
+          --ignore-vuln CVE-2026-3219
+          --ignore-vuln GHSA-xqmj-j6mv-4862

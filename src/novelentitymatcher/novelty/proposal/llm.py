@@ -757,7 +757,10 @@ Guidelines:
 Provide your analysis as a JSON object:"""
 
         if len(prompt) > max_input_chars:
-            prompt = prompt[:max_input_chars] + "\n\n[TRUNCATED: prompt exceeded maximum length]"
+            prompt = (
+                prompt[:max_input_chars]
+                + "\n\n[TRUNCATED: prompt exceeded maximum length]"
+            )
 
         return prompt
 
@@ -857,7 +860,9 @@ Prefer one proposal per coherent cluster. Use source_cluster_ids for traceabilit
                     "Return only valid JSON matching the requested schema."
                 )
 
-        logger.error(f"Failed to generate LLM proposals: {_redact_api_keys(str(last_error))}")
+        logger.error(
+            f"Failed to generate LLM proposals: {_redact_api_keys(str(last_error))}"
+        )
         if novel_samples is not None:
             return self._create_fallback_analysis(novel_samples, [])
         return NovelClassAnalysis(
@@ -978,27 +983,37 @@ Please fix the errors above and return ONLY valid JSON matching the schema."""
                 response = self._call_litellm(model, prompt)
                 return response, model
             except LLM_AUTH_ERRORS as e:
-                logger.error(f"Authentication failed for model {model}: {_redact_api_keys(str(e))}")
+                logger.error(
+                    f"Authentication failed for model {model}: {_redact_api_keys(str(e))}"
+                )
                 raise LLMError(
                     f"LLM authentication failed for model {model}. Check your API key.",
                     last_error=e,
                     attempted_models=models_to_try,
                 ) from e
             except LLM_RETRYABLE_ERRORS as e:
-                logger.warning(f"Retryable error for model {model}: {_redact_api_keys(str(e))}")
+                logger.warning(
+                    f"Retryable error for model {model}: {_redact_api_keys(str(e))}"
+                )
                 last_error = e
                 continue
             except (ImportError, ValueError, TypeError, RuntimeError) as e:
-                logger.warning(f"Non-retryable error for model {model}: {_redact_api_keys(str(e))}")
+                logger.warning(
+                    f"Non-retryable error for model {model}: {_redact_api_keys(str(e))}"
+                )
                 last_error = e
                 continue
             except Exception as e:  # pragma: no cover - defensive fallback wrapper
-                logger.warning(f"Unexpected error for model {model}: {_redact_api_keys(str(e))}")
+                logger.warning(
+                    f"Unexpected error for model {model}: {_redact_api_keys(str(e))}"
+                )
                 last_error = e
                 continue
 
         # All models failed
-        error_msg = f"All LLM providers failed. Last error: {_redact_api_keys(str(last_error))}"
+        error_msg = (
+            f"All LLM providers failed. Last error: {_redact_api_keys(str(last_error))}"
+        )
         logger.error(error_msg)
         raise LLMError(
             error_msg,
@@ -1017,11 +1032,11 @@ Please fix the errors above and return ONLY valid JSON matching the schema."""
         """Call litellm completion API with retry, timeout, and circuit breaker."""
         try:
             from litellm import completion
-        except ImportError:
+        except ImportError as exc:
             raise ImportError(
                 "litellm is required for LLM class proposal. "
                 "Install with: pip install litellm"
-            )
+            ) from exc
 
         model_config = self._get_model_config(model)
         temperature = (

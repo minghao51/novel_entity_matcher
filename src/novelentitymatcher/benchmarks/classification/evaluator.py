@@ -90,7 +90,8 @@ class ClassificationEvaluator(BaseEvaluator[pd.DataFrame]):
             zero_division=0,
         )
         per_class_f1_dict = {
-            str(label): float(f1) for label, f1 in zip(unique_labels, per_class_f1, strict=False)
+            str(label): float(f1)
+            for label, f1 in zip(unique_labels, per_class_f1, strict=False)
         }
 
         class_names = (

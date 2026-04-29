@@ -158,7 +158,9 @@ def benchmark_inference(
     elapsed = time.perf_counter() - start_time
 
     throughput = len(texts) / elapsed
-    correct = sum(1 for pred, true in zip(predictions, true_labels, strict=False) if pred == true)
+    correct = sum(
+        1 for pred, true in zip(predictions, true_labels, strict=False) if pred == true
+    )
     accuracy = correct / len(true_labels)
 
     return {

@@ -162,7 +162,9 @@ def test_pipeline_orchestrator_sync_async_parity():
 
     assert len(sync_result.stage_results) == len(async_result.stage_results)
 
-    for sync_sr, async_sr in zip(sync_result.stage_results, async_result.stage_results, strict=False):
+    for sync_sr, async_sr in zip(
+        sync_result.stage_results, async_result.stage_results, strict=False
+    ):
         assert sync_sr.stage_name == async_sr.stage_name
         assert sync_sr.artifacts == async_sr.artifacts
 
