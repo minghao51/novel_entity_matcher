@@ -66,7 +66,7 @@ Classification assigns a query to one of the known entity classes. The system su
 
 ### 1.1 SetFit Full Training (Recommended)
 
-**Implementation**: `src/novelentitymatcher/core/classifier.py`  
+**Implementation**: `src/novelentitymatcher/core/classifier.py`
 **Benchmark Performance**: 91.2% test accuracy on ag_news (500 training samples)
 
 #### Mathematical Formulation
@@ -120,14 +120,14 @@ where:
 | Need best accuracy with moderate data | **Use Full SetFit** |
 | Production deployment | **Use Full SetFit** |
 
-**Pros**: Best accuracy, learns domain-specific embeddings, robust to variations  
+**Pros**: Best accuracy, learns domain-specific embeddings, robust to variations
 **Cons**: ~3 min training time, requires sufficient training data
 
 ---
 
 ### 1.2 SetFit Head-Only Training
 
-**Implementation**: `src/novelentitymatcher/core/classifier.py`  
+**Implementation**: `src/novelentitymatcher/core/classifier.py`
 **Benchmark Performance**: 54.7% test accuracy on ag_news (500 training samples)
 
 #### Mathematical Formulation
@@ -156,14 +156,14 @@ PCA is applied to reduce overfitting when training samples are limited.
 | Need fast training (~30s) | **Use Head-Only** |
 | Quick iteration/exploration | **Use Head-Only** |
 
-**Pros**: Fast training, works with minimal data, no GPU required  
+**Pros**: Fast training, works with minimal data, no GPU required
 **Cons**: Lower accuracy, embeddings not adapted to domain
 
 ---
 
 ### 1.3 Zero-Shot Classification
 
-**Implementation**: `src/novelentitymatcher/core/matcher.py` → `EmbeddingMatcher`  
+**Implementation**: `src/novelentitymatcher/core/matcher.py` → `EmbeddingMatcher`
 **Benchmark Performance**: 73.3% test accuracy on ag_news (no training)
 
 #### Mathematical Formulation
@@ -174,7 +174,7 @@ PCA is applied to reduce overfitting when training samples are limited.
 For each known entity e with name/alias text:
   e_embedding = f_pretrained(e.text)
   q_embedding = f_pretrained(query)
-  
+
   score(e) = cosine_similarity(q_embedding, e_embedding)
            = (q · e) / (||q|| · ||e||)
 
@@ -190,14 +190,14 @@ confidence = max_e score(e)
 | Entity names are semantically distinct | **Use Zero-Shot** |
 | Prototyping/exploration | **Use Zero-Shot** |
 
-**Pros**: No training required, instant setup, works out of the box  
+**Pros**: No training required, instant setup, works out of the box
 **Cons**: Lower accuracy, cannot learn from data
 
 ---
 
 ### 1.4 BERT Classification
 
-**Implementation**: `src/novelentitymatcher/core/bert_classifier.py`  
+**Implementation**: `src/novelentitymatcher/core/bert_classifier.py`
 **Benchmark Performance**: Superior accuracy for complex patterns (100+ examples/entity)
 
 #### Mathematical Formulation
@@ -224,14 +224,14 @@ Supports mixed precision (fp16) for faster training on GPU.
 | Complex patterns (sarcasm, nuance) | **Use BERT** |
 | GPU resources available | **Use BERT** |
 
-**Pros**: Superior accuracy (often 3-5% better than SetFit), state-of-the-art architecture  
+**Pros**: Superior accuracy (often 3-5% better than SetFit), state-of-the-art architecture
 **Cons**: Slower training (~5 min), slower inference, higher compute cost
 
 ---
 
 ### 1.5 Hybrid Mode
 
-**Implementation**: `src/novelentitymatcher/core/hybrid.py`  
+**Implementation**: `src/novelentitymatcher/core/hybrid.py`
 **Use Case**: Large datasets (10k+ entities)
 
 #### Pipeline Stages
@@ -320,7 +320,7 @@ Query Embedding + Predicted Class + Confidence
 
 #### SetFit Centroid Distance (RECOMMENDED)
 
-**Benchmark**: AUROC 0.886, DR@1% 16.6% (ag_news)  
+**Benchmark**: AUROC 0.886, DR@1% 16.6% (ag_news)
 **Weight**: 0.45 (highest in ensemble)
 
 **Mathematical Formulation**:
@@ -331,7 +331,7 @@ For each known class c:
 
 For query x:
   d(x) = min_c cosine_distance(f_tuned(x), μ_c)
-  
+
   novelty_score = d(x)
   is_novel = d(x) > threshold
 ```
@@ -343,9 +343,9 @@ SetFit-Trained Embeddings:
   ●●●●●         ○○○○○
   ●●●●●         ○○○○○    ← Tight clusters, maximum separation
   ●●●●●         ○○○○○
-  
+
   Class A       Class B
-  
+
   ★ = novel sample (far from all centroids)
 ```
 
@@ -358,7 +358,7 @@ SetFit-Trained Embeddings:
 
 #### kNN Distance Strategy
 
-**Benchmark**: AUROC 0.698 (raw embeddings), 0.866 (SetFit embeddings)  
+**Benchmark**: AUROC 0.698 (raw embeddings), 0.866 (SetFit embeddings)
 **Weight**: 0.45 (highest in ensemble)
 
 **Mathematical Formulation**:
@@ -367,10 +367,10 @@ SetFit-Trained Embeddings:
 For query x with embedding e_x:
   Find k nearest neighbors from reference set R:
     NN_k(x) = top-k most similar embeddings in R
-  
+
   For each neighbor n_i ∈ NN_k(x):
     d_i = 1 - cosine_similarity(e_x, e_{n_i})
-  
+
   novelty_score = mean(d_1, ..., d_k)
   is_novel = novelty_score ≥ distance_threshold
 ```
@@ -386,7 +386,7 @@ Uses ANN-backed search structures (HNSWlib/FAISS) for O(log n) search efficiency
 
 #### Mahalanobis Distance Strategy
 
-**Benchmark**: AUROC 0.474 (ag_news), 0.993 (go_emotions) — highly dataset dependent  
+**Benchmark**: AUROC 0.474 (ag_news), 0.993 (go_emotions) — highly dataset dependent
 **Weight**: 0.35
 
 **Mathematical Formulation**:
@@ -416,7 +416,7 @@ Regularization is applied to ensure invertibility: `Σ_reg = Σ + λI`
 
 #### Local Outlier Factor (LOF) Strategy
 
-**Benchmark**: AUROC 0.648 (ag_news), 0.850 (go_emotions)  
+**Benchmark**: AUROC 0.648 (ag_news), 0.850 (go_emotions)
 **Weight**: 0.30
 
 **Mathematical Formulation**:
@@ -441,7 +441,7 @@ is_novel = LOF(x) < score_threshold
 
 #### One-Class SVM Strategy
 
-**Benchmark**: AUROC 0.682 (ag_news)  
+**Benchmark**: AUROC 0.682 (ag_news)
 **Weight**: 0.10
 
 **Mathematical Formulation**:
@@ -467,7 +467,7 @@ The `nu` parameter controls the expected fraction of outliers.
 
 #### Confidence Strategy
 
-**Benchmark**: AUROC 0.500 (essentially random)  
+**Benchmark**: AUROC 0.500 (essentially random)
 **Weight**: 0.35
 
 **Mathematical Formulation**:
@@ -519,7 +519,7 @@ Apply HDBSCAN on combined reference + query embeddings:
 For each query point:
   If labeled as noise (cluster = -1):
     is_novel = True
-  
+
   If assigned to cluster C:
     cohesion = avg_pairwise_distance(members of C)
     support_score = 1 - cohesion
@@ -536,7 +536,7 @@ For each query point:
 
 #### Pattern Strategy
 
-**Benchmark**: AUROC 0.999 (entity-like text), 0.50 (free text)  
+**Benchmark**: AUROC 0.999 (entity-like text), 0.50 (free text)
 **Weight**: 0.20
 
 **Mathematical Formulation**:

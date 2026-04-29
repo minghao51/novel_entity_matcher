@@ -39,7 +39,7 @@ Prediction:
 
 Confidence scoring:
   novelty_score = clip(-f(x), 0, 1)
-  
+
   # Normalize decision function to [0, 1]
   novelty_score = clip(-decision_function(x) / scale, 0, 1)
 

@@ -25,7 +25,7 @@ Hierarchy:
 
 Cluster stability:
   persistence(C) = Σ_{x ∈ C} (λ_max(x) - λ_min(C))
-  
+
   where λ = 1/density (inverse density)
   λ_max(x) = density level at which x leaves the cluster
   λ_min(C) = density level at which cluster C forms
@@ -43,10 +43,10 @@ If labeled as noise (cluster = -1):
 If assigned to cluster C:
   cohesion = avg_pairwise_distance(members of C)
   support_score = 1 - cohesion
-  
+
   is_novel = support_score < (1 - cohesion_threshold)
              OR cluster not validated (persistence < persistence_threshold)
-  
+
   novelty_score = 1 - support_score
 ```
 
@@ -60,7 +60,7 @@ A cluster C is valid if:
 
 Known support:
   support_ratio = |C ∩ known_classes| / |C|
-  
+
   Low support_ratio → cluster may represent novel class
 ```
 

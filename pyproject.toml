@@ -47,6 +47,13 @@ novelentitymatcher-bench = "novelentitymatcher.benchmarks.cli:main"
 novelentitymatcher-review = "novelentitymatcher.novelty.cli:main"
 
 [project.optional-dependencies]
+# Documentation building and serving
+docs = [
+    "mkdocs>=1.6.0",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.25.0",
+]
+
 # Progress bars for notebooks and terminals
 jupyter = [
     "tqdm>=4.66.0",

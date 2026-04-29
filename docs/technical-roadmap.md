@@ -1,7 +1,7 @@
 # Technical Roadmap
 
-**Last Updated:** 2026-03-24  
-**Status:** Active technical plan  
+**Last Updated:** 2026-03-24
+**Status:** Active technical plan
 **Version Path:** 0.1.0 package today -> 1.0.0 architecture target
 
 ## Purpose

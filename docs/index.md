@@ -1,84 +1,76 @@
-# Documentation Index
+# Novel Entity Matcher
 
-This folder is split into active guides, experiment docs, architecture notes, and archived project history.
+Map messy text to canonical entities with automatic novel entity detection and classification.
 
-## Guides
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/minghao51/novel_entity_matcher/blob/main/LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/novel-entity-matcher)](https://pypi.org/project/novel-entity-matcher/)
+[![Python Version](https://img.shields.io/pypi/pyversions/novel-entity-matcher)](https://pypi.org/project/novel-entity-matcher/)
 
-- [`quickstart.md`](./quickstart.md): unified `Matcher` class with smart auto-selection
-- [`async-guide.md`](./async-guide.md): async/await API for high-concurrency scenarios
-- [`examples.md`](./examples.md): maintained example inventory for the current API
-- [`troubleshooting.md`](./troubleshooting.md): common install and first-run errors
-- [`models.md`](./models.md): model registry, aliases, and selection guidance
-- [`matcher-modes.md`](./matcher-modes.md): matcher mode system (zero-shot, head-only, full, hybrid)
-- [`static-embeddings.md`](./static-embeddings.md): static embedding backend notes
-- [`configuration.md`](./configuration.md): configuration system and model registries
-- [`novel-class-detection.md`](./novel-class-detection.md): current novelty-aware matching and class discovery workflow
+## What It Solves
 
-## Benchmarks & Experiments
+- **Normalize** messy entity strings (typos, aliases, alternate names)
+- **Map** text to canonical IDs (e.g. country code matching)
+- **Detect** novel entities not present in your known classes
+- **Discover** and propose new entity categories automatically
+- Run **locally** with Sentence Transformers + SetFit — no cloud API required
 
-All benchmark docs are in [`experiments/`](./experiments/):
+Example: `"Deutchland"` → `DE`
 
-- [`experiments/benchmarking.md`](./experiments/benchmarking.md): how to run benchmarks via `novelentitymatcher-bench` CLI
-- [`experiments/benchmark-results.md`](./experiments/benchmark-results.md): ER, classification, and novelty results
-- [`experiments/novelty-detection-benchmark.md`](./experiments/novelty-detection-benchmark.md): novelty strategy results (traditional + SetFit-based)
-- [`experiments/speed-benchmark-results.md`](./experiments/speed-benchmark-results.md): sync vs async route speed results
-- [`experiments/country-classifier-scripts.md`](./experiments/country-classifier-scripts.md): country classifier experiment walkthrough
-- [`experiments/index.md`](./experiments/index.md): experiment inventory and execution conventions
+## Quick Start
 
-## Internals
+```python
+import asyncio
+from novelentitymatcher import Matcher
 
-- [`architecture.md`](./architecture.md): module layout and internals
-- [`architecture/hierarchical-matching.md`](./architecture/hierarchical-matching.md): hierarchy-specific design notes
-- [`bert-classifier.md`](./bert-classifier.md): BERT classifier details
-- [`classifier-routes-comparison.md`](./classifier-routes-comparison.md): classifier route tradeoffs
+matcher = Matcher(["US", "CA", "DE", "FR", "JP"])
+results = asyncio.run(matcher("Deutchland"))
+# → MatchResult(id="DE", score=0.92)
+```
 
-## Planning
+## Key Features
 
-- [`technical-roadmap.md`](./technical-roadmap.md): active technical roadmap grounded in the current repo and target discovery-pipeline architecture
-- [`phase2-roadmap.md`](./phase2-roadmap.md): next phase implementation plan (signal fusion, pipeline contracts, discovery quality)
-- [`audit-report.md`](./audit-report.md): latest comprehensive codebase audit and gap analysis
+- **Unified `Matcher` class** — auto-selects between zero-shot, SetFit, BERT, and hybrid modes
+- **Novelty Detection** — identifies entities that don't match any known class using kNN, clustering, and statistical strategies
+- **Discovery Pipeline** — staged processing with novel class proposal via LLM or heuristic methods
+- **Blocking & Reranking** — BM25, TF-IDF, and fuzzy blocking with cross-encoder reranking for scalability
+- **Hierarchical Matching** — tree-aware entity resolution with configurable depth and pruning
+- **Async API** — high-throughput matching with `async/await` for batch workloads
+- **Multiple Backends** — Sentence Transformers, LiteLLM, and static embeddings (Model2Vec)
 
-## Archive
+## Where to Go Next
 
-- [`archive/index.md`](./archive/index.md): archived research notes, implementation snapshots, and operational docs
-- [`archive/related-work.md`](./archive/related-work.md): archived research landscape
-- [`archive/novelty-methods-research.md`](./archive/novelty-methods-research.md): archived novelty-method proposals
-- [`archive/implementation/2026-03-26-mypy-fixes.md`](./archive/implementation/2026-03-26-mypy-fixes.md): archived maintenance note
-- [`archive/pypi-trusted-publishing.md`](./archive/pypi-trusted-publishing.md): archived release setup note
-- [`archive/2026-04-25-benchmark-comprehensive-analysis.md`](./archive/2026-04-25-benchmark-comprehensive-analysis.md): merged into `experiments/benchmark-results.md`
-- [`archive/2026-04-25-phase2-benchmark-results.md`](./archive/2026-04-25-phase2-benchmark-results.md): merged into `experiments/novelty-detection-benchmark.md`
-- [`archive/2026-04-25-novelty-detection-benchmark-root.md`](./archive/2026-04-25-novelty-detection-benchmark-root.md): moved to `experiments/novelty-detection-benchmark.md`
+<div class="grid cards" markdown>
 
-### I want to use the library
+-   :rocket: **Getting Started**
+    [Quickstart guide](quickstart.md) — install, create a matcher, and run your first match
 
-1. Read [`quickstart.md`](./quickstart.md).
-2. If processing large batches (1K+ queries), read [`async-guide.md`](./async-guide.md).
-3. Run one of the maintained examples from `examples/`.
-4. Use [`models.md`](./models.md) and [`matcher-modes.md`](./matcher-modes.md) to refine behavior.
-5. Use [`troubleshooting.md`](./troubleshooting.md) if setup/runtime issues appear.
+-   :books: **API Reference**
+    [Auto-generated docs](api/index.md) — full API documentation from source docstrings
 
-### I want to reproduce experiments
+-   :bulb: **Guides**
+    [Async API](async-guide.md) · [Configuration](configuration.md) · [Models](models.md) · [Matcher Modes](matcher-modes.md)
 
-1. Read [`experiments/index.md`](./experiments/index.md).
-2. Use the runnable scripts in `experiments/`.
-3. Review [`experiments/benchmarking.md`](./experiments/benchmarking.md) or [`experiments/country-classifier-scripts.md`](./experiments/country-classifier-scripts.md) as needed.
+-   :test_tube: **Experiments**
+    [Benchmarking](experiments/index.md) — reproduce results and run your own benchmarks
 
-### I want lower-level control
+-   :gear: **Architecture**
+    [Internals](architecture.md) — module layout, design decisions, and extension points
 
-1. Read [`examples.md`](./examples.md).
-2. Start from `examples/raw/`.
-3. Refer to [`architecture.md`](./architecture.md) for project internals.
+-   :map: **Roadmap**
+    [Technical Roadmap](technical-roadmap.md) — active development plan and upcoming features
 
-### I want to contribute or plan features
+</div>
 
-1. Read [`technical-roadmap.md`](./technical-roadmap.md) for the active implementation plan
-2. Read [`novel-class-detection.md`](./novel-class-detection.md) for the current novelty workflow
-3. Check [`architecture.md`](./architecture.md) for implementation details
-4. Use [`archive/index.md`](./archive/index.md) only when you need historical context or older proposals
-5. See GitHub issues for specific tasks and discussions
+## Installation
 
-## Notes
+```bash
+uv add novel-entity-matcher
+```
 
-- The package code lives in `src/novelentitymatcher/` (src-layout).
-- Script experiments live in `experiments/`.
-- Local generated outputs should go under `artifacts/`, not the repository root.
+Optional extras for novelty detection, LLM features, and visualization:
+
+```bash
+uv add "novel-entity-matcher[novelty]"
+uv add "novel-entity-matcher[llm]"
+uv add "novel-entity-matcher[viz]"
+```

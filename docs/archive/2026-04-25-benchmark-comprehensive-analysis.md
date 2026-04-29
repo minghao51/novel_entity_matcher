@@ -214,7 +214,7 @@ Even with SetFit training on known classes:
 
 ### 5.2 What Needs Improvement
 
-1. **Head-Only Training Efficiency**: 
+1. **Head-Only Training Efficiency**:
    - 500 samples takes ~2 hours to train
    - Underperforms zero-shot with limited data
    - Needs either more data or faster training

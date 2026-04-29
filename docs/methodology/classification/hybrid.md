@@ -49,7 +49,7 @@ Output: candidates with score ≥ fuzzy_threshold
 For each candidate c from blocking stage:
   c_embedding = f(c.name)
   q_embedding = f(query)
-  
+
   score(c) = cosine_similarity(q_embedding, c_embedding)
 
 Output: top-k candidates by embedding similarity

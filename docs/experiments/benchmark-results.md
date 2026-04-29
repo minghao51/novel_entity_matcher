@@ -4,7 +4,7 @@ Related docs: [`benchmarking.md`](./benchmarking.md) | [`speed-benchmark-results
 
 ## Latest Results: Zero-Shot vs Head-Only vs Full SetFit (April 2, 2026)
 
-**Model:** sentence-transformers/all-MiniLM-L6-v2  
+**Model:** sentence-transformers/all-MiniLM-L6-v2
 **Key fix:** Probability reordering bug + PCA dimensionality reduction + stratified sampling
 
 ### ag_news (4 classes)

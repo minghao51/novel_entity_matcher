@@ -1,7 +1,7 @@
 # Phase 2 Roadmap: Signal Fusion, Pipeline Contracts & Discovery Quality
 
-**Last Updated:** 2026-04-04  
-**Status:** Active  
+**Last Updated:** 2026-04-04
+**Status:** Active
 **Predecessor:** [technical-roadmap.md](./technical-roadmap.md)
 
 ## Purpose

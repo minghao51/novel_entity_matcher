@@ -1,9 +1,9 @@
 # Phase 2 Benchmark Results
 
-**Date:** 2026-04-04  
-**Model:** sentence-transformers/all-MiniLM-L6-v2  
-**Datasets:** ag_news, go_emotions  
-**Max samples per class:** 500  
+**Date:** 2026-04-04
+**Model:** sentence-transformers/all-MiniLM-L6-v2
+**Datasets:** ag_news, go_emotions
+**Max samples per class:** 500
 **OOD ratio:** 0.2
 
 ## Strategy-Level Results

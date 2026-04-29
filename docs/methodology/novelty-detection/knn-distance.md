@@ -44,7 +44,7 @@ For large reference sets, approximate nearest neighbor search is used:
 HNSW Index:
   Build: O(n · log(n) · M) where M = max connections
   Query: O(log(n) · M)
-  
+
 FAISS Index:
   Build: O(n · d) for flat index
   Query: O(n · d) for flat, O(log(n) · d) for IVF

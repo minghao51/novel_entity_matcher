@@ -1,7 +1,7 @@
 # Novelty Detection Benchmark Results
 
-**Date**: April 2026  
-**Model**: sentence-transformers/all-MiniLM-L6-v2  
+**Date**: April 2026
+**Model**: sentence-transformers/all-MiniLM-L6-v2
 **Dataset**: ag_news (4 classes: World, Sports, Business, Sci/Tech)
 
 ---
@@ -71,9 +71,9 @@ This benchmark evaluates both **traditional novelty detection methods** and **no
 Pre-trained embeddings create loose, overlapping clusters:
 
     ● ● ●       ○ ○ ○
-      ● ● ●   ○ ○ 
+      ● ● ●   ○ ○
         ● ● ○ ○
-    
+
     Class A       Class B    (overlapping, not well-separated)
 ```
 
@@ -85,7 +85,7 @@ Contrastive learning creates tight, well-separated clusters:
     ●●●●●         ○○○○○
     ●●●●●         ○○○○○
     ●●●●●         ○○○○○
-    
+
     Class A       Class B    (tight clusters, maximum separation)
 ```
 
