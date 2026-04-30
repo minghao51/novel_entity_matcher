@@ -28,6 +28,8 @@ venv/
 
 # Jupyter / notebooks
 .ipynb_checkpoints/
+__marimo__/
+notebooks/__marimo__/
 
 # OS/editor noise
 .DS_Store
@@ -46,6 +48,11 @@ checkpoints/
 *.pt
 *.pth
 *.bin
+
+# CI-generated notebook docs (source of truth = notebooks/*.py)
+docs/notebooks/*.html
+docs/notebooks/0*.md
+!docs/notebooks/index.md
 
 # Local runtime outputs
 tmp/

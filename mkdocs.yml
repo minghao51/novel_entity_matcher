@@ -79,6 +79,17 @@ nav:
       - Overview: experiments/index.md
       - Benchmarking: experiments/benchmarking.md
       - Results: experiments/benchmark-results.md
+  - Notebooks:
+      - Overview: notebooks/index.md
+      - Country Explorer: notebooks/01_country_matching_explorer.md
+      - Novelty Dashboard: notebooks/02_novel_entity_dashboard.md
+      - Training Impact: notebooks/03_training_impact_analyzer.md
+      - Methodology: notebooks/04_methodology_benchmarks_overview.md
+  - Project:
+      - Testing Guide: testing.md
+      - Contributing: CONTRIBUTING.md
+      - Changelog: CHANGELOG.md
+      - Benchmark Organization: benchmark-organization.md
   - Roadmap:
       - Technical Roadmap: technical-roadmap.md
       - Phase 2: phase2-roadmap.md

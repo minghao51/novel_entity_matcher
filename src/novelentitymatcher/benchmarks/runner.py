@@ -697,8 +697,8 @@ class BenchmarkRunner:
                     entities, model=model, mode="zero-shot", threshold=0.5
                 )
 
-                def novelty_fn(text: str) -> float:
-                    return 1.0 - matcher_fn(text)[1]
+                def novelty_fn(text: str, _matcher_fn=matcher_fn) -> float:
+                    return 1.0 - _matcher_fn(text)[1]
 
                 result = self.novelty_evaluator.evaluate(
                     (known_data, ood_data),
@@ -1051,7 +1051,7 @@ class BenchmarkRunner:
         return results
 
     def _save_results(self, results: dict[str, Any], suffix: str = "") -> Path:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         filename = f"benchmark_results{suffix}_{timestamp}.json"
         output_path = self.output_dir / filename
 
@@ -1067,7 +1067,7 @@ class BenchmarkRunner:
         filename: str | None = None,
     ) -> Path:
         if filename is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
             output_path = self.output_dir / f"benchmark_results_{timestamp}.json"
         else:
             output_path = Path(filename)

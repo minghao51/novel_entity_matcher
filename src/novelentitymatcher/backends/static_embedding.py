@@ -69,7 +69,7 @@ class StaticEmbeddingBackend(EmbeddingBackend):
             raise ValueError(
                 f"Failed to load static embedding model {model_name}. "
                 f"Tried both model2vec and SentenceTransformer. Last error: {e}"
-            )
+            ) from e
 
     def encode(self, texts, batch_size: int = 32):
         """Generate embeddings using static lookup."""
