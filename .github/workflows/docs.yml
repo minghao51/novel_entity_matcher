@@ -67,10 +67,12 @@ jobs:
       - name: Export changed notebooks as static HTML (slow, runs ML models)
         if: steps.check_notebooks.outputs.changed != ''
         run: |
-          for f in ${{ steps.check_notebooks.outputs.changed }}; do
+          echo "${{ steps.check_notebooks.outputs.changed }}" > /tmp/changed_notebooks.txt
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
             name=$(basename "$f" .py)
             uv run marimo export html "$f" -o "docs/notebooks/${name}.html" -f
-          done
+          done < /tmp/changed_notebooks.txt
 
       - name: Build site
         run: uv run mkdocs build
