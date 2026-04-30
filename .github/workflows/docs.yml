@@ -4,12 +4,14 @@ on:
   push:
     branches: [main]
     paths:
+      - ".github/workflows/docs.yml"
       - "docs/**"
       - "notebooks/**"
       - "src/**"
       - "mkdocs.yml"
   pull_request:
     paths:
+      - ".github/workflows/docs.yml"
       - "docs/**"
       - "notebooks/**"
       - "src/**"
