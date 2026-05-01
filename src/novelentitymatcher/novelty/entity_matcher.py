@@ -9,10 +9,7 @@ multi-signal ``NoveltyDetector`` and optional ``LLMClassProposer``.
 from __future__ import annotations
 
 import asyncio
-import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -23,7 +20,6 @@ from ..pipeline.discovery_support import (
     build_novel_match_result,
     collect_match_result_async,
     collect_match_result_sync,
-    derive_existing_classes,
 )
 from ..pipeline.match_result import MatchResultWithMetadata
 from ..pipeline.orchestrator import PipelineOrchestrator
@@ -33,9 +29,9 @@ from .clustering.scalable import ScalableClusterer
 from .config.base import DetectionConfig
 from .config.strategies import ClusteringConfig, ConfidenceConfig, KNNConfig
 from .core.detector import NoveltyDetector
+from .discovery_base import DiscoveryBase
 from .proposal.llm import LLMClassProposer
-from .schemas import NovelClassDiscoveryReport, NovelSampleMetadata, NovelSampleReport
-from .storage.persistence import export_summary, save_proposals
+from .schemas import NovelClassDiscoveryReport
 from .storage.review import ProposalReviewManager
 
 logger = get_logger(__name__)
@@ -60,7 +56,7 @@ class NovelEntityMatchResult:
 NoveltyMatchResult = NovelEntityMatchResult
 
 
-class NovelEntityMatcher:
+class NovelEntityMatcher(DiscoveryBase):
     """
     Primary public API for novelty-aware matching.
 
@@ -244,11 +240,7 @@ class NovelEntityMatcher:
     def _derive_existing_classes(
         self, existing_classes: list[str] | None = None
     ) -> list[str]:
-        return derive_existing_classes(
-            entities=self.entities,
-            get_reference_corpus=self.get_reference_corpus,
-            existing_classes=existing_classes,
-        )
+        return super()._derive_existing_classes(existing_classes)
 
     async def _collect_match_result_async(
         self, queries: list[str]
@@ -301,31 +293,6 @@ class NovelEntityMatcher:
             existing_classes=existing_classes,
             context=context,
             run_llm_proposal=run_llm_proposal,
-        )
-
-    def _coerce_novel_sample_report(self, report: Any) -> NovelSampleReport:
-        if isinstance(report, NovelSampleReport):
-            return report
-
-        samples = [
-            sample
-            if isinstance(sample, NovelSampleMetadata)
-            else NovelSampleMetadata(
-                text=str(getattr(sample, "text", "")),
-                index=int(getattr(sample, "index", 0)),
-                confidence=float(getattr(sample, "confidence", 0.0)),
-                predicted_class=str(getattr(sample, "predicted_class", "unknown")),
-                novelty_score=getattr(sample, "novelty_score", None),
-                cluster_id=getattr(sample, "cluster_id", None),
-                signals=dict(getattr(sample, "signals", {})),
-            )
-            for sample in getattr(report, "novel_samples", [])
-        ]
-        return NovelSampleReport(
-            novel_samples=samples,
-            detection_strategies=list(getattr(report, "detection_strategies", [])),
-            config=dict(getattr(report, "config", {})),
-            signal_counts=dict(getattr(report, "signal_counts", {})),
         )
 
     def match(
@@ -405,67 +372,28 @@ class NovelEntityMatcher:
         return_metadata: bool = True,
         run_llm_proposal: bool = True,
     ) -> NovelClassDiscoveryReport:
-        discovery_id = str(uuid.uuid4())[:8]
-        logger.info(
-            "[%s] Starting novel class discovery for %s queries",
-            discovery_id,
-            len(queries),
-        )
         pipeline = self._build_orchestrator(
             existing_classes=existing_classes,
             context=context,
             run_llm_proposal=run_llm_proposal,
         )
-        context_obj = StageContext(inputs=list(queries))
+        ctx = StageContext(inputs=list(queries))
 
         if return_metadata:
-            pipeline_result = await pipeline.run_async(context_obj)
+            pipeline_result = await pipeline.run_async(ctx)
         else:
-            pipeline_result = pipeline.run(context_obj)
+            pipeline_result = pipeline.run(ctx)
 
-        known_classes = self._derive_existing_classes(existing_classes)
-        novel_sample_report = self._coerce_novel_sample_report(
-            pipeline_result.context.artifacts["novel_sample_report"]
-        )
-        discovery_clusters = pipeline_result.context.artifacts.get(
-            "discovery_clusters", []
-        )
-        class_proposals = pipeline_result.context.artifacts.get("class_proposals")
-
-        report = NovelClassDiscoveryReport(
-            discovery_id=discovery_id,
-            timestamp=datetime.now(),
-            matcher_config=self._get_matcher_config(),
-            detection_config=self.detection_config.model_dump(),
-            novel_sample_report=novel_sample_report,
-            discovery_clusters=discovery_clusters,
-            class_proposals=class_proposals,
-            diagnostics={
-                "stage_metadata": pipeline_result.context.metadata,
-            },
-            metadata={
-                "num_queries": len(queries),
-                "num_existing_classes": len(known_classes),
-                "num_novel_samples": len(novel_sample_report.novel_samples),
-                "num_discovery_clusters": len(discovery_clusters),
-                "context": context,
-                "pipeline_stage_metadata": pipeline_result.context.metadata,
-            },
+        report = self._build_discovery_report(
+            pipeline_result=pipeline_result,
+            detection_config_dump=self.detection_config.model_dump(),
+            existing_classes=existing_classes,
+            context=context,
         )
 
         report.review_records = self.review_manager.create_records(report)
 
-        if self.auto_save:
-            output_file = save_proposals(report, output_dir=self.output_dir)
-            report.output_file = output_file
-            summary_path = output_file.replace(
-                f".{output_file.split('.')[-1]}",
-                "_summary.md",
-            )
-            export_summary(report, summary_path)
-            report.metadata["summary_file"] = summary_path
-
-        return report
+        return self._finalize_report(report)
 
     def batch_discover(
         self,
@@ -505,37 +433,6 @@ class NovelEntityMatcher:
         if hasattr(self.matcher, "_training_mode"):
             config["mode"] = self.matcher._training_mode
         return config
-
-    def export_metrics(
-        self,
-        format: str = "json",
-        path: str | None = None,
-    ) -> Path:
-        """Export collected metrics to file.
-
-        Args:
-            format: Export format ('json' or 'csv')
-            path: Output file path (default: './metrics_{timestamp}.{ext}')
-
-        Returns:
-            Path to exported metrics file
-
-        Raises:
-            ValueError: If format is not 'json' or 'csv'
-        """
-        from ..pipeline.discovery_support import export_pipeline_metrics
-
-        metrics: dict[str, Any] = {
-            "num_entities": len(self.entities),
-            "acceptance_threshold": self.acceptance_threshold,
-            "use_novelty_detector": bool(self.use_novelty_detector),
-        }
-        if hasattr(self.matcher, "model_name"):
-            metrics["model_name"] = str(self.matcher.model_name)
-        if hasattr(self.matcher, "_training_mode"):
-            metrics["training_mode"] = self.matcher._training_mode
-
-        return export_pipeline_metrics(metrics=metrics, format=format, path=path)
 
 
 def create_novel_entity_matcher(

@@ -16,3 +16,4 @@
   - Verify: Run `npm run check` and `npm test` after changes.
 - **Docs:** Update `ARCHITECTURE.md` if structure changes.
 - **Files:** Markdown files must follow `YYYYMMDD-filename.md` format.
+- **Full stack details:** See @.planning/codebase/STACK.md

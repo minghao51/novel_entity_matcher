@@ -21,9 +21,10 @@ try:
     from .utils.logging_config import configure_logging
 
     configure_logging(verbose=_verbose)
-except Exception:
-    # If logging configuration fails, continue without it
-    pass
+except (ImportError, OSError, ValueError) as _exc:
+    import logging as _logging
+
+    _logging.getLogger(__name__).debug("Logging configuration failed: %s", _exc)
 
 try:
     from importlib.metadata import version as _pkg_version

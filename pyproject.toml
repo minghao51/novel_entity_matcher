@@ -273,7 +273,7 @@ module = [
 ]
 ignore_missing_imports = true
 
-# Per-module options for files with many Optional[None] patterns
+# Known-issue modules with complex numpy typing — suppress until refactored
 [[tool.mypy.overrides]]
 module = [
     "novelentitymatcher.novelty.strategies.*",
@@ -285,7 +285,6 @@ module = [
 no_implicit_optional = false
 ignore_errors = true
 
-# Ignore legacy impl files with complex numpy typing
 [[tool.mypy.overrides]]
 module = [
     "novelentitymatcher.novelty.strategies.self_knowledge_impl.*",

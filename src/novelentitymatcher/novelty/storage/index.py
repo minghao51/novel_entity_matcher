@@ -6,6 +6,7 @@ Supports HNSWlib and FAISS backends for O(log n) similarity search.
 
 import json
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -50,9 +51,11 @@ class ANNIndex:
         self.dim = dim
         self.backend = backend
         self.max_elements = max_elements
-        self._index = None
+        self._index: Any = None
         self._labels: list[str] = []
-        self._vectors = np.empty((0, dim), dtype=np.float32)
+        self._vector_buffer: list[np.ndarray] = []
+        self._vectors: np.ndarray | None = None
+        self._hnsw_params: dict = {}
 
         if backend == ANNBackend.HNSWLIB:
             self._init_hnswlib(ef_construction, M)
@@ -68,6 +71,7 @@ class ANNIndex:
         try:
             import hnswlib
 
+            self._hnsw_params = {"ef_construction": ef_construction, "M": M}
             self._index = hnswlib.Index(space="cosine", dim=self.dim)
             self._index.init_index(
                 max_elements=self.max_elements,
@@ -94,7 +98,7 @@ class ANNIndex:
             raise ImportError(
                 "faiss-cpu is required for FAISS backend. "
                 "Install with: pip install faiss-cpu"
-            )
+            ) from None
 
     def add_vectors(self, vectors: np.ndarray, labels: list[str] | None = None) -> None:
         """
@@ -118,20 +122,41 @@ class ANNIndex:
         if self.backend == ANNBackend.HNSWLIB:
             current_count = self._index.get_current_count()
             if current_count + len(vectors) > self.max_elements:
-                raise ValueError(
-                    f"Index capacity exceeded: {current_count + len(vectors)} > {self.max_elements}"
-                )
+                self._resize_hnsw_index(current_count + len(vectors))
             self._index.add_items(vectors)
         elif self.backend == ANNBackend.FAISS:
             self._index.add(vectors)
 
-        self._vectors = np.vstack([self._vectors, vectors])
+        self._vector_buffer.append(vectors)
+        self._vectors = None
 
         if labels:
             self._labels.extend(labels)
         else:
             start = len(self._labels)
             self._labels.extend([str(i) for i in range(start, start + len(vectors))])
+
+    def _resize_hnsw_index(self, needed: int) -> None:
+        new_max = max(needed, int(self.max_elements * 2))
+        logger.info(
+            "Resizing HNSW index from %d to %d elements",
+            self.max_elements,
+            new_max,
+        )
+        self._index.resize_index(new_max)
+        self.max_elements = new_max
+
+    def _ensure_vectors(self) -> np.ndarray:
+        if self._vectors is not None:
+            return self._vectors
+        if not self._vector_buffer:
+            self._vectors = np.empty((0, self.dim), dtype=np.float32)
+        elif len(self._vector_buffer) == 1:
+            self._vectors = self._vector_buffer[0]
+        else:
+            self._vectors = np.vstack(self._vector_buffer)
+            self._vector_buffer = [self._vectors]
+        return self._vectors
 
     def knn_query(self, query: np.ndarray, k: int = 5) -> tuple[np.ndarray, np.ndarray]:
         """
@@ -162,12 +187,13 @@ class ANNIndex:
             # FAISS IndexFlatIP returns similarities directly
             return distances, indices
 
-        if self._vectors.size == 0:
+        if self._ensure_vectors().size == 0:
             empty = np.empty((len(query), 0), dtype=np.float32)
             return empty, empty.astype(int)
 
-        k = min(k, len(self._vectors))
-        similarities = np.dot(query.astype(np.float32, copy=False), self._vectors.T)
+        vectors = self._ensure_vectors()
+        k = min(k, len(vectors))
+        similarities = np.dot(query.astype(np.float32, copy=False), vectors.T)
         top_indices = np.argsort(-similarities, axis=1)[:, :k]
         top_similarities = np.take_along_axis(similarities, top_indices, axis=1)
         return top_similarities, top_indices
@@ -192,9 +218,10 @@ class ANNIndex:
         queries = self._normalize(queries).astype(np.float32, copy=False)
 
         if targets is None:
-            if self._vectors.size == 0:
+            vectors = self._ensure_vectors()
+            if vectors.size == 0:
                 return np.zeros((len(queries), 0), dtype=np.float32)
-            return np.dot(queries, self._vectors.T)
+            return np.dot(queries, vectors.T)
         else:
             # Compute direct similarity
             targets = self._normalize(targets).astype(np.float32, copy=False)
@@ -229,7 +256,7 @@ class ANNIndex:
             json.dumps(self._labels, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        np.save(vectors_path, self._vectors)
+        np.save(vectors_path, self._ensure_vectors())
 
     def load(self, path: str | Path) -> None:
         """Load index from disk."""
@@ -263,8 +290,10 @@ class ANNIndex:
 
         if vectors_path.exists():
             self._vectors = np.load(vectors_path).astype(np.float32, copy=False)
+            self._vector_buffer = [self._vectors]
         else:
             self._vectors = np.empty((0, self.dim), dtype=np.float32)
+            self._vector_buffer = []
 
     @property
     def n_elements(self) -> int:
@@ -273,7 +302,7 @@ class ANNIndex:
             return self._index.get_current_count()
         if self.backend == ANNBackend.FAISS:
             return self._index.ntotal
-        return len(self._vectors)
+        return len(self._ensure_vectors())
 
     def clear(self) -> None:
         """Clear all elements from the index."""
@@ -288,10 +317,12 @@ class ANNIndex:
             self._index = faiss.IndexFlatIP(self.dim)
             self._labels = []
             self._vectors = np.empty((0, self.dim), dtype=np.float32)
+            self._vector_buffer = []
             logger.info("Cleared FAISS index")
         else:
             self._labels = []
             self._vectors = np.empty((0, self.dim), dtype=np.float32)
+            self._vector_buffer = []
             logger.info("Cleared exact ANN fallback index")
 
     @property

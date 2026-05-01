@@ -1,177 +1,240 @@
 # Architecture
 
-**Analysis Date:** 2026-04-23
+## High-Level Pattern
 
-## Pattern Overview
+**Layered pipeline architecture** with a strategy-pattern novelty detection subsystem. The system follows a "match → detect → cluster → propose" pipeline pattern for entity matching with novel class discovery.
 
-**Overall:** Layered architecture with pipeline orchestration
+Three public entry points form a tiered API:
+1. **`Matcher`** (`src/novelentitymatcher/core/matcher.py`) — Core entity matching (zero-shot, SetFit, BERT, hybrid)
+2. **`NovelEntityMatcher`** (`src/novelentitymatcher/novelty/entity_matcher.py`) — Matcher-first orchestration wrapping Matcher + NoveltyDetector
+3. **`DiscoveryPipeline`** (`src/novelentitymatcher/pipeline/discovery.py`) — Pipeline-first discovery with staged processing (recommended for new projects)
 
-**Key Characteristics:**
-- Multi-layer separation: core matching → novelty detection → pipeline orchestration
-- Async-first design with sync fallbacks
-- Strategy pattern for pluggable detection algorithms
-- Modular configuration via Pydantic models
-- Lazy imports for optional features
+All three share a common internal pipeline orchestrated by `PipelineOrchestrator` (`src/novelentitymatcher/pipeline/orchestrator.py`).
 
-## Layers
+## Layers & Modules
 
-**Core Layer (Matching):**
-- Purpose: Text normalization, embedding generation, classification/matching
-- Location: `src/novelentitymatcher/core/`
-- Contains: Matcher, BERTClassifier, SetFitClassifier, EmbeddingMatcher, TextNormalizer, BlockingStrategy, HierarchicalMatcher, Reranker
-- Depends on: sentence-transformers, setfit, transformers, torch, numpy
-- Used by: novelty layer, pipeline layer, public API
+### Layer 1: Core Matching (`src/novelentitymatcher/core/`)
+The foundation layer providing entity matching primitives:
+- `matcher.py` — `Matcher` class: unified entry point with auto-strategy selection
+- `embedding_matcher.py` — `EmbeddingMatcher`: zero-shot embedding similarity
+- `classifier.py` — `SetFitClassifier`: few-shot SetFit training
+- `bert_classifier.py` — `BERTClassifier`: BERT-based fine-tuning
+- `hybrid.py` — `HybridMatcher`: combines embedding + trained approaches
+- `blocking.py` — Blocking strategies (BM25, TF-IDF, Fuzzy) for candidate pre-filtering
+- `reranker.py` — `CrossEncoderReranker`: cross-encoder re-scoring
+- `hierarchy.py` — `HierarchicalMatcher`: hierarchical entity matching
+- `normalizer.py` — `TextNormalizer`: text preprocessing
+- `matcher_components.py` / `matcher_engines.py` / `matcher_entity.py` / `matcher_runtime.py` / `matcher_shared.py` — Internal decomposition of Matcher internals
+- `matching_strategy.py` — `MatcherFacade`: strategy interface
+- `async_utils.py` — Async execution support
 
-**Novelty Layer (Detection):**
-- Purpose: Novel entity detection, clustering, class proposal
-- Location: `src/novelentitymatcher/novelty/`
-- Contains: NoveltyDetector, NovelEntityMatcher, novelty strategies (confidence, knn, clustering, etc.), clustering backends, LLM class proposer
-- Depends on: core layer, sklearn, hnswlib, faiss, hdbscan, umap, litellm
-- Used by: pipeline layer, public API
+### Layer 2: Backends (`src/novelentitymatcher/backends/`)
+Pluggable model backends:
+- `base.py` — Base backend interface
+- `static_embedding.py` — Static embedding models (model2vec, potion)
+- `sentencetransformer.py` — SentenceTransformer backend
+- `litellm.py` — LLM backend (via litellm for class proposals)
+- `reranker_st.py` — SentenceTransformer-based reranker
 
-**Pipeline Layer (Orchestration):**
-- Purpose: Staged discovery pipeline, data flow orchestration
-- Location: `src/novelentitymatcher/pipeline/`
-- Contains: DiscoveryPipeline, PipelineOrchestrator, PipelineStage, stage adapters (OODDetectionStage, ClusterEvidenceStage, etc.)
-- Depends on: core layer, novelty layer
-- Used by: public API
+### Layer 3: Novelty Detection (`src/novelentitymatcher/novelty/`)
+The largest subsystem, implementing multi-signal out-of-distribution detection:
 
-**Backends Layer (Infrastructure):**
-- Purpose: Embedding backends, LLM backends, rerankers
-- Location: `src/novelentitymatcher/backends/`
-- Contains: SentenceTransformerBackend, StaticEmbeddingBackend, LiteLLMBackend, CrossEncoderReranker
-- Depends on: sentence-transformers, model2vec, litellm
-- Used by: core layer, novelty layer
+**Core** (`novelty/core/`):
+- `detector.py` — `NoveltyDetector`: strategy orchestrator, initializes and runs registered strategies
+- `strategies.py` — `StrategyRegistry`: registers and resolves detection strategies by name
+- `signal_combiner.py` — `SignalCombiner`: combines multi-strategy signals (weighted, voting, any, all)
+- `metadata.py` — `MetadataBuilder`: builds `NovelSampleMetadata` from detection results
 
-**Ingestion Layer (Data Loading):**
-- Purpose: Data ingestion for entity corpora
-- Location: `src/novelentitymatcher/ingestion/`
-- Contains: Fetchers for languages, currencies, industries, timezones, occupations, products, universities
-- Depends on: requests, csv, json
-- Used by: CLI tools, setup scripts
+**Strategies** (`novelty/strategies/`) — Each strategy implements `NoveltyStrategy` base class from `base.py`:
+- `confidence.py` — Low confidence detection
+- `knn_distance.py` — KNN distance-based detection
+- `uncertainty.py` — Prediction uncertainty
+- `clustering.py` — Clustering-based detection
+- `self_knowledge.py` / `self_knowledge_impl.py` — Self-supervised knowledge detection
+- `prototypical.py` / `prototypical_impl.py` — Prototypical network approach
+- `oneclass.py` / `oneclass_impl.py` — One-class classification
+- `pattern.py` / `pattern_impl.py` — Pattern-based detection
+- `setfit.py` / `setfit_impl.py` / `setfit_centroid.py` — SetFit-based detection
+- `mahalanobis.py` — Mahalanobis distance with conformal calibration
+- `lof.py` — Local Outlier Factor
+- `conformal.py` — Conformal prediction helpers
 
-**Benchmarks Layer (Evaluation):**
-- Purpose: Benchmarking entity matching, classification, novelty detection, and async performance
-- Location: `src/novelentitymatcher/benchmarks/`
-- Contains:
-  - `cli.py` — CLI entry point with 10 subcommands (run, load, list, clear, sweep, bench-classifier, bench-novelty, bench-async, render, plot)
-  - `runner.py` — BenchmarkRunner orchestrating dataset loading and evaluation
-  - `loader.py` — Async HuggingFace dataset loader with parquet caching
-  - `registry.py` — Dataset registry, configs, cache configuration
-  - `base.py` — BaseEvaluator, EvaluationResult abstractions
-  - `shared.py` — Shared utilities (SplitData, timer, compute_ood_metrics, generate_synthetic_data, benchmark_training, benchmark_inference, prepare_binary_labels)
-  - `classifier_bench.py` — BERT vs SetFit classifier benchmarking (merged from scripts)
-  - `novelty_bench.py` — Novelty strategy benchmarking with quick/standard/full depth levels (merged from scripts)
-  - `async_bench.py` — Sync vs async matcher API benchmarking (moved from scripts)
-  - `visualization.py` — Markdown rendering and chart generation from benchmark JSON (merged from scripts)
-  - `entity_resolution/` — Entity resolution evaluation subpackage
-  - `classification/` — Classification evaluation subpackage
-  - `novelty/` — Novelty evaluation subpackage
-- Depends on: core layer, novelty layer, datasets, huggingface_hub, matplotlib
-- Used by: CLI (`novelentitymatcher-bench` entry point)
+**Clustering** (`novelty/clustering/`):
+- `base.py` — `ClusteringBackend` ABC
+- `backends.py` — `HDBSCANBackend`, `SOPTICSBackend`, `UMAPHDBSCANBackend`, `ClusteringBackendRegistry`
+- `scalable.py` — `ScalableClusterer`: auto-selects backend based on data size
+- `validation.py` — `ClusterValidator`: validates cluster quality
+- `params.py` — Parameter selection utilities
 
-**Utils Layer (Shared):**
-- Purpose: Logging, validation, preprocessing
-- Location: `src/novelentitymatcher/utils/`
-- Contains: logging_config, validation, preprocessing, embeddings
-- Depends on: Standard library, numpy, sklearn
-- Used by: All layers
+**Config** (`novelty/config/`):
+- `base.py` — `DetectionConfig`: Pydantic model for detection configuration
+- `strategies.py` — Per-strategy config models (KNNConfig, ConfidenceConfig, ClusteringConfig, etc.)
+- `weights.py` — `WeightConfig`: strategy weight configuration
+
+**Schemas** (`novelty/schemas/`):
+- `models.py` — Pydantic models: `NovelSampleMetadata`, `DiscoveryCluster`, `ClassProposal`, `ProposalReviewRecord`, etc.
+- `results.py` — `DetectionReport`, `EvaluationReport`, `SampleMetrics`, `StrategyMetrics`
+- `reports.py` — Report models
+
+**Storage** (`novelty/storage/`):
+- `index.py` — `ANNIndex`, `ANNBackend`: ANN index abstraction (hnswlib, faiss)
+- `review.py` — `ProposalReviewManager`: HITL review record management
+- `persistence.py` — Export/save proposals and summaries
+
+**Proposal** (`novelty/proposal/`):
+- `llm.py` — `LLMClassProposer`: LLM-based class name proposal via litellm
+- `retrieval.py` — `RetrievalAugmentedProposer`, `BGERetriever`: RAG-based proposals
+
+**Evaluation** (`novelty/evaluation/`):
+- `evaluator.py` — `NoveltyEvaluator`: strategy evaluation
+- `splitters.py` — `OODSplitter`, `GradualNoveltySplitter`: train/test splitting for OOD evaluation
+
+**Extraction** (`novelty/extraction/`) — Evidence extraction from clusters
+
+**Utils** (`novelty/utils/`) — Shared novelty utilities
+
+### Layer 4: Pipeline (`src/novelentitymatcher/pipeline/`)
+Staged discovery pipeline:
+- `discovery.py` — `DiscoveryPipeline`: top-level public API
+- `config.py` — `PipelineConfig`: Pydantic model for all pipeline settings
+- `contracts.py` — `PipelineStage` ABC, `StageContext`, `StageResult`, `PipelineRunResult`
+- `orchestrator.py` — `PipelineOrchestrator`: runs ordered stages against shared context
+- `pipeline_builder.py` — `PipelineBuilder` + `PipelineStageConfig`: constructs 5-stage pipelines
+- `adapters.py` — Stage implementations: `MatcherMetadataStage`, `OODDetectionStage`, `ClusterEvidenceStage`, `CommunityDetectionStage`, `ProposalStage`
+- `discovery_support.py` — Helper functions for match result collection and novel match result building
+- `match_result.py` — `MatchResultWithMetadata`: rich match result dataclass
+
+### Layer 5: Ingestion (`src/novelentitymatcher/ingestion/`)
+Data ingestion pipelines for building entity lists:
+- `base.py` — Base fetcher class with shared utilities
+- `cli.py` — CLI entry point (`novelentitymatcher-ingest`)
+- Per-domain fetchers: `currencies.py`, `industries.py`, `languages.py`, `occupations.py`, `products.py`, `timezones.py`, `universities.py`
+
+### Layer 6: Benchmarks (`src/novelentitymatcher/benchmarks/`)
+Comprehensive benchmarking infrastructure:
+- `cli.py` — CLI entry point (`novelentitymatcher-bench`) with subcommands: run, load, list, clear, sweep, bench-classifier, bench-novelty, bench-async, bench-weights, bench-ann, bench-reranker, render, plot
+- `runner.py` — `BenchmarkRunner`: orchestrates benchmark execution
+- `registry.py` — `DATASET_REGISTRY`: HuggingFace dataset configurations
+- `loader.py` — Dataset loading from HuggingFace
+- `classification/` — Classification benchmark implementations
+- `entity_resolution/` — Entity resolution benchmark implementations
+- `novelty/` — Novelty detection benchmark implementations
+- `weight_optimizer.py` — Bayesian optimization of ensemble weights (Optuna)
+- `classifier_bench.py`, `novelty_bench.py`, `async_bench.py`, `infra_bench.py` — Specific benchmark types
+- `visualization.py` — Result visualization and plotting
+- `shared.py` — Shared benchmark utilities
+
+### Support Modules
+- **Config** (`config.py`, `config_registry.py`) — `Config` class for YAML/JSON config loading + model registry
+- **Exceptions** (`exceptions.py`) — `SemanticMatcherError`, `ValidationError`, `TrainingError`, `MatchingError`, `ModeError`, `LLMError`
+- **Monitoring** (`monitoring/`) — `metrics.py`, `performance.py`
+- **Utils** (`utils/`) — `logging_config.py`, `validation.py`, `preprocessing.py`, `embeddings.py`, `benchmark_dataset.py`, `benchmark_reporting.py`, `benchmarks.py`, `learning_curves.py`
+- **Data** (`data/`) — Bundled static data: `country_codes.json`, `default_config.json`
 
 ## Data Flow
 
-**Matching Flow (Matcher):**
-1. Input text → TextNormalizer (optional)
-2. Normalized text → Embedding generation (SentenceTransformers/Static)
-3. Embeddings → Classification/SetFit/BERT
-4. Output: predicted_id, confidence, candidates
+### Primary Discovery Flow
+```
+User queries (list[str])
+    ↓
+DiscoveryPipeline.discover()
+    ↓
+PipelineOrchestrator runs 5 stages sequentially:
+    ↓
+[1. MatcherMetadataStage]
+    Matcher.match_batch() → MatchResultWithMetadata (predictions, confidences, embeddings, candidate_results)
+    ↓
+[2. OODDetectionStage]
+    NoveltyDetector.detect() → NovelSampleReport (novel samples identified via multi-strategy signals)
+    ↓
+[3. ClusterEvidenceStage]
+    ScalableClusterer.fit_predict() → cluster assignments on novel embeddings
+    ↓
+[4. CommunityDetectionStage]
+    Refines clusters, extracts keywords/examples per cluster → DiscoveryCluster list
+    ↓
+[5. ProposalStage]
+    LLMClassProposer.propose() (or RetrievalAugmentedProposer) → ClassProposal list
+    ↓
+NovelClassDiscoveryReport (assembled by DiscoveryPipeline)
+    ↓
+Auto-save (YAML/JSON) + HITL review records
+```
 
-**Novelty-Aware Flow (NovelEntityMatcher):**
-1. Input text(s) → Matcher (top-k candidates + embeddings)
-2. Novelty detection (multi-signal via ANN index)
-3. Optional: Clustering of novel samples
-4. Optional: LLM class proposal
-5. Output: NovelEntityMatchResult with is_novel flag
+### Single Match Flow
+```
+text → Matcher.predict() → (prediction, confidence, embedding)
+                                 ↓
+                    NovelEntityMatcher.match() → NovelEntityMatchResult
+                      (is_novel decision based on threshold + novelty signals)
+```
 
-**Pipeline Flow (DiscoveryPipeline):**
-1. Stage 1: Matcher metadata collection
-2. Stage 2: OOD detection (NoveltyDetector)
-3. Stage 3: Clustering (ScalableClusterer)
-4. Stage 4: Cluster evidence extraction
-5. Stage 5: LLM class proposal
-6. Output: NovelClassDiscoveryReport
-
-**State Management:**
-- Stateless matching (per-request)
-- Stateful novelty detection (maintains reference embeddings in ANN index)
-- Pipeline stages share immutable StageContext
-- Optional persistence via ProposalReviewManager
-
-## Key Abstractions
-
-**Matcher (Facade Pattern):**
-- Purpose: Unified API for entity matching with auto mode selection
-- Examples: `src/novelentitymatcher/core/matcher.py`, `src/novelentitymatcher/api.py`
-- Pattern: Facade with strategy pattern (zero-shot, head-only, full training)
-
-**NoveltyStrategy (Strategy Pattern):**
-- Purpose: Pluggable novelty detection algorithms
-- Examples: `src/novelentitymatcher/novelty/strategies/`, `src/novelentitymatcher/novelty/strategies/base.py`
-- Pattern: Abstract base class with multiple implementations
-
-**PipelineStage (Pipeline Pattern):**
-- Purpose: Composable stages in discovery pipeline
-- Examples: `src/novelentitymatcher/pipeline/adapters.py`, `src/novelentitymatcher/pipeline/contracts.py`
-- Pattern: Ordered list of stages with shared context
-
-**EmbeddingBackend (Adapter Pattern):**
-- Purpose: Abstraction over different embedding sources
-- Examples: `src/novelentitymatcher/backends/sentencetransformer.py`, `src/novelentitymatcher/backends/static_embedding.py`
-- Pattern: Base class with implementations for different providers
+### Strategy Signal Combining
+```
+NoveltyDetector.detect()
+    → for each strategy in config.strategies:
+        strategy.detect() → per-sample signal dict
+    → SignalCombiner.combine() → merged novelty decisions
+    → MetadataBuilder.build() → NovelSampleMetadata list
+```
 
 ## Entry Points
 
-**Matcher Class:**
-- Location: `src/novelentitymatcher/core/matcher.py`
-- Triggers: Instantiation by user code
-- Responsibilities: Entity matching with auto mode selection, async/sync APIs
+### CLI Entry Points (from `pyproject.toml`)
+- `novelentitymatcher-ingest` → `src/novelentitymatcher/ingestion/cli.py:main` — Data ingestion
+- `novelentitymatcher-bench` → `src/novelentitymatcher/benchmarks/cli.py:main` — Benchmark runner
+- `novelentitymatcher-review` → `src/novelentitymatcher/novelty/cli.py:main` — HITL review CLI
 
-**NovelEntityMatcher Class:**
-- Location: `src/novelentitymatcher/novelty/entity_matcher.py`
-- Triggers: Instantiation by user code
-- Responsibilities: Novelty-aware matching orchestration, class proposal
+### Programmatic Entry Points
+- `from novelentitymatcher import Matcher` — Core matching
+- `from novelentitymatcher import NovelEntityMatcher` — Novelty-aware matching (matcher-first)
+- `from novelentitymatcher import DiscoveryPipeline` — Full discovery pipeline (pipeline-first, recommended)
+- `from novelentitymatcher.api import *` — Complete public API surface
 
-**DiscoveryPipeline Class:**
-- Location: `src/novelentitymatcher/pipeline/discovery.py`
-- Triggers: Instantiation by user code
-- Responsibilities: Multi-stage discovery pipeline for novel entities
+### Lazy Import System
+`src/novelentitymatcher/__init__.py` uses `__getattr__` with a `_EXPORTS` dict for lazy module loading — imports only resolve when an attribute is accessed.
 
-**CLI Commands:**
-- Location: `src/novelentitymatcher/ingestion/cli.py`, `src/novelentitymatcher/benchmarks/cli.py`
-- Triggers: Command line invocation via `novelentitymatcher-bench` entry point
-- Responsibilities: Data ingestion, benchmark running (10 subcommands: run, load, list, clear, sweep, bench-classifier, bench-novelty, bench-async, render, plot)
+## Key Abstractions
 
-## Error Handling
+| Abstraction | Location | Purpose |
+|---|---|---|
+| `PipelineStage` | `pipeline/contracts.py:51` | ABC for pipeline stages with `run()` / `run_async()` |
+| `StageContext` | `pipeline/contracts.py:13` | Mutable context passed between stages (inputs, artifacts, metadata) |
+| `NoveltyStrategy` | `novelty/strategies/base.py` | ABC for detection strategies with `initialize()`, `detect()` |
+| `ClusteringBackend` | `novelty/clustering/base.py` | ABC for clustering implementations |
+| `ANNIndex` / `ANNBackend` | `novelty/storage/index.py` | ANN index abstraction (hnswlib, faiss) |
+| `DetectionConfig` | `novelty/config/base.py` | Pydantic config for detection |
+| `PipelineConfig` | `pipeline/config.py:27` | Pydantic config for full pipeline |
+| `Config` | `config.py:68` | YAML/JSON config loader with merge |
+| `Matcher` | `core/matcher.py:54` | Unified entity matcher with auto-strategy selection |
 
-**Strategy:** Custom exception hierarchy with descriptive types
+## Configuration
 
-**Patterns:**
-- SemanticMatcherError - Base exception
-- ValidationError - Input validation failures
-- TrainingError - Training process failures
-- MatchingError - Matching process failures
-- ModeError - Mode/configuration errors
-- Logging via custom logger with configurable verbosity
+### Config Loading Chain
+1. `Config` class (`src/novelentitymatcher/config.py`) searches for config in order:
+   - Repo root `config.yaml` (walks up from package to find `.git`/`pyproject.toml`)
+   - Package-bundled `data/default_config.json`
+   - `config.yaml` in current working directory
+2. Custom config path can override via `Config(custom_path=...)`
+3. Deep-merge of defaults with custom config
 
-## Cross-Cutting Concerns
+### Model Registry
+`src/novelentitymatcher/config_registry.py` maintains:
+- `MODEL_SPECS` — All known model aliases with backend type, language, and training support
+- `STATIC_MODEL_REGISTRY` — Static embedding models (potion, mrl)
+- `DYNAMIC_MODEL_REGISTRY` — SentenceTransformer models (bge, mpnet, minilm)
+- `RERANKER_REGISTRY` — Reranker model aliases
+- `MATCHER_MODE_REGISTRY` — Mode name → implementation class mapping
+- `LLM_PROVIDERS` — LLM provider configs (openrouter, anthropic, openai)
 
-**Logging:** Centralized via `novelentitymatcher.utils.logging_config` with DEBUG/INFO/WARNING/ERROR levels, optional file handler, environment-controlled verbosity
+### Pipeline Configuration
+`PipelineConfig` (`src/novelentitymatcher/pipeline/config.py`) is a Pydantic `BaseModel` that drives:
+- Stage selection and ordering via `stages()` method
+- OOD strategy validation
+- Clustering backend validation
+- All tunable parameters with sensible defaults
 
-**Validation:** Pydantic models for configuration, custom validation functions in `utils/validation.py`
-
-**Async Support:** Async-first design with AsyncExecutor in `core/async_utils.py`, pytest-asyncio for testing
-
-**Configuration:** Pydantic-based config in `novelty/config/`, model registry in `config_registry.py`
-
----
-
-*Architecture analysis: 2026-04-23*
+### Environment Variables
+- `NOVEL_ENTITY_MATCHER_VERBOSE=true` — Enable verbose logging
+- `OPENROUTER_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` — LLM API keys
+- `PYTORCH_ENABLE_MPS_FALLBACK=1` — Auto-set on macOS ARM64

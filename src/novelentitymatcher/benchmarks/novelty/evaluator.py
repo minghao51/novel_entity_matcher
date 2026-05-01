@@ -78,22 +78,22 @@ class NoveltyEvaluator(BaseEvaluator[tuple[pd.DataFrame, pd.DataFrame]]):
         novelty_scores = []
         true_labels = []
 
-        for _, row in known_data.iterrows():
+        for row in known_data.itertuples(index=False):
             if novelty_score_fn:
-                score = novelty_score_fn(str(row[text_col]))
+                score = novelty_score_fn(str(getattr(row, text_col)))
             else:
                 assert detector_fn is not None
-                is_novel, score = detector_fn(str(row[text_col]))
+                is_novel, score = detector_fn(str(getattr(row, text_col)))
                 score = 1.0 - score if is_novel else score
             novelty_scores.append(score)
             true_labels.append(0)
 
-        for _, row in ood_data.iterrows():
+        for row in ood_data.itertuples(index=False):
             if novelty_score_fn:
-                score = novelty_score_fn(str(row[text_col]))
+                score = novelty_score_fn(str(getattr(row, text_col)))
             else:
                 assert detector_fn is not None
-                is_novel, score = detector_fn(str(row[text_col]))
+                is_novel, score = detector_fn(str(getattr(row, text_col)))
                 score = 1.0 - score if is_novel else score
             novelty_scores.append(score)
             true_labels.append(1)

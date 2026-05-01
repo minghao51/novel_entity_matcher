@@ -1,182 +1,232 @@
-# Code Conventions
+# Coding Conventions
 
-**Analysis Date:** 2026-04-23
+**Analysis Date:** 2026-04-30
 
 ## Code Style
 
-**Formatting:**
-- Tool: black 23.0.0+
-- Style: PEP 8 with Black defaults
-- Line length: 88 characters (Black default)
-- Quotes: Double quotes preferred
-- CI check: `uv run black --check .`
+### Formatting
 
-**Linting:**
-- Tool: ruff 0.1.0+
-- CI check: `uv run ruff check .`
-- Rules: PEP 8, flake8, isort, pydocstyle integration
-- Fast: Ruff is significantly faster than flake8+isort
+- **Tool:** Ruff (formatter + linter)
+- **Config:** `pyproject.toml` `[tool.ruff]` / `[tool.ruff.format]`
+- **Line length:** 88 (Black-compatible default)
+- **Target version:** Python 3.10+
+- **Quote style:** Double quotes (`quote-style = "double"`)
+- **E501 ignored:** Long lines allowed; ruff lint ignores `E501`
 
-**Type Checking:**
-- Tool: mypy 1.19.1+
-- Python version target: 3.13
-- Mode: Not strict yet (gradual migration)
-- CI check: Manual (not in CI workflow)
-- Relaxed rules for:
-  - External packages (setfit, transformers, torch, etc.)
-  - Legacy implementation files (self_knowledge_impl, prototypical_impl, etc.)
-  - Optional types (no_implicit_optional=false for strategy modules)
+### Linting
+
+- **Tool:** Ruff (`[tool.ruff.lint]` in `pyproject.toml:178-194`)
+- **Selected rule sets:**
+  - `E`, `F` — pyflakes + pycodestyle errors
+  - `I` — isort (import sorting)
+  - `UP` — pyupgrade
+  - `B` — flake8-bugbear
+  - `C4` — flake8-comprehensions
+  - `DTZ` — flake8-datetimez (timezone-aware datetimes)
+  - `T10` — flake8-debugger
+  - `ISC` — flake8-implicit-str-concat
+  - `PIE` — flake8-pie
+  - `PT` — flake8-pytest-style
+  - `RUF` — Ruff-specific rules
+- **Fixable:** All (`fixable = ["ALL"]`)
+- **Per-file ignores:**
+  - `tests/**` — `DTZ` disabled
+  - `notebooks/**` — `ALL` rules disabled
+
+### Type Checking
+
+- **Tool:** mypy (`pyproject.toml:220-296`)
+- **Target:** Python 3.11
+- **Mode:** Gradual typing — `disallow_untyped_defs = false`, `disallow_any_generics = false`
+- **Strictness:** `strict_optional = true`, `check_untyped_defs = true`
+- **`mypy_path`:** `src`
+- **External stubs:** Many third-party packages use `ignore_missing_imports = true` (setfit, transformers, torch, etc.)
+- **Legacy overrides:** Some modules use `ignore_errors = true` (novelty strategies impl files, clustering, storage)
+
+### Pre-commit Hooks
+
+- **Config:** `.pre-commit-config.yaml`
+- **Hooks:**
+  - trailing-whitespace, end-of-file-fixer, check-yaml, check-merge-conflict, debug-statements
+  - check-added-large-files (max 1000 KB)
+  - `uv-lock` — keeps lockfile in sync
+  - `ruff` (with `--fix`) + `ruff-format`
+  - `mypy` — runs `uv run mypy src/novelentitymatcher`
+  - `conventional-pre-commit` — enforces Conventional Commits on commit messages
 
 ## Naming Patterns
 
-**Classes:**
-- PascalCase
-- Descriptive names: `NovelEntityMatcher`, `SignalCombiner`, `ScalableClusterer`
-- Suffixes: `Strategy`, `Config`, `Backend`, `Detector`, `Manager`
+### Files
 
-**Functions/Methods:**
-- snake_case
-- Verb-first for actions: `match_async`, `fit_async`, `predict`
-- Noun phrases for getters: `get_embedding`, `get_reference_corpus`
-- Private methods: underscore prefix `_ensure_async_executor`
+- **Modules:** `snake_case.py` (e.g., `embedding_matcher.py`, `matcher_runtime.py`)
+- **Private/internal modules:** prefixed with underscore (e.g., `matcher_shared.py`, `matcher_entity.py`)
+- **Package data:** JSON files in `src/novelentitymatcher/data/` (e.g., `country_codes.json`, `default_config.json`)
 
-**Variables:**
-- snake_case
-- Descriptive: `training_data`, `reference_embeddings`, `confidence_threshold`
-- Booleans: `is_novel`, `is_trained`, `use_novelty_detector`
+### Functions
 
-**Constants:**
-- UPPER_CASE
-- Prefix with underscore for module-private: `_VALID_OOD_STRATEGIES`
+- `snake_case` throughout (e.g., `validate_entities`, `resolve_model_alias`, `get_cached_sentence_transformer`)
+- **Private helpers:** prefixed with underscore (e.g., `_load_file`, `_deep_update`, `_format_message`)
+- **Boolean-returning:** use `is_`/`has_` prefix (e.g., `is_bert_model`, `is_static_embedding_model`)
 
-## Code Patterns
+### Variables
 
-**Async Support:**
-- Async-first design for new features
-- Sync fallbacks for compatibility
-- Use `asyncio` for concurrent operations
-- `@pytest.mark.asyncio` for async tests
+- `snake_case` throughout
+- Constants: `UPPER_SNAKE_CASE` at module level (e.g., `MODEL_SPECS`, `RERANKER_REGISTRY`, `METRIC_MATCH_LATENCY`)
 
-**Type Hints:**
-- Use type hints on all public APIs
-- `from __future__ import annotations` for forward references
-- `TYPE_CHECKING` for import-only type hints
-- Optional types: `Optional[str]`, `List[str]`, `Dict[str, Any]`
+### Types / Classes
 
-**Pydantic Models:**
-- Use Pydantic v2 for configuration
-- Field validation with `Field()`
-- `field_validator` for custom validation
-- Config dict: `ConfigDict`
+- `PascalCase` for classes (e.g., `Matcher`, `NoveltyDetector`, `ModelCache`, `MetricEvent`)
+- Pydantic models: `PascalCase` with `BaseModel` inheritance (e.g., `DetectionConfig`, `NovelSampleMetadata`)
+- Dataclasses: `@dataclass` decorator (e.g., `StageContext`, `StageResult`, `PipelineRunResult`)
+- Type aliases: `PascalCase` (e.g., `PathLike = Union[str, Path]`)
 
-**Error Handling:**
-- Custom exception hierarchy
-- Specific exception types: `ValidationError`, `TrainingError`, `MatchingError`, `ModeError`
-- Descriptive error messages
-- Logging via custom logger
+## Import Conventions
 
-**Logging:**
-- Import: `from ..utils.logging_config import get_logger`
-- Usage: `logger = get_logger(__name__)`
-- Levels: DEBUG, INFO, WARNING, ERROR
-- Verbosity controlled by NOVEL_ENTITY_MATCHER_VERBOSE env var
+### Order (enforced by Ruff `I` rules)
 
-## File Organization
+1. **Future imports:** `from __future__ import annotations` — used in ~55 source files
+2. **Standard library:** `import os`, `import re`, `import threading`, etc.
+3. **Third-party:** `import numpy as np`, `from pydantic import BaseModel`, `from sentence_transformers import SentenceTransformer`
+4. **Local/package:** `from ..config import ...`, `from ..exceptions import ...`, `from .embedding_matcher import ...`
 
-**Import Order:**
-1. Standard library
-2. Third-party imports
-3. Local imports (relative or absolute)
-4. Type checking imports (under `if TYPE_CHECKING:`)
+### Path Aliases
 
-**Module Structure:**
-1. Module docstring
-2. Imports (with __future__ annotations first)
-3. Constants
-4. Type definitions
-5. Classes/functions
-6. `__all__` exports
+- No path aliases configured — all imports use full package-relative paths
+- Relative imports use leading dots: `from ..utils.logging_config import get_logger`
+- `TYPE_CHECKING` guard used for type-only imports to avoid circular dependencies:
+  ```python
+  from typing import TYPE_CHECKING
+  if TYPE_CHECKING:
+      from .matching_strategy import MatchingStrategy
+  ```
 
-**Test Structure:**
-- Test class per module (if needed)
-- `test_` prefix for test functions
-- Fixtures in `conftest.py` for shared setup
-- Markers: `@pytest.mark.unit`, `@pytest.mark.integration`, etc.
+### Common Import Patterns
 
-## Error Handling Patterns
+- **Lazy imports in `__init__.py`:** Uses `__getattr__` pattern for deferred module loading (`src/novelentitymatcher/__init__.py:97-104`)
+- **Heavy dependencies deferred:** `sentence_transformers.CrossEncoder`, `setfit.SetFitModel` imported inside functions (e.g., `src/novelentitymatcher/utils/embeddings.py:169,197`)
+- **Optional dependencies guarded:** `try/except ImportError` for NLTK, model2vec, etc. (`src/novelentitymatcher/utils/preprocessing.py:5-14`)
 
-**Validation:**
-- Input validation before processing
-- Custom validation functions in `utils/validation.py`
-- Pydantic models for config validation
-- Raise `ValidationError` for invalid inputs
+## Error Handling
 
-**Strategy Pattern:**
-- Abstract base class: `NoveltyStrategy`
-- Concrete implementations: `ConfidenceStrategy`, `ClusteringStrategy`, etc.
-- Registry pattern: `StrategyRegistry`
+### Exception Hierarchy
 
-**Adapter Pattern:**
-- Base interface: `EmbeddingBackend`
-- Implementations: `SentenceTransformerBackend`, `StaticEmbeddingBackend`
-- Dynamic resolution via `backends/__init__.py`
+- **Base:** `SemanticMatcherError(Exception)` — `src/novelentitymatcher/exceptions.py:8`
+- **Domain exceptions** (all inherit from base + a stdlib type):
+  - `ValidationError(ValueError, SemanticMatcherError)` — input validation failures
+  - `TrainingError(RuntimeError, SemanticMatcherError)` — training failures
+  - `MatchingError(RuntimeError, SemanticMatcherError)` — matching failures
+  - `ModeError(ValueError, SemanticMatcherError)` — invalid mode configuration
+  - `LLMError(SemanticMatcherError)` — LLM API failures
 
-## Documentation Patterns
+### Error Design Patterns
 
-**Docstrings:**
-- Google-style docstrings preferred
-- Module docstrings explain purpose
-- Class docstrings explain role and usage
-- Function docstrings explain args/returns
+- **Rich context:** Each exception carries domain-specific attributes (e.g., `entity`, `field`, `suggestion` for `ValidationError`)
+- **Self-formatting:** Exceptions override `_format_message()` to produce human-readable output with context
+- **API key redaction:** `LLMError` uses `_redact_api_keys()` to strip sensitive keys from error messages (`src/novelentitymatcher/exceptions.py:136-137`)
+- **Validation module:** Centralized `validate_*` functions in `src/novelentitymatcher/utils/validation.py` that raise `ValidationError` with suggestions
 
-**Examples:**
-- Usage examples in `examples/`
-- Script examples in `scripts/`
-- README with quick start guide
+### Error Handling in Config
+
+- `_safe_load_file()` wraps file loading in broad exception catch (`src/novelentitymatcher/config.py:123-127`)
+- Package init uses `try/except` for logging setup and version detection (`src/novelentitymatcher/__init__.py:21-33`)
+
+## Logging
+
+### Framework
+
+- **Standard library `logging`** — centralized in `src/novelentitymatcher/utils/logging_config.py`
+- **Logger factory:** `get_logger(__name__)` — used in 30+ modules
+
+### Configuration
+
+- **Verbose mode:** Controlled by `NOVEL_ENTITY_MATCHER_VERBOSE` env var or `verbose=True` parameter
+- **Default level:** `WARNING` (quiet mode)
+- **Verbose level:** `DEBUG` with format `[%(levelname)s] %(name)s: %(message)s`
+- **Third-party suppression:** `suppress_third_party_loggers()` sets ML libraries to WARNING
+- **Optional file logging:** `configure_logging(log_file="path")`
+
+### Usage Patterns
+
+```python
+from ..utils.logging_config import get_logger
+logger = get_logger(__name__)
+logger.info("Starting operation")
+logger.debug("Detailed information")
+```
+
+- Module-level logger: `logger = get_logger(__name__)` at top of file
+- Instance-level logger: `self.logger = get_logger(__name__)` in `__init__` for classes like `Matcher`, `BERTClassifier`
+
+## Shared Utilities
+
+### `src/novelentitymatcher/utils/`
+
+| File | Purpose |
+|------|---------|
+| `embeddings.py` | `ModelCache` (thread-safe LRU), `get_cached_sentence_transformer()`, `compute_embeddings()`, `cosine_sim()`, `batch_encode()` |
+| `validation.py` | `validate_entities()`, `validate_entity()`, `validate_threshold()`, `validate_model_name()` |
+| `preprocessing.py` | `clean_text()`, `tokenize()`, `lemmatize()`, `remove_stopwords()`, `extract_aliases()` |
+| `logging_config.py` | `configure_logging()`, `get_logger()`, `set_log_level()`, `suppress_third_party_loggers()` |
+| `benchmarks.py` | Benchmarking utilities |
+| `benchmark_dataset.py` | Benchmark dataset loading |
+| `benchmark_reporting.py` | Benchmark report generation |
+| `learning_curves.py` | Learning curve utilities |
+
+### `src/novelentitymatcher/exceptions.py`
+
+All custom exceptions in one file with helpful context, suggestions, and API key redaction.
+
+### `src/novelentitymatcher/config_registry.py`
+
+Centralized model/mode registries: `MODEL_SPECS`, `MODEL_REGISTRY`, `STATIC_MODEL_REGISTRY`, `RERANKER_REGISTRY`, `MATCHER_MODE_REGISTRY`, `NOVEL_DETECTION_CONFIG`, `LLM_PROVIDERS`, plus resolver functions.
+
+### `src/novelentitymatcher/monitoring/metrics.py`
+
+`MetricEvent` dataclass + `create_metric()` helper + standard metric name constants (`METRIC_*`, `LABEL_*`).
 
 ## Configuration Patterns
 
-**Pydantic Config:**
-- All config classes inherit from `BaseModel`
-- Use `Field()` for constraints
-- `field_validator` for custom validation
-- Type-safe access to config values
+### Config Loading
 
-**Model Registry:**
-- Centralized registry in `config_registry.py`
-- Dynamic model loading
-- Aliases and version resolution
+- **Main config class:** `Config` in `src/novelentitymatcher/config.py` — attribute-access via `__getattr__`
+- **Sources searched in order:**
+  1. Repo root `config.yaml` (walks up from `__file__`)
+  2. Package-bundled `data/default_config.json`
+  3. CWD `config.yaml`
+- **Custom overrides:** `Config(custom_path="...")` deep-merges on top of defaults
+- **Dot-notation access:** `cfg.get("training.batch_size")` returns nested values
 
-**Environment Variables:**
-- Prefix: `NOVEL_ENTITY_MATCHER_`
-- Logging: `NOVEL_ENTITY_MATCHER_VERBOSE`
-- LLM keys: Provider-specific (e.g., `OPENAI_API_KEY`)
+### Pydantic Configs
 
-## Testing Conventions
+- Novelty detection configs use `pydantic.BaseModel` with `ConfigDict(validate_assignment=True, arbitrary_types_allowed=True)`
+- Examples: `DetectionConfig` (`src/novelentitymatcher/novelty/config/base.py`), `PipelineConfig` (`src/novelentitymatcher/pipeline/config.py`)
+- Per-strategy configs: `ConfidenceConfig`, `KNNConfig`, `ClusteringConfig`, etc. (`src/novelentitymatcher/novelty/config/strategies.py`)
 
-**Test Organization:**
-- Unit tests: `tests/unit/` (fast, no external deps)
-- Integration tests: `tests/integration/` (requires external services)
-- Test fixtures: `tests/fixtures/`
-- Shared fixtures in `tests/conftest.py`
+### Environment Variables
 
-**Test Markers:**
-- `@pytest.mark.unit` - Fast isolated tests
-- `@pytest.mark.integration` - Tests with external deps
-- `@pytest.mark.slow` - Expensive tests
-- `@pytest.mark.e2e` - End-to-end tests
-- `@pytest.mark.hf` - Hugging Face model tests
-- `@pytest.mark.llm` - LLM API tests (requires API key)
-- `@pytest.mark.llm_mocked` - LLM tests with mocks
-- `@pytest.mark.serial` - Non-parallelizable tests
-- `@pytest.mark.network` - Tests requiring internet
-- `@pytest.mark.smoke` - Critical path tests
+- `NOVEL_ENTITY_MATCHER_VERBOSE` — enables verbose/debug logging
+- `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` — LLM provider keys (referenced in `config_registry.py:LLM_PROVIDERS`)
+- `PYTORCH_ENABLE_MPS_FALLBACK` — set for Apple Silicon compatibility
 
-**Test Commands:**
-- Fast tests: `pytest -m "not integration and not slow"`
-- All tests: `pytest`
-- Specific marker: `pytest -m llm`
+## Module Design
+
+### Exports
+
+- Every module defines `__all__` explicitly (30+ modules)
+- Package `__init__.py` uses lazy loading via `__getattr__` to avoid importing heavy dependencies at package import time
+
+### ABC / Interface Pattern
+
+- Abstract backends: `EmbeddingBackend`, `RerankerBackend` in `src/novelentitymatcher/backends/base.py`
+- Pipeline stages: `PipelineStage(ABC)` in `src/novelentitymatcher/pipeline/contracts.py`
+- Novelty strategies: `NoveltyStrategy(ABC)` with registry pattern
+
+### Registry Pattern
+
+- `StrategyRegistry` for novelty strategies (`src/novelentitymatcher/novelty/core/strategies.py`)
+- `ClusteringBackendRegistry` for clustering backends
+- Model registries in `config_registry.py` (alias → full name mapping)
 
 ---
 
-*Conventions analysis: 2026-04-23*
+*Convention analysis: 2026-04-30*

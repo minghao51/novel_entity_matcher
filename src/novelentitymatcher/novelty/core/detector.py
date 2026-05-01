@@ -56,7 +56,7 @@ class NoveltyDetector:
     ) -> str:
         """Create a stable signature for the active reference corpus."""
         normalized = np.ascontiguousarray(reference_embeddings)
-        digest = hashlib.sha1()
+        digest = hashlib.sha256()
         digest.update(str(normalized.shape).encode("utf-8"))
         digest.update(str(normalized.dtype).encode("utf-8"))
         digest.update(normalized.tobytes())

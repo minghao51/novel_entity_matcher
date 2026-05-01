@@ -232,7 +232,7 @@ def generate_charts(
 
     if not embedding_df.empty:
         metric = "throughput_qps"
-        fig, ax = plt.subplots(figsize=(14, 6))
+        _, ax = plt.subplots(figsize=(14, 6))
         pivot_df = embedding_df.pivot(index="section", columns="model", values=metric)
         pivot_df = pivot_df[pivot_df.mean().sort_values(ascending=False).index]
         pivot_df.plot(kind="bar", ax=ax, rot=45, width=0.8)
@@ -249,7 +249,7 @@ def generate_charts(
         )
         plt.close()
 
-        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+        _, axes = plt.subplots(1, 2, figsize=(16, 6))
         embedding_df.groupby("model")["avg_latency_ms"].mean().sort_values().plot(
             kind="barh", ax=axes[0], color="steelblue"
         )
@@ -292,14 +292,14 @@ def generate_charts(
                         "accuracy": subset["accuracy"].mean() * 100,
                     }
                 )
-        for _, row in bert_df.iterrows():
-            data.append(
-                {
-                    "model": row["model"],
-                    "route": "bert",
-                    "accuracy": row["accuracy"] * 100,
-                }
-            )
+        data.extend(
+            {
+                "model": row.model,
+                "route": "bert",
+                "accuracy": row.accuracy * 100,
+            }
+            for row in bert_df.itertuples(index=False)
+        )
 
         import pandas as pd
 

@@ -294,8 +294,8 @@ class BenchmarkRunner:
         confidences = []
         true_labels_raw = data[label_col].tolist()
 
-        for _, row in data.iterrows():
-            result = matcher_fn(str(row[text_col]))
+        for row in data.itertuples(index=False):
+            result = matcher_fn(str(getattr(row, text_col)))
             if isinstance(result, tuple):
                 predictions.append(result[0])
                 confidences.append(result[1])
@@ -397,10 +397,13 @@ class BenchmarkRunner:
         right_col: str = "right",
         label_col: str = "label",
     ) -> list[dict]:
-        entity_texts = set()
-        for _, row in pairs_df.iterrows():
-            entity_texts.add(str(row[left_col]))
-            entity_texts.add(str(row[right_col]))
+        entity_texts = set(
+            pd.unique(
+                pd.concat(
+                    [pairs_df[left_col].astype(str), pairs_df[right_col].astype(str)]
+                )
+            )
+        )
 
         entities = []
         for i, text in enumerate(sorted(entity_texts)):
@@ -500,10 +503,10 @@ class BenchmarkRunner:
                         train_df = train_df.sample(n=max_train_samples, random_state=42)
                     training_data = [
                         {
-                            "text": str(row[config.text_column]),
-                            "label": str(row[config.label_column]),
+                            "text": str(getattr(row, config.text_column)),
+                            "label": str(getattr(row, config.label_column)),
                         }
-                        for _, row in train_df.iterrows()
+                        for row in train_df.itertuples(index=False)
                     ]
                     if not training_data:
                         raise ValueError(

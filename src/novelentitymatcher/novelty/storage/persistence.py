@@ -5,7 +5,7 @@ Provides utilities for saving and loading proposals in YAML format.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -143,7 +143,9 @@ def list_proposals(
             # Extract metadata from filename
             stem = path.stem  # e.g., "discovery_20250317-143000_ab12cd34"
             timestamp_str = stem.split("_", 2)[1]  # "20250317-143000"
-            timestamp = datetime.strptime(timestamp_str, "%Y%m%d-%H%M%S")
+            timestamp = datetime.strptime(timestamp_str, "%Y%m%d-%H%M%S").replace(
+                tzinfo=timezone.utc
+            )
 
             proposals.append(
                 {
@@ -162,7 +164,9 @@ def list_proposals(
         try:
             stem = path.stem
             timestamp_str = stem.split("_", 2)[1]
-            timestamp = datetime.strptime(timestamp_str, "%Y%m%d-%H%M%S")
+            timestamp = datetime.strptime(timestamp_str, "%Y%m%d-%H%M%S").replace(
+                tzinfo=timezone.utc
+            )
 
             proposals.append(
                 {
@@ -178,11 +182,11 @@ def list_proposals(
 
     # Sort
     if sort == "newest":
-        proposals.sort(key=lambda x: x["timestamp"], reverse=True)
+        proposals.sort(key=lambda x: str(x["timestamp"]), reverse=True)
     elif sort == "oldest":
-        proposals.sort(key=lambda x: x["timestamp"])
+        proposals.sort(key=lambda x: str(x["timestamp"]))
     elif sort == "name":
-        proposals.sort(key=lambda x: x["filename"])
+        proposals.sort(key=lambda x: str(x["filename"]))
 
     return proposals
 

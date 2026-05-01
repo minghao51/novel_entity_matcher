@@ -82,7 +82,7 @@ class ScalableClusterer:
 
     def _create_backend(self, backend_name: str) -> Any:
         """Create a backend instance from the registry."""
-        kwargs = {
+        kwargs: dict[str, Any] = {
             "min_samples": self.min_samples,
             "cluster_selection_epsilon": self.cluster_selection_epsilon,
             "prediction_data": self.prediction_data,
@@ -231,15 +231,15 @@ def compute_cluster_quality(
 
     cohesion = float(np.mean(cohesion_scores)) if cohesion_scores else 0.0
 
-    centroids = []
+    centroids: list[Any] = []
     for cluster_id in unique_labels:
         member_indices = np.where(labels == cluster_id)[0]
         centroid = np.mean(embeddings[member_indices], axis=0)
         centroids.append(centroid)
-    centroids = np.array(centroids)
+    centroids_array = np.array(centroids)
 
-    if len(centroids) > 1:
-        centroid_distances = pairwise_distances(centroids, metric=metric)
+    if len(centroids_array) > 1:
+        centroid_distances = pairwise_distances(centroids_array, metric=metric)
         upper_tri = centroid_distances[np.triu_indices_from(centroid_distances, k=1)]
         separation = float(np.mean(upper_tri))
     else:

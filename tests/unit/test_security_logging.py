@@ -36,3 +36,13 @@ class TestRedactApiKeys:
         text = "The word 'skill' and 'sky' should remain"
         result = _redact_api_keys(text)
         assert result == text
+
+    def test_redacts_google_ai_key(self):
+        result = _redact_api_keys("key=AIzaSyA1234567890abcdefghijklmnopqrstuvwx")
+        assert "AIza" not in result
+        assert "...REDACTED..." in result
+
+    def test_redacts_google_oauth_token(self):
+        result = _redact_api_keys("Bearer ya29.a0AfH6SMBx1234567890abcdef")
+        assert "ya29" not in result
+        assert "...REDACTED..." in result

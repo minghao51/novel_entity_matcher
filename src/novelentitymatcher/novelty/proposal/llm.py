@@ -8,6 +8,7 @@ and descriptions for clusters of novel samples.
 import json
 import logging
 import os
+import re
 from collections import defaultdict
 from datetime import timedelta
 from types import SimpleNamespace
@@ -24,6 +25,11 @@ try:
         wait_exponential_jitter,
     )
 except ImportError:  # pragma: no cover - optional dependency
+    import logging as _logging
+
+    _logging.getLogger(__name__).warning(
+        "tenacity not installed — retry protection disabled for LLM calls"
+    )
     RetryCallState = Any  # type: ignore[assignment,misc]
 
     def retry(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[no-redef]
@@ -45,6 +51,11 @@ except ImportError:  # pragma: no cover - optional dependency
 try:
     from aiobreaker import CircuitBreaker, CircuitBreakerError
 except ImportError:  # pragma: no cover - optional dependency
+    import logging as _logging
+
+    _logging.getLogger(__name__).warning(
+        "aiobreaker not installed — circuit-breaker protection disabled for LLM calls"
+    )
 
     class CircuitBreaker:  # type: ignore[no-redef]
         def __init__(self, *args: Any, **kwargs: Any):
@@ -58,6 +69,7 @@ except ImportError:  # pragma: no cover - optional dependency
 
 
 from ...exceptions import LLMError, _redact_api_keys
+from ...utils.api_keys import get_all_api_keys, provider_to_env_var
 from ...utils.logging_config import get_logger
 from ..schemas import (
     ClassProposal,
@@ -65,6 +77,17 @@ from ..schemas import (
     NovelClassAnalysis,
     NovelSampleMetadata,
 )
+
+_SANITIZE_RE = re.compile(r"```")
+_MAX_INPUT_LENGTH = 5000
+
+
+def sanitize_prompt_input(text: str, max_length: int = _MAX_INPUT_LENGTH) -> str:
+    text = _SANITIZE_RE.sub("", text)
+    if len(text) > max_length:
+        text = text[:max_length] + "..."
+    return text
+
 
 logger = get_logger(__name__)
 
@@ -259,29 +282,10 @@ class LLMClassProposer:
         return DEFAULT_PROVIDERS[0]
 
     def _get_api_keys_from_env(self) -> dict[str, str]:
-        """Get API keys from environment variables."""
-        keys = {}
-        env_mappings = {
-            "openrouter": "OPENROUTER_API_KEY",
-            "anthropic": "ANTHROPIC_API_KEY",
-            "openai": "OPENAI_API_KEY",
-        }
-
-        for provider, env_var in env_mappings.items():
-            key = os.getenv(env_var)
-            if key:
-                keys[provider] = key
-
-        return keys
+        return get_all_api_keys()
 
     def _provider_to_env_var(self, provider: str) -> str | None:
-        """Convert provider name to environment variable name."""
-        mappings = {
-            "openrouter": "OPENROUTER_API_KEY",
-            "anthropic": "ANTHROPIC_API_KEY",
-            "openai": "OPENAI_API_KEY",
-        }
-        return mappings.get(provider)
+        return provider_to_env_var(provider)
 
     def _api_key_for_model(self, model: str) -> str | None:
         """Resolve provider-specific API key for a model identifier."""
@@ -427,18 +431,23 @@ class LLMClassProposer:
         """Build prompt requesting attribute discovery alongside class proposals."""
         cluster_lines = []
         for cluster in discovery_clusters:
-            keywords = ", ".join(cluster.keywords or [])
-            examples = "; ".join(
+            keywords = ", ".join(
+                sanitize_prompt_input(k) for k in (cluster.keywords or [])
+            )
+            raw_examples = (
                 cluster.evidence.representative_examples
                 if cluster.evidence
                 else cluster.example_texts
             )
+            examples = "; ".join(sanitize_prompt_input(e) for e in raw_examples)
             cluster_lines.append(
                 f"- Cluster {cluster.cluster_id}: sample_count={cluster.sample_count}; "
                 f"keywords=[{keywords}]; examples=[{examples}]"
             )
 
-        context_section = f"\nDomain Context: {context}" if context else ""
+        context_section = (
+            f"\nDomain Context: {sanitize_prompt_input(context)}" if context else ""
+        )
         return f"""You are reviewing clusters of likely novel concepts and discovering their data structure.
 
 Existing Classes: {", ".join(existing_classes)}{context_section}
@@ -506,7 +515,8 @@ Prefer one proposal per coherent cluster. Use source_cluster_ids for traceabilit
                             if isinstance(attr, DiscoveredAttribute)
                             else DiscoveredAttribute(**attr)
                         )
-                    except Exception:
+                    except (ValidationError, TypeError, KeyError) as _attr_exc:
+                        logger.debug("Skipping malformed attribute: %s", _attr_exc)
                         continue
                 if parsed:
                     proposal.discovered_attributes = parsed
@@ -573,12 +583,16 @@ Prefer one proposal per coherent cluster. Use source_cluster_ids for traceabilit
         summary_lines = []
         for i, summary in enumerate(summaries):
             cluster_ids = ", ".join(str(c) for c in summary["cluster_ids"])
+            kw = sanitize_prompt_input(str(summary["keywords"]))
+            ex = sanitize_prompt_input(str(summary["representative_examples"]))
             summary_lines.append(
                 f"- Group {i + 1} (clusters {cluster_ids}, {summary['total_samples']} samples): "
-                f"keywords=[{summary['keywords']}]; examples=[{summary['representative_examples']}]"
+                f"keywords=[{kw}]; examples=[{ex}]"
             )
 
-        context_section = f"\nDomain Context: {context}" if context else ""
+        context_section = (
+            f"\nDomain Context: {sanitize_prompt_input(context)}" if context else ""
+        )
         proposal_block = """{
       "name": "class name",
       "description": "what the class represents",
@@ -685,7 +699,7 @@ Prefer one proposal per coherent group. Use source_cluster_ids for traceability.
         """Build the proposal prompt for the LLM."""
         # Format samples for the prompt
         sample_texts = [
-            f"- {sample.text}"
+            f"- {sanitize_prompt_input(sample.text)}"
             for sample in novel_samples[:20]  # Limit to 20
         ]
 
@@ -700,7 +714,7 @@ Prefer one proposal per coherent group. Use source_cluster_ids for traceability.
         # Build context section
         context_section = ""
         if context:
-            context_section = f"\n\nDomain Context: {context}"
+            context_section = f"\n\nDomain Context: {sanitize_prompt_input(context)}"
 
         # Build cluster section if applicable
         cluster_section = ""
@@ -710,7 +724,9 @@ Prefer one proposal per coherent group. Use source_cluster_ids for traceability.
                 cluster_name = (
                     f"Cluster {cluster_id}" if cluster_id is not None else "Unclustered"
                 )
-                sample_list = ", ".join([s.text[:50] for s in samples[:3]])
+                sample_list = ", ".join(
+                    [sanitize_prompt_input(s.text[:50]) for s in samples[:3]]
+                )
                 cluster_info.append(f"- {cluster_name}: {sample_list}")
             cluster_section = "\n\nNatural clusters found:\n" + "\n".join(cluster_info)
 
@@ -772,18 +788,23 @@ Provide your analysis as a JSON object:"""
     ) -> str:
         cluster_lines = []
         for cluster in discovery_clusters:
-            keywords = ", ".join(cluster.keywords or [])
-            examples = "; ".join(
+            keywords = ", ".join(
+                sanitize_prompt_input(k) for k in (cluster.keywords or [])
+            )
+            raw_examples = (
                 cluster.evidence.representative_examples
                 if cluster.evidence
                 else cluster.example_texts
             )
+            examples = "; ".join(sanitize_prompt_input(e) for e in raw_examples)
             cluster_lines.append(
                 f"- Cluster {cluster.cluster_id}: sample_count={cluster.sample_count}; "
                 f"keywords=[{keywords}]; examples=[{examples}]"
             )
 
-        context_section = f"\nDomain Context: {context}" if context else ""
+        context_section = (
+            f"\nDomain Context: {sanitize_prompt_input(context)}" if context else ""
+        )
         return f"""You are reviewing clusters of likely novel concepts.
 
 Existing Classes: {", ".join(existing_classes)}{context_section}

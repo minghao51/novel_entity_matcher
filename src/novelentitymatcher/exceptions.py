@@ -129,7 +129,13 @@ class ModeError(ValueError, SemanticMatcherError):
 
 
 _API_KEY_PATTERN = re.compile(
-    r"(sk-or-v1-[A-Za-z0-9]+|sk-ant-[A-Za-z0-9]+|sk-[A-Za-z0-9]{20,}|hf_[A-Za-z0-9]+)"
+    r"(sk-or-v1-[A-Za-z0-9]+"
+    r"|sk-ant-[A-Za-z0-9]+"
+    r"|sk-[A-Za-z0-9]{20,}"
+    r"|hf_[A-Za-z0-9]+"
+    r"|AIza[A-Za-z0-9_\\-]{35}"
+    r"|ya29\.[A-Za-z0-9_\\-]+"
+    r")"
 )
 
 

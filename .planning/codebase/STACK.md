@@ -1,107 +1,162 @@
-# Technology Stack
+# Stack — novel-entity-matcher
 
-**Analysis Date:** 2026-04-23
+## Languages & Runtime
 
-## Languages
+| Item | Value | Source |
+|------|-------|--------|
+| Language | Python 3 | `pyproject.toml` |
+| Minimum Python | >=3.10 | `pyproject.toml:10` |
+| Local Python | 3.13 | `.python-version` |
+| CI Python | 3.10, 3.11, 3.12 (matrix) | `.github/workflows/test.yml:63` |
+| Package manager | uv (astral-sh) | `uv.lock`, `.pre-commit-config.yaml:13` |
+| Build backend | hatchling >=1.27.0 | `pyproject.toml:2` |
 
-**Primary:**
-- Python 3.10+ - Core application language
-- Python 3.11 - Primary development and CI target
-- Python 3.9, 3.10, 3.11, 3.12 - Supported runtime versions
+## Frameworks & Libraries
 
-**Secondary:**
-- Markdown - Documentation (README, docs/)
-- YAML - Configuration files
+### Core ML / NLP
 
-## Runtime
+| Library | Purpose | Files |
+|---------|---------|-------|
+| **sentence-transformers** >=3.0.0 | Dense text embeddings (SentenceTransformer, CrossEncoder) | `src/novelentitymatcher/core/matcher.py`, `src/novelentitymatcher/utils/embeddings.py`, `src/novelentitymatcher/backends/sentencetransformer.py` |
+| **setfit** >=1.0.0 | Few-shot classification via SetFit | `src/novelentitymatcher/core/classifier.py`, `src/novelentitymatcher/novelty/strategies/setfit_impl.py` |
+| **transformers** >=4.45.0,<5.0.0 | Hugging Face model hub, tokenizers, BERT classifier | `src/novelentitymatcher/core/bert_classifier.py` |
+| **torch** >=2.0.0 | Deep learning backend (PyTorch) | `src/novelentitymatcher/core/bert_classifier.py` |
+| **model2vec** >=0.1.0 | Static embedding models (e.g. potion-base) | `src/novelentitymatcher/backends/static_embedding.py` |
+| **scikit-learn** >=1.3.0 | Cosine similarity, metrics, ML utilities | `src/novelentitymatcher/core/hybrid.py`, `src/novelentitymatcher/benchmarks/shared.py` |
+| **numpy** >=2.0.0 | Array operations throughout | Nearly all modules |
+| **pandas** >=2.0.0 | DataFrames for benchmarks and ingestion | `src/novelentitymatcher/benchmarks/runner.py`, `src/novelentitymatcher/benchmarks/loader.py` |
+| **nltk** >=3.9.4 | Natural language processing utilities | `pyproject.toml:35` |
+| **optuna** >=4.8.0 | Hyperparameter optimization | `pyproject.toml:41` |
 
-**Environment:**
-- Python 3.10+ (requires-python: ">=3.10")
+### Similarity & Search
 
-**Package Manager:**
-- uv - Fast Python package manager
-- Lockfile: Not explicitly managed (uv sync uses pyproject.toml)
+| Library | Purpose | Files |
+|---------|---------|-------|
+| **rank-bm25** >=0.2.2 | BM25 blocking strategy | `pyproject.toml:37` |
+| **rapidfuzz** >=3.0.0 | Fuzzy string matching blocking | `pyproject.toml:38` |
+| **networkx** >=3.0,<4.0 | Hierarchical entity matching graph | `src/novelentitymatcher/core/hierarchy.py` |
 
-## Frameworks
+### Data Validation & Config
 
-**Core:**
-- SetFit - Few-shot text classification
-- Sentence Transformers - Text embeddings
-- Transformers (Hugging Face) - Pre-trained models
-- PyTorch - Deep learning backend
+| Library | Purpose | Files |
+|---------|---------|-------|
+| **pydantic** >=2.0.0 | Schema validation, BaseModel for proposals/configs | `src/novelentitymatcher/novelty/proposal/llm.py`, `src/novelentitymatcher/novelty/schemas/` |
+| **pyyaml** >=6.0.0 | Config file loading (config.yaml) | `src/novelentitymatcher/config.py` |
 
-**Testing:**
-- pytest 8.4.2+ - Test framework
-- pytest-asyncio 1.2.0+ - Async test support
+### LLM Integration (optional `[llm]` extra)
 
-**Build/Dev:**
-- black 23.0.0+ - Code formatting
-- ruff 0.1.0+ - Linting and fast Python linter
-- mypy 1.19.1+ - Static type checking
-- build 1.2.2+ - Package building
-- twine 5.1.1+ - PyPI upload
+| Library | Purpose | Files |
+|---------|---------|-------|
+| **litellm** >=1.83.7 | Unified LLM API (OpenRouter, OpenAI, Anthropic) | `src/novelentitymatcher/backends/litellm.py`, `src/novelentitymatcher/novelty/proposal/llm.py` |
+| **tenacity** >=9.0.0 | Retry logic for LLM calls | `src/novelentitymatcher/novelty/proposal/llm.py` |
+| **aiobreaker** >=1.1.0 | Circuit breaker for LLM resilience | `src/novelentitymatcher/novelty/proposal/llm.py` |
 
-## Key Dependencies
+### ANN / Clustering (optional `[novelty]`/`[full]` extras)
 
-**Critical:**
-- numpy 2.0.0+ - Array operations and numerical computing
-- pandas 2.0.0+ - Data manipulation
-- sentence-transformers 3.0.0+ - Text embeddings
-- setfit 1.0.0+ - Few-shot classification
-- torch 2.0.0+ - Deep learning framework
-- transformers 4.45.0+ - Pre-trained transformer models
+| Library | Purpose | Files |
+|---------|---------|-------|
+| **hnswlib** >=0.8.0 | HNSW approximate nearest neighbor index | `src/novelentitymatcher/novelty/storage/index.py` |
+| **faiss-cpu** >=1.7.4 | FAISS ANN index | `src/novelentitymatcher/novelty/storage/index.py` |
+| **hdbscan** >=0.8.33 | HDBSCAN clustering | `src/novelentitymatcher/novelty/clustering/backends.py` |
+| **umap-learn** >=0.5 | UMAP dimensionality reduction | `pyproject.toml` `[full]` extra |
 
-**Infrastructure:**
-- scikit-learn 1.3.0+ - ML utilities and metrics
-- sklearn - Clustering, pairwise distances, feature extraction
-- networkx 3.0+ - Graph operations
-- requests 2.31.0+ - HTTP client
-- pyyaml 6.0.0+ - YAML parsing
+### HTTP
 
-**Novelty Detection:**
-- hnswlib 0.8.0+ - Approximate nearest neighbor search
-- faiss-cpu 1.7.4+ - Vector similarity search
-- hdbscan 0.8.33+ - Density-based clustering
-- umap-learn 0.5+ - Dimensionality reduction for clustering
+| Library | Purpose | Files |
+|---------|---------|-------|
+| **requests** >=2.31.0 | HTTP client for data ingestion, benchmark dataset downloads | `src/novelentitymatcher/ingestion/base.py`, `src/novelentitymatcher/benchmarks/loader.py` |
 
-**LLM Integration:**
-- litellm 1.50.0+ - Multi-provider LLM API client
-- pydantic 2.0.0+ - Data validation
+### Visualization (optional `[viz]` extra)
 
-**Embeddings & Retrieval:**
-- model2vec 0.1.0+ - Static embeddings
-- rank-bm25 0.2.2+ - BM25 text retrieval
-- rapidfuzz 3.0.0+ - Fuzzy string matching
-- nltk 3.9.2+ - NLP utilities
+| Library | Purpose | Files |
+|---------|---------|-------|
+| **matplotlib** >=3.9.4 | Plotting (core dep + viz extra) | `src/novelentitymatcher/benchmarks/visualization.py` |
+| **seaborn** >=0.13.2 | Statistical visualization | `pyproject.toml` `[viz]` extra |
 
-**Benchmarks:**
-- matplotlib 3.9.4+ - Plotting
-- seaborn 0.13.2+ - Statistical visualization
-- tqdm 4.66.0+ - Progress bars
-- ipywidgets 8.0.0+ - Jupyter widgets
+## Dependencies (with versions from manifests)
 
-## Configuration
+### Core dependencies — `pyproject.toml:24-43`
 
-**Environment:**
-- NOVEL_ENTITY_MATCHER_VERBOSE - Enable verbose debug logging
-- LLM_API_KEY(s) - For LLM providers (OpenAI, Anthropic, etc.)
+```
+numpy>=2.0.0
+networkx>=3.0,<4.0
+pandas>=2.0.0
+scikit-learn>=1.3.0
+sentence-transformers>=3.0.0
+setfit>=1.0.0
+datasets>=2.14.0
+torch>=2.0.0
+transformers>=4.45.0,<5.0.0
+nltk>=3.9.4
+requests>=2.31.0
+pydantic>=2.0.0
+rank-bm25>=0.2.2
+rapidfuzz>=3.0.0
+pyyaml>=6.0.0
+model2vec>=0.1.0
+optuna>=4.8.0
+matplotlib>=3.9.4
+```
 
-**Build:**
-- pyproject.toml - Primary configuration (dependencies, scripts, tools)
-- hatchling - Build backend
+### Optional extras — `pyproject.toml:50-140`
 
-## Platform Requirements
+| Extra | Key Packages |
+|-------|-------------|
+| `docs` | mkdocs>=1.6.0, mkdocs-material>=9.5.0, mkdocstrings[python]>=0.25.0, marimo>=0.23.4 |
+| `notebooks` | marimo>=0.23.4 |
+| `jupyter` | tqdm>=4.66.0, ipywidgets>=8.0.0 |
+| `novelty` | pydantic>=2.0.0, hnswlib>=0.8.0, hdbscan>=0.8.33, faiss-cpu>=1.7.4 |
+| `llm` | litellm>=1.83.7, pydantic>=2.0.0, tenacity>=9.0.0, aiobreaker>=1.1.0 |
+| `clustering` | hdbscan>=0.2, umap-learn>=0.5 |
+| `viz` | matplotlib>=3.9.4, seaborn>=0.13.2 |
+| `full` | pydantic, hnswlib, hdbscan, faiss-cpu, litellm, umap-learn |
 
-**Development:**
-- Python 3.9+
-- uv package manager
-- macOS MPS fallback enabled for arm64 (PyTorch)
+### Pinned versions from `uv.lock` (selected, Python >=3.11 resolution)
 
-**Production:**
-- Python 3.10+
-- 4GB+ RAM recommended for embedding models
-- Optional: GPU for faster training (CUDA/MPS)
+- torch: 2.11.0
+- transformers: (resolved via sentence-transformers)
+- accelerate: 1.13.0
+- numpy: 2.4.4
+- pydantic: (latest compatible)
 
----
+## Build Tools & Config
 
-*Stack analysis: 2026-04-23*
+| Tool | Config Location | Details |
+|------|----------------|---------|
+| **uv** | `uv.lock` | Package resolution and locking |
+| **hatchling** | `pyproject.toml:1-3` | Build backend, wheel packages `src/novelentitymatcher` |
+| **ruff** | `pyproject.toml:173-202` | Linter (E,F,I,UP,B,C4,DTZ,T10,ISC,PIE,PT,RUF) + formatter (double quotes, 88-char line) |
+| **mypy** | `pyproject.toml:220-296` | Type checker, target Python 3.11, strict_optional, per-module ignore_missing_imports |
+| **pytest** | `pyproject.toml:203-218` | strict-markers, 12 custom markers (unit/integration/slow/e2e/hf/llm/llm_mocked/serial/network/smoke), asyncio_mode=auto |
+| **pre-commit** | `.pre-commit-config.yaml` | trailing-whitespace, end-of-file-fixer, check-yaml, uv-lock, ruff (lint+format), mypy, conventional-pre-commit |
+| **mkdocs** | `mkdocs.yml` | Material theme, mkdocstrings[python], mike versioning, search plugin |
+| **marimo** | `notebooks/*.py` | Interactive notebooks (4 notebooks) |
+| **conventional-pre-commit** | `.pre-commit-config.yaml:34-38` | Enforces conventional commit messages |
+
+## Development Dependencies — `pyproject.toml:142-159`
+
+```
+beautifulsoup4>=4.14.3
+build>=1.2.2
+html-to-markdown>=1.8.0
+mypy>=1.19.1
+patchright>=1.58.0
+pip-audit>=2.7.0
+pre-commit>=3.6
+pytest>=9.0.3
+pytest-asyncio>=1.2.0
+ruff>=0.1.0
+twine>=5.1.1
+types-networkx>=3.2
+types-pyyaml>=6.0.12.20250915
+types-requests>=2.32.4.20260107
+types-tqdm>=4.67.3.20260205
+```
+
+## CLI Entry Points — `pyproject.toml:45-48`
+
+| Command | Module |
+|---------|--------|
+| `novelentitymatcher-ingest` | `novelentitymatcher.ingestion.cli:main` |
+| `novelentitymatcher-bench` | `novelentitymatcher.benchmarks.cli:main` |
+| `novelentitymatcher-review` | `novelentitymatcher.novelty.cli:main` |

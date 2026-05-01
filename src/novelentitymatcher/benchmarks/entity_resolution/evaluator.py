@@ -59,8 +59,10 @@ class EntityResolutionEvaluator(BaseEvaluator[pd.DataFrame]):
         predictions = []
         scores = []
 
-        for _, row in data.iterrows():
-            score = matcher_fn(str(row[left_col]), str(row[right_col]))
+        for row in data.itertuples(index=False):
+            score = matcher_fn(
+                str(getattr(row, left_col)), str(getattr(row, right_col))
+            )
             scores.append(score)
             predictions.append(1 if score >= match_threshold else 0)
 

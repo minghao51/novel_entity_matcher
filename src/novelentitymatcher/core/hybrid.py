@@ -164,7 +164,7 @@ class HybridMatcher:
             all_candidates.append(candidates or [])
 
         # Stage 2: Bi-Encoder Retrieval - batched encoding
-        query_embeddings = self.retriever.model.encode(queries)
+        query_embeddings = self.retriever.model.encode(queries)  # type: ignore[union-attr]
         if isinstance(query_embeddings, list):
             query_embeddings = np.array(query_embeddings)
 
@@ -187,7 +187,7 @@ class HybridMatcher:
                 all_retrieved.append([])
                 continue
 
-            candidate_embeddings = self.retriever.embeddings[candidate_indices]
+            candidate_embeddings = self.retriever.embeddings[candidate_indices]  # type: ignore[index]
             query_emb = query_embeddings[i : i + 1]
             similarities = cosine_similarity(query_emb, candidate_embeddings)[0]
 

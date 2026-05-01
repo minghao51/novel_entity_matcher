@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 from sklearn.metrics import pairwise_distances
@@ -16,11 +16,11 @@ logger = get_logger(__name__)
 class ClusteringBackendRegistry:
     """Registry for clustering backends."""
 
-    _backends: dict[str, type] = {}
+    _backends: ClassVar[dict[str, type]] = {}
 
     @classmethod
     def register(cls, backend_cls: type) -> type:
-        cls._backends[backend_cls.name] = backend_cls
+        cls._backends[getattr(backend_cls, "name", backend_cls.__name__)] = backend_cls
         return backend_cls
 
     @classmethod
@@ -69,7 +69,7 @@ class HDBSCANBackend(ClusteringBackend):
             raise ImportError(
                 "hdbscan is required for HDBSCAN clustering. "
                 "Install with: pip install hdbscan"
-            )
+            ) from None
 
         distance_matrix = self._compute_distances(embeddings)
 
@@ -257,7 +257,7 @@ class UMAPHDBSCANBackend(ClusteringBackend):
             raise ImportError(
                 "umap-learn is required for UMAP preprocessing. "
                 "Install with: pip install umap-learn"
-            )
+            ) from None
 
         try:
             import hdbscan
@@ -265,7 +265,7 @@ class UMAPHDBSCANBackend(ClusteringBackend):
             raise ImportError(
                 "hdbscan is required for HDBSCAN clustering. "
                 "Install with: pip install hdbscan"
-            )
+            ) from None
 
         logger.info(
             f"Applying UMAP reduction: {embeddings.shape} -> ({embeddings.shape[0]}, {self.umap_dim})"

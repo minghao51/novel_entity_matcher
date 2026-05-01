@@ -57,8 +57,8 @@ class ClassificationEvaluator(BaseEvaluator[pd.DataFrame]):
         confidences = []
         true_labels_raw = data[label_col].tolist()
 
-        for _, row in data.iterrows():
-            result = matcher_fn(str(row[text_col]))
+        for row in data.itertuples(index=False):
+            result = matcher_fn(str(getattr(row, text_col)))
             if result is None:
                 predicted_label = None
                 confidence = 0.0
