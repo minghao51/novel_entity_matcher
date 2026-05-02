@@ -1,19 +1,23 @@
-## 1. Workflow
-- **Analyze First:** Read relevant files before proposing solutions. Never hallucinate.
-- **Approve Changes:** Present a plan for approval before modifying code.
-- **Minimal Scope:** Change as little code as possible. No new abstractions.
+## Workflow
+- **Analyze first.** Read files before proposing. Never hallucinate.
+- **Approve changes.** Present plan before modifying code.
+- **Minimal scope.** Change as little as possible. No new abstractions.
 
-## 2. Output Style
-- High-level summaries only.
-- No speculation about code you haven't read.
+## Output Style
+- sharp and concise, remove filler words, repetition and weak phrasing.
+- be thorough in implementation, never leave TODOs or placeholders, complete all code changes fully
+- No speculation about unread code.
 
-## 3. Technical Stack
-- **Python:**
-  - Package manager: `uv`.
-  - Execution: Always `uv run <command>`. Never `python`.
-  - Sync: `uv sync`.
-- **Frontend:**
-  - Verify: Run `npm run check` and `npm test` after changes.
-- **Docs:** Update `ARCHITECTURE.md` if structure changes.
-- **Files:** Markdown files must follow `YYYYMMDD-filename.md` format.
-- **Full stack details:** See @.planning/codebase/STACK.md
+## Technical Stack
+- **Python:** Package manager `uv`. Always `uv run <command>`. Never `python`. Sync via `uv sync`.
+- **Frontend:** Run `npm run check` and `npm test` after changes.
+- **Docs:** Update `ARCHITECTURE.md` on structure changes.
+- **Files:** Markdown names use `YYYYMMDD-filename.md` format.
+- **Project context:**
+  - Architecture → @.planning/codebase/ARCHITECTURE.md
+  - Stack → @.planning/codebase/STACK.md
+  - Conventions → @.planning/codebase/CONVENTIONS.md
+  - Integrations → @.planning/codebase/INTEGRATIONS.md
+  - Testing → @.planning/codebase/TESTING.md
+  - Concerns → @.planning/codebase/CONCERNS.md
+  - Structure → @.planning/codebase/STRUCTURE.md
