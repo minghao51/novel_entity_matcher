@@ -32,7 +32,7 @@ def _():
 
 
 @app.cell
-def _(Matcher):
+def _(Matcher, mo):
     entities = [
         {"id": "DE", "name": "Germany", "aliases": ["Deutschland", "Bundesrepublik"]},
         {"id": "FR", "name": "France", "aliases": ["Frankreich", "La France"]},
@@ -46,8 +46,13 @@ def _(Matcher):
         {"id": "CA", "name": "Canada", "aliases": ["Canuck Land"]},
     ]
 
-    matcher = Matcher(entities=entities, mode="zero-shot")
-    matcher.fit()
+    @mo.persistent_cache
+    def _fit_matcher():
+        m = Matcher(entities=entities, mode="zero-shot")
+        m.fit()
+        return m
+
+    matcher = _fit_matcher()
     return (matcher,)
 
 

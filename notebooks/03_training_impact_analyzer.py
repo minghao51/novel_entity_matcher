@@ -74,8 +74,13 @@ def _(Matcher):
         ("La Republique", "FR"),
     ]
 
-    zero_matcher = Matcher(entities=entities, mode="zero-shot")
-    zero_matcher.fit()
+    @mo.persistent_cache
+    def _fit_zero():
+        m = Matcher(entities=entities, mode="zero-shot")
+        m.fit()
+        return m
+
+    zero_matcher = _fit_zero()
     return entities, full_training, test_queries, zero_matcher
 
 
@@ -141,6 +146,7 @@ def _(
     Matcher,
     entities,
     full_training,
+    mo,
     n_samples,
     plt,
     test_queries,
@@ -148,37 +154,43 @@ def _(
 ):
     _n = n_samples.value
 
-    _sample_counts = list(range(min(_n + 1, len(full_training) + 1)))
-    _zero_acc = []
-    _trained_acc = []
+    @mo.persistent_cache
+    def _sweep_accuracy(n):
+        _sample_counts = list(range(min(n + 1, len(full_training) + 1)))
+        _zero_acc = []
+        _trained_acc = []
 
-    for _count in _sample_counts:
-        _z_correct = sum(
-            1
-            for _q, _exp in test_queries
-            if (_entry := zero_matcher.match(_q))
-            and (_e := _entry if isinstance(_entry, dict) else _entry)
-            and (_e.get("id", "?") if isinstance(_e, dict) else "?") == _exp
-        )
-        _zero_acc.append(_z_correct / len(test_queries))
+        for _count in _sample_counts:
+            _z_correct = sum(
+                1
+                for _q, _exp in test_queries
+                if (_entry := zero_matcher.match(_q))
+                and (_e := _entry if isinstance(_entry, dict) else _entry)
+                and (_e.get("id", "?") if isinstance(_e, dict) else "?") == _exp
+            )
+            _zero_acc.append(_z_correct / len(test_queries))
 
-        if _count > 0:
-            _subset = full_training[:_count]
-            try:
-                _tm = Matcher(entities=entities, verbose=False)
-                _tm.fit(training_data=_subset, num_epochs=1)
-                _t_correct = sum(
-                    1
-                    for _q, _exp in test_queries
-                    if (_entry := _tm.match(_q))
-                    and (_e := _entry if isinstance(_entry, dict) else _entry)
-                    and (_e.get("id", "?") if isinstance(_e, dict) else "?") == _exp
-                )
-                _trained_acc.append(_t_correct / len(test_queries))
-            except Exception:
+            if _count > 0:
+                _subset = full_training[:_count]
+                try:
+                    _tm = Matcher(entities=entities, verbose=False)
+                    _tm.fit(training_data=_subset, num_epochs=1)
+                    _t_correct = sum(
+                        1
+                        for _q, _exp in test_queries
+                        if (_entry := _tm.match(_q))
+                        and (_e := _entry if isinstance(_entry, dict) else _entry)
+                        and (_e.get("id", "?") if isinstance(_e, dict) else "?") == _exp
+                    )
+                    _trained_acc.append(_t_correct / len(test_queries))
+                except Exception:
+                    _trained_acc.append(_zero_acc[-1])
+            else:
                 _trained_acc.append(_zero_acc[-1])
-        else:
-            _trained_acc.append(_zero_acc[-1])
+
+        return _sample_counts, _zero_acc, _trained_acc
+
+    _sample_counts, _zero_acc, _trained_acc = _sweep_accuracy(_n)
 
     _fig, _ax = plt.subplots(figsize=(8, 4))
     _ax.plot(_sample_counts, _zero_acc, "o--", label="Zero-shot", color="#3498db")

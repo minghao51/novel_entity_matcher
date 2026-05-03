@@ -101,8 +101,13 @@ def _(Matcher, mo):
         "math",
     ]
 
-    matcher = Matcher(entities=entities, model="minilm", threshold=0.6)
-    matcher.fit(texts=training_texts, labels=training_labels)
+    @mo.persistent_cache
+    def _fit_matcher():
+        m = Matcher(entities=entities, model="minilm", threshold=0.6)
+        m.fit(texts=training_texts, labels=training_labels)
+        return m
+
+    matcher = _fit_matcher()
 
     mo.md(
         f"**Trained matcher** with {len(training_texts)} samples across {len(entities)} classes."

@@ -30,21 +30,21 @@ except ImportError:  # pragma: no cover - optional dependency
     _logging.getLogger(__name__).warning(
         "tenacity not installed — retry protection disabled for LLM calls"
     )
-    RetryCallState = Any  # type: ignore[assignment,misc]
+    RetryCallState = Any
 
-    def retry(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[no-redef]
+    def retry(*_args: Any, **_kwargs: Any) -> Any:
         def _decorator(func: Any) -> Any:
             return func
 
         return _decorator
 
-    def wait_exponential_jitter(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[no-redef]
+    def wait_exponential_jitter(*_args: Any, **_kwargs: Any) -> Any:
         return None
 
-    def retry_if_exception_type(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[no-redef]
+    def retry_if_exception_type(*_args: Any, **_kwargs: Any) -> Any:
         return None
 
-    def before_sleep_log(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[misc]
+    def before_sleep_log(*_args: Any, **_kwargs: Any) -> Any:
         return None
 
 
@@ -975,12 +975,12 @@ Please fix the errors above and return ONLY valid JSON matching the schema."""
                 ServiceUnavailableError as LiteLLMServiceUnavailableError,
             )
         except ImportError:
-            AuthenticationError = type("AuthenticationError", (Exception,), {})  # type: ignore[misc,assignment]
-            RateLimitError = type("RateLimitError", (Exception,), {})  # type: ignore[misc,assignment]
-            ServiceUnavailableError = type("ServiceUnavailableError", (Exception,), {})  # type: ignore[misc,assignment]
-            LiteLLMAuthError = AuthenticationError  # type: ignore[misc]
-            LiteLLMRateLimitError = RateLimitError  # type: ignore[misc]
-            LiteLLMServiceUnavailableError = ServiceUnavailableError  # type: ignore[misc]
+            AuthenticationError = type("AuthenticationError", (Exception,), {})
+            RateLimitError = type("RateLimitError", (Exception,), {})
+            ServiceUnavailableError = type("ServiceUnavailableError", (Exception,), {})
+            LiteLLMAuthError = AuthenticationError
+            LiteLLMRateLimitError = RateLimitError
+            LiteLLMServiceUnavailableError = ServiceUnavailableError
 
         LLM_RETRYABLE_ERRORS = (
             RateLimitError,

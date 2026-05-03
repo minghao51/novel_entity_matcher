@@ -9,7 +9,7 @@ try:
     LITELLM_AVAILABLE = True
 except ImportError:
     LITELLM_AVAILABLE = False
-    embedding = None  # type: ignore[assignment]
+    embedding = None
     rerank = None
 
 

@@ -30,6 +30,7 @@ venv/
 .ipynb_checkpoints/
 __marimo__/
 notebooks/__marimo__/
+**/__marimo__/cache/
 
 # OS/editor noise
 .DS_Store
