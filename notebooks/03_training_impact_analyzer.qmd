@@ -1,0 +1,152 @@
+---
+title: "Training Impact Analyzer"
+description: "Compare zero-shot vs trained matching side-by-side. See how accuracy changes for known and tricky inputs."
+date: today
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    code-fold: true
+    code-tools: true
+---
+
+This notebook compares **zero-shot** and **trained** matching performance on country entity resolution.
+It sweeps across training sample counts to measure how additional training data improves accuracy.
+
+```{python}
+#| label: setup
+#| cache: true
+import matplotlib.pyplot as plt
+from novelentitymatcher import Matcher
+
+entities = [
+    {"id": "DE", "name": "Germany", "aliases": ["Deutschland"]},
+    {"id": "FR", "name": "France", "aliases": ["Frankreich"]},
+    {"id": "US", "name": "United States", "aliases": ["USA", "America"]},
+    {"id": "JP", "name": "Japan", "aliases": ["Nippon"]},
+    {"id": "CN", "name": "China", "aliases": ["Zhongguo"]},
+]
+
+full_training = [
+    {"text": "Germany", "label": "DE"},
+    {"text": "Deutschland", "label": "DE"},
+    {"text": "Deutchland", "label": "DE"},
+    {"text": "GER", "label": "DE"},
+    {"text": "France", "label": "FR"},
+    {"text": "French Republic", "label": "FR"},
+    {"text": "La France", "label": "FR"},
+    {"text": "FRA", "label": "FR"},
+    {"text": "United States", "label": "US"},
+    {"text": "USA", "label": "US"},
+    {"text": "America", "label": "US"},
+    {"text": "U.S.A.", "label": "US"},
+    {"text": "Japan", "label": "JP"},
+    {"text": "Nippon", "label": "JP"},
+    {"text": "Nihon", "label": "JP"},
+    {"text": "China", "label": "CN"},
+    {"text": "Zhongguo", "label": "CN"},
+    {"text": "PRC", "label": "CN"},
+]
+
+test_queries = [
+    ("Deutchland", "DE"),
+    ("America", "US"),
+    ("Frankreich", "FR"),
+    ("Nihon", "JP"),
+    ("PRC", "CN"),
+    ("Bundesrepublik", "DE"),
+    ("U.S. of A", "US"),
+    ("La Republique", "FR"),
+]
+```
+
+```{python}
+#| label: fit-zero-shot
+#| cache: true
+zero_matcher = Matcher(entities=entities, mode="zero-shot")
+zero_matcher.fit()
+```
+
+```{python}
+#| label: train-comparison-n6
+#| cache: true
+n_samples = 6
+training_subset = full_training[:n_samples]
+
+trained_matcher = Matcher(entities=entities, verbose=False)
+trained_matcher.fit(training_data=training_subset, num_epochs=1)
+
+rows = []
+for query, expected in test_queries:
+    zr = zero_matcher.match(query)
+    z_entry = zr if isinstance(zr, dict) else zr
+    z_id = z_entry.get("id", "?") if isinstance(z_entry, dict) else "?"
+    z_score = z_entry.get("score", 0) if isinstance(z_entry, dict) else 0
+
+    tr = trained_matcher.match(query)
+    t_entry = tr if isinstance(tr, dict) else tr
+    t_id = t_entry.get("id", "?") if isinstance(t_entry, dict) else "?"
+    t_score = t_entry.get("score", 0) if isinstance(t_entry, dict) else 0
+
+    rows.append({
+        "query": query,
+        "expected": expected,
+        "zero_shot_id": z_id,
+        "zero_shot_score": f"{z_score:.2%}",
+        "zero_shot_correct": "OK" if z_id == expected else "MISS",
+        "trained_id": t_id,
+        "trained_score": f"{t_score:.2%}",
+        "trained_correct": "OK" if t_id == expected else "MISS",
+    })
+
+import pandas as pd
+pd.DataFrame(rows)
+```
+
+```{python}
+#| label: accuracy-sweep
+#| cache: true
+sample_counts = list(range(len(full_training) + 1))
+zero_acc = []
+trained_acc = []
+
+for count in sample_counts:
+    z_correct = sum(
+        1
+        for q, exp in test_queries
+        if (entry := zero_matcher.match(q))
+        and (e := entry if isinstance(entry, dict) else entry)
+        and (e.get("id", "?") if isinstance(e, dict) else "?") == exp
+    )
+    zero_acc.append(z_correct / len(test_queries))
+
+    if count > 0:
+        subset = full_training[:count]
+        try:
+            tm = Matcher(entities=entities, verbose=False)
+            tm.fit(training_data=subset, num_epochs=1)
+            t_correct = sum(
+                1
+                for q, exp in test_queries
+                if (entry := tm.match(q))
+                and (e := entry if isinstance(entry, dict) else entry)
+                and (e.get("id", "?") if isinstance(e, dict) else "?") == exp
+            )
+            trained_acc.append(t_correct / len(test_queries))
+        except Exception:
+            trained_acc.append(zero_acc[-1])
+    else:
+        trained_acc.append(zero_acc[-1])
+
+fig, ax = plt.subplots(figsize=(8, 4))
+ax.plot(sample_counts, zero_acc, "o--", label="Zero-shot", color="#3498db")
+ax.plot(sample_counts, trained_acc, "s-", label="Trained", color="#e74c3c")
+ax.set_xlabel("Number of Training Samples")
+ax.set_ylabel("Accuracy")
+ax.set_title("Zero-Shot vs Trained Matching Accuracy")
+ax.set_ylim(0, 1.05)
+ax.legend()
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
+fig
+```

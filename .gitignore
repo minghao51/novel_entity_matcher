@@ -50,9 +50,9 @@ checkpoints/
 *.pth
 *.bin
 
-# CI-generated notebook docs (source of truth = notebooks/*.py)
-docs/notebooks/*.html
-docs/notebooks/0*.md
+# Quarto-rendered notebook docs (source of truth = notebooks/*.py + notebooks/*.qmd)
+docs/notebooks/html/
+docs/notebooks/*.md
 !docs/notebooks/index.md
 
 # Local runtime outputs

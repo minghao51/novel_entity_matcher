@@ -1,0 +1,117 @@
+---
+title: "Novel Entity Detection Dashboard"
+description: "Feed in text queries and see which ones are flagged as novel — not matching any known entity. Uses confidence + KNN distance strategies."
+date: today
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    code-fold: true
+    code-tools: true
+---
+
+This notebook demonstrates novelty detection — flagging queries that don't match any known entity.
+It uses a combination of confidence thresholding and KNN distance to detect out-of-domain inputs.
+
+```{python}
+#| label: setup
+#| cache: true
+import matplotlib.pyplot as plt
+import pandas as pd
+from novelentitymatcher import Matcher, NovelEntityMatcher
+from novelentitymatcher.novelty import DetectionConfig
+from novelentitymatcher.novelty.config.strategies import ConfidenceConfig, KNNConfig
+
+entities = [
+    {"id": "physics", "name": "Physics"},
+    {"id": "cs", "name": "Computer Science"},
+    {"id": "biology", "name": "Biology"},
+    {"id": "chemistry", "name": "Chemistry"},
+    {"id": "math", "name": "Mathematics"},
+]
+
+training_texts = [
+    "quantum mechanics", "wave function", "particle physics", "thermodynamics",
+    "machine learning", "neural networks", "algorithm design", "data structures",
+    "gene expression", "protein synthesis", "cell division", "DNA replication",
+    "organic synthesis", "molecular bonding", "periodic table", "reaction kinetics",
+    "linear algebra", "calculus", "topology", "number theory",
+]
+
+training_labels = [
+    "physics", "physics", "physics", "physics",
+    "cs", "cs", "cs", "cs",
+    "biology", "biology", "biology", "biology",
+    "chemistry", "chemistry", "chemistry", "chemistry",
+    "math", "math", "math", "math",
+]
+```
+
+```{python}
+#| label: fit
+#| cache: true
+matcher = Matcher(entities=entities, model="minilm", threshold=0.6)
+matcher.fit(texts=training_texts, labels=training_labels)
+print(f"Trained matcher with {len(training_texts)} samples across {len(entities)} classes.")
+```
+
+```{python}
+#| label: detect
+#| cache: true
+nm = NovelEntityMatcher(
+    matcher=matcher,
+    detection_config=DetectionConfig(
+        strategies=["confidence", "knn_distance"],
+        confidence=ConfidenceConfig(threshold=0.45),
+        knn_distance=KNNConfig(distance_threshold=0.45),
+        combine_method="weighted",
+    ),
+)
+
+queries = [
+    "quantum superposition",
+    "deep learning models",
+    "CRISPR gene editing",
+    "computational chemistry methods",
+    "autonomous robotics",
+    "discount coupon policy",
+    "weather forecast today",
+    "gibberish zxqv placeholder",
+]
+
+rows = []
+for q in queries:
+    r = nm.match(q)
+    rows.append({
+        "query": q,
+        "is_novel": r.is_novel,
+        "predicted_id": r.predicted_id if not r.is_novel else "—",
+        "score": f"{r.score:.2%}",
+        "signals": ", ".join(r.signals.keys()) if r.signals else "—",
+    })
+
+pd.DataFrame(rows)
+```
+
+```{python}
+#| label: plot-confidence
+#| cache: true
+scores = []
+for q in queries:
+    r = matcher.match(q)
+    entry = r if isinstance(r, dict) else r
+    score = entry.get("score", 0) if isinstance(entry, dict) else 0
+    scores.append(score)
+
+fig, ax = plt.subplots(figsize=(8, 4))
+colors = ["#e74c3c" if s < 0.5 else "#2ecc71" for s in scores]
+ax.barh(range(len(queries)), scores, color=colors)
+ax.set_yticks(range(len(queries)))
+ax.set_yticklabels(queries, fontsize=9)
+ax.set_xlabel("Match Confidence")
+ax.set_title("Confidence Scores (red = likely novel)")
+ax.axvline(x=0.5, color="gray", linestyle="--", alpha=0.7, label="threshold")
+ax.legend()
+plt.tight_layout()
+fig
+```

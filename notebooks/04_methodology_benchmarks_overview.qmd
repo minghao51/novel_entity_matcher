@@ -1,0 +1,242 @@
+---
+title: "Methodology & Benchmarks Overview"
+description: "Comprehensive overview of all classification modes, novelty detection strategies, parameter sweeps, and performance benchmarks."
+date: today
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    code-fold: true
+    code-tools: true
+---
+
+Novel Entity Matcher uses a **two-phase pipeline**:
+1. **Classification** — assigns a query to a known entity class
+2. **Novelty Detection** — determines if the query actually belongs to an unknown class
+
+## 1. Classification Methods
+
+The Matcher auto-selects the best mode based on your data:
+- **Zero-shot** — no training needed, fast but lower accuracy
+- **Head-only** — quick training (~5s), weak accuracy
+- **Full SetFit** — best all-rounder (~64s, 91.2% acc)
+- **BERT** — highest ceiling (88-98%), needs 100+ samples/entity
+- **Hybrid** — blocking + retrieval + reranking, for 10k+ entities
+
+```{python}
+#| label: classification-table
+#| cache: true
+import pandas as pd
+
+modes = pd.DataFrame([
+    {"Mode": "zero-shot", "Train Acc": "—", "Test Acc": "73.3%", "Train Time": "~3s", "Best For": "Prototyping, simple matching", "Pros": "Fast (~50K qps), no training needed", "Cons": "Lower accuracy, no novelty detection"},
+    {"Mode": "head-only", "Train Acc": "53.1%", "Test Acc": "54.7%", "Train Time": "~5s", "Best For": "Quick accuracy boost", "Pros": "Fast training", "Cons": "Severe overfitting with small data"},
+    {"Mode": "full SetFit", "Train Acc": "89.8%", "Test Acc": "91.2%", "Train Time": "~64s", "Best For": "Production, complex variations", "Pros": "Best accuracy/time tradeoff, setfit_centroid novelty", "Cons": "Requires training data"},
+    {"Mode": "BERT", "Train Acc": "—", "Test Acc": "88-98%", "Train Time": "~5min", "Best For": "High-stakes, 100+ samples/entity", "Pros": "Highest accuracy ceiling", "Cons": "Needs lots of data, 17x more memory"},
+    {"Mode": "hybrid", "Train Acc": "—", "Test Acc": "90-95%", "Train Time": "None (index)", "Best For": "10k+ entities, reranking", "Pros": "Handles large candidate sets", "Cons": "Slower, complex setup"},
+])
+modes
+```
+
+```{python}
+#| label: classification-plot
+#| cache: true
+import matplotlib.pyplot as plt
+
+data = pd.DataFrame({
+    "Mode": ["Zero-shot", "Head-only", "Full SetFit", "BERT", "Hybrid"],
+    "Accuracy": [73.3, 54.7, 91.2, 93.0, 92.5],
+})
+
+fig, ax = plt.subplots(figsize=(7, 4))
+colors = ["#95a5a6", "#e74c3c", "#2ecc71", "#3498db", "#9b59b6"]
+bars = ax.bar(data["Mode"], data["Accuracy"], color=colors, width=0.6)
+for bar, val in zip(bars, data["Accuracy"]):
+    ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1, f"{val:.1f}%", ha="center", fontsize=11, fontweight="bold")
+ax.set_ylabel("Test Accuracy (%)")
+ax.set_ylim(0, 105)
+ax.axhline(y=73.3, color="gray", linestyle="--", alpha=0.5, label="Zero-shot baseline")
+ax.legend(fontsize=9)
+ax.grid(axis="y", alpha=0.3)
+plt.tight_layout()
+fig
+```
+
+## 2. Novelty Detection Strategies
+
+All 14 strategies ranked by performance on ag_news (20% OOD):
+
+```{python}
+#| label: novelty-strategies-table
+#| cache: true
+strategies_df = pd.DataFrame([
+    {"Strategy": "setfit_centroid", "Type": "SetFit-based", "Val AUROC": 0.915, "Test AUROC": 0.907, "DR@1%": 0.147, "Weight": 0.45, "Best For": "Production default, free text"},
+    {"Strategy": "ensemble_adaptive", "Type": "Ensemble", "Val AUROC": 0.911, "Test AUROC": 0.906, "DR@1%": 0.187, "Weight": "—", "Best For": "Best ensemble"},
+    {"Strategy": "ensemble_weighted", "Type": "Ensemble", "Val AUROC": 0.911, "Test AUROC": 0.905, "DR@1%": 0.124, "Weight": "—", "Best For": "Strong ensemble"},
+    {"Strategy": "knn_distance (k=30)", "Type": "Traditional", "Val AUROC": 0.893, "Test AUROC": 0.883, "DR@1%": 0.103, "Weight": 0.45, "Best For": "Scalable, production"},
+    {"Strategy": "lof", "Type": "Traditional", "Val AUROC": 0.872, "Test AUROC": 0.871, "DR@1%": 0.069, "Weight": 0.30, "Best For": "Varying density"},
+    {"Strategy": "oneclass_svm", "Type": "Traditional", "Val AUROC": 0.836, "Test AUROC": 0.834, "DR@1%": 0.143, "Weight": 0.10, "Best For": "Boundary detection"},
+    {"Strategy": "pattern", "Type": "Traditional", "Val AUROC": 0.682, "Test AUROC": 0.630, "DR@1%": 0.002, "Weight": 0.20, "Best For": "Entity name matching only"},
+    {"Strategy": "mahalanobis", "Type": "Traditional", "Val AUROC": 0.696, "Test AUROC": 0.691, "DR@1%": 0.029, "Weight": 0.35, "Best For": "Gaussian structure"},
+    {"Strategy": "self_knowledge", "Type": "ML-based", "Val AUROC": 0.588, "Test AUROC": 0.563, "DR@1%": 0.011, "Weight": 0.15, "Best For": "Experimental"},
+    {"Strategy": "isolation_forest", "Type": "Traditional", "Val AUROC": 0.577, "Test AUROC": 0.572, "DR@1%": 0.013, "Weight": "—", "Best For": "Baseline"},
+    {"Strategy": "prototypical", "Type": "ML-based", "Val AUROC": 0.507, "Test AUROC": 0.507, "DR@1%": 0.006, "Weight": 0.10, "Best For": "Few-shot (near random)"},
+    {"Strategy": "confidence", "Type": "ML-based", "Val AUROC": 0.500, "Test AUROC": 0.500, "DR@1%": 0.002, "Weight": 0.35, "Best For": "Baseline, always included"},
+    {"Strategy": "setfit (contrastive)", "Type": "SetFit-based", "Val AUROC": 0.483, "Test AUROC": 0.452, "DR@1%": 0.017, "Weight": 0.02, "Best For": "Below random — deprecated"},
+    {"Strategy": "mahalanobis_conformal", "Type": "Conformal", "Val AUROC": 0.545, "Test AUROC": 0.520, "DR@1%": 0.034, "Weight": "—", "Best For": "Dataset-dependent"},
+])
+
+strategies_df
+```
+
+```{python}
+#| label: novelty-strategies-plot
+#| cache: true
+fig, ax = plt.subplots(figsize=(9, 5))
+top = strategies_df.sort_values("Test AUROC", ascending=True)
+colors = ["#2ecc71" if "setfit" in s.lower() else "#3498db" if "ensemble" in s.lower() else "#95a5a6" for s in top["Strategy"]]
+ax.barh(range(len(top)), top["Test AUROC"], color=colors)
+ax.set_yticks(range(len(top)))
+ax.set_yticklabels(top["Strategy"], fontsize=9)
+ax.set_xlabel("Test AUROC")
+ax.set_title("Novelty Strategies Ranked by AUROC")
+ax.axvline(x=0.5, color="red", linestyle="--", alpha=0.5, label="Random")
+ax.axvline(x=0.8, color="green", linestyle=":", alpha=0.5, label="Good")
+ax.set_xlim(0, 1.0)
+ax.legend(fontsize=9)
+plt.tight_layout()
+fig
+```
+
+## 3. KNN Parameter Sweep
+
+Optimal k=20-30 provides the best detection rate.
+
+```{python}
+#| label: knn-sweep
+#| cache: true
+knn_data = pd.DataFrame([
+    {"k": 3, "Val AUROC": 0.860, "Test AUROC": 0.862, "DR@1%": 0.075},
+    {"k": 5, "Val AUROC": 0.870, "Test AUROC": 0.873, "DR@1%": 0.078},
+    {"k": 10, "Val AUROC": 0.880, "Test AUROC": 0.877, "DR@1%": 0.080},
+    {"k": 20, "Val AUROC": 0.889, "Test AUROC": 0.881, "DR@1%": 0.090},
+    {"k": 25, "Val AUROC": 0.891, "Test AUROC": 0.882, "DR@1%": 0.097},
+    {"k": 30, "Val AUROC": 0.893, "Test AUROC": 0.883, "DR@1%": 0.103},
+])
+
+fig, ax1 = plt.subplots(figsize=(7, 4))
+ax1.plot(knn_data["k"], knn_data["Test AUROC"], "o-", color="#3498db", linewidth=2, label="Test AUROC")
+ax1.set_xlabel("k (neighbors)")
+ax1.set_ylabel("AUROC", color="#3498db")
+ax1.tick_params(axis="y", labelcolor="#3498db")
+ax1.set_ylim(0.85, 0.90)
+
+ax2 = ax1.twinx()
+ax2.bar(knn_data["k"] - 0.4, knn_data["DR@1%"], width=0.8, color="#e74c3c", alpha=0.6, label="DR@1%")
+ax2.set_ylabel("DR@1%", color="#e74c3c")
+ax2.tick_params(axis="y", labelcolor="#e74c3c")
+
+lines1, labels1 = ax1.get_legend_handles_labels()
+lines2, labels2 = ax2.get_legend_handles_labels()
+ax1.legend(lines1 + lines2, labels1 + labels2, loc="lower right")
+ax1.grid(alpha=0.3)
+ax1.set_title("KNN Parameter Sweep")
+plt.tight_layout()
+fig
+```
+
+## 4. BERT vs SetFit Comparison
+
+SetFit dominates on few-shot tasks — higher accuracy, 17x less memory, 1.68x faster inference.
+
+```{python}
+#| label: bert-vs-setfit
+#| cache: true
+compare = pd.DataFrame({
+    "Metric": ["Training Time (s)", "Peak Memory (MB)", "Inference Throughput (/s)", "Accuracy"],
+    "SetFit": [41.26, 32.06, 1671, 100.0],
+    "BERT (distilbert)": [13.20, 545.11, 998, 88.0],
+})
+compare
+```
+
+```{python}
+#| label: bert-vs-setfit-plot
+#| cache: true
+metrics = ["Memory (MB)", "Throughput (/s)", "Accuracy (%)"]
+setfit_vals = [32.06, 1671, 100.0]
+bert_vals = [545.11, 998, 88.0]
+x = range(len(metrics))
+fig, ax = plt.subplots(figsize=(7, 4))
+w = 0.35
+ax.bar([p - w / 2 for p in x], setfit_vals, w, label="SetFit", color="#2ecc71")
+ax.bar([p + w / 2 for p in x], bert_vals, w, label="BERT", color="#e74c3c")
+ax.set_xticks(list(x))
+ax.set_xticklabels(metrics)
+ax.legend()
+ax.set_title("SetFit vs BERT")
+plt.tight_layout()
+fig
+```
+
+## 5. Speed Benchmarks
+
+Zero-shot achieves **~50K qps** while trained modes run at **~30 q/s**.
+
+```{python}
+#| label: speed-table
+#| cache: true
+speed = pd.DataFrame({
+    "Route": ["sync.match.bulk", "async.match_batch_async", "sync.match.single"],
+    "zero-shot (qps)": [49670, 34530, 27807],
+    "head-only (qps)": [104, 84, 44],
+    "full (qps)": [104, 90, 48],
+})
+speed
+```
+
+```{python}
+#| label: speed-plot
+#| cache: true
+fig, ax = plt.subplots(figsize=(8, 4))
+x = range(len(speed))
+w = 0.25
+ax.bar([p - w for p in x], speed["zero-shot (qps)"], w, label="Zero-shot", color="#3498db")
+ax.bar([p for p in x], speed["head-only (qps)"], w, label="Head-only", color="#e67e22")
+ax.bar([p + w for p in x], speed["full (qps)"], w, label="Full", color="#2ecc71")
+ax.set_xticks(list(x))
+ax.set_xticklabels(speed["Route"])
+ax.set_ylabel("Queries per second")
+ax.set_yscale("log")
+ax.legend()
+ax.set_title("Throughput by Mode (log scale)")
+ax.grid(axis="y", alpha=0.3)
+plt.tight_layout()
+fig
+```
+
+## 6. Signal Combination Methods
+
+| Method | Formula | Use Case |
+|--------|---------|----------|
+| **weighted** | `score = Σ(wᵢ × sᵢ) / Σ(wᵢ)` | **Default** — best overall |
+| **union** | `novel = any(flags)` | High recall |
+| **intersection** | `novel = all(flags)` | High precision |
+| **voting** | `novel = count(flags) > n/2` | Balanced |
+| **meta_learner** | Logistic regression | Learned combination |
+
+## 7. Recommended Production Config
+
+```python
+strategies=["confidence", "knn_distance", "setfit_centroid"]
+combine_method="weighted"
+knn_distance=KNNConfig(k=20)
+weights=WeightConfig(setfit_centroid=0.45, knn=0.45, confidence=0.35)
+```
+
+```{python}
+#| label: production-strategies
+#| cache: true
+production = strategies_df[strategies_df["Strategy"].isin(["setfit_centroid", "knn_distance (k=30)", "confidence"])].copy()
+production
+```

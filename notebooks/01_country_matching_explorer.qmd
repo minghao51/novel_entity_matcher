@@ -1,0 +1,86 @@
+---
+title: "Zero-Shot Country Matching Explorer"
+description: "Type a country name with typos, aliases, or alternate languages and see how the Matcher resolves it to a canonical entity — no training required."
+date: today
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    code-fold: true
+    code-tools: true
+---
+
+This notebook demonstrates zero-shot entity matching using the Novel Entity Matcher.
+Given a set of country entities with common aliases, it resolves free-text queries
+(including typos and foreign names) to the correct canonical entity without any training.
+
+```{python}
+#| label: setup
+#| cache: true
+import pandas as pd
+from novelentitymatcher import Matcher
+
+entities = [
+    {"id": "DE", "name": "Germany", "aliases": ["Deutschland", "Bundesrepublik"]},
+    {"id": "FR", "name": "France", "aliases": ["Frankreich", "La France"]},
+    {"id": "US", "name": "United States", "aliases": ["USA", "America"]},
+    {"id": "JP", "name": "Japan", "aliases": ["Nihon", "Nippon"]},
+    {"id": "CN", "name": "China", "aliases": ["Zhongguo"]},
+    {"id": "BR", "name": "Brazil", "aliases": ["Brasil"]},
+    {"id": "IN", "name": "India", "aliases": ["Bharat"]},
+    {"id": "GB", "name": "United Kingdom", "aliases": ["UK", "Britain", "England"]},
+    {"id": "AU", "name": "Australia", "aliases": ["Oz"]},
+    {"id": "CA", "name": "Canada", "aliases": ["Canuck Land"]},
+]
+```
+
+```{python}
+#| label: fit
+#| cache: true
+matcher = Matcher(entities=entities, mode="zero-shot")
+matcher.fit()
+```
+
+```{python}
+#| label: match-examples
+#| cache: true
+queries = [
+    "Deutchland",
+    "America",
+    "Frankreich",
+    "Nihon",
+    "UK",
+    "Brasil",
+    "Bharat",
+    "Canuck Land",
+    "Zhongguo",
+    "Oz",
+]
+
+results = []
+for q in queries:
+    r = matcher.match(q, top_k=3)
+    batch = r if isinstance(r, list) else [r]
+    for entry in batch:
+        entry["query"] = q
+    results.extend(batch)
+
+df = pd.DataFrame(results)
+df
+```
+
+```{python}
+#| label: summary
+correct = 0
+total = len(queries)
+for q in queries:
+    r = matcher.match(q)
+    entry = r if isinstance(r, dict) else r
+    is_correct = isinstance(entry, dict) and entry.get("id") in {
+        e["id"] for e in entities if q.lower() in [e["name"].lower()] + [a.lower() for a in e["aliases"]] + [e["id"].lower()]
+    }
+    if is_correct:
+        correct += 1
+
+print(f"Accuracy: {correct}/{total} ({correct/total:.0%})")
+```
