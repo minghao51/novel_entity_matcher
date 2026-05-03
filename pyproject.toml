@@ -48,7 +48,6 @@ novelentitymatcher-bench = "novelentitymatcher.benchmarks.cli:main"
 novelentitymatcher-review = "novelentitymatcher.novelty.cli:main"
 
 [project.optional-dependencies]
-# Documentation building and serving
 docs = [
     "marimo>=0.23.4",
     "mkdocs>=1.6.0",
@@ -56,86 +55,16 @@ docs = [
     "mkdocstrings[python]>=0.25.0",
 ]
 
-# Interactive notebooks (marimo)
-notebooks = [
-    "marimo>=0.23.4",
-]
-
-# Progress bars for notebooks and terminals
-jupyter = [
-    "tqdm>=4.66.0",
-    "ipywidgets>=8.0.0",
-]
-
-# Novel class detection and ANN-backed discovery
-novelty = [
-    "pydantic>=2.0.0",
-    "hnswlib>=0.8.0",
-    "hdbscan>=0.8.33",
-    "faiss-cpu>=1.7.4",
-]
-
-# LLM-backed embedding, reranking, and class proposal features
-llm = [
-    "litellm>=1.83.7",
-    "pydantic>=2.0.0",
-    "tenacity>=9.0.0",
+opinion = [
     "aiobreaker>=1.1.0",
-]
-
-# Clustering helpers for novelty discovery
-clustering = [
-    "hdbscan>=0.2",
-    "umap-learn>=0.5",
-]
-
-# Plotting helpers for benchmark visualization scripts
-viz = [
-    "matplotlib>=3.9.4",
-    "seaborn>=0.13.2",
-]
-
-# Development tools
-dev = [
-    "beautifulsoup4>=4.14.3",
-    "build>=1.2.2",
-    "html-to-markdown>=1.8.0",
-    "ipywidgets>=8.0.0",
-    "patchright>=1.58.0",
-    "pytest>=9.0.3",
-    "ruff>=0.1.0",
-    "tqdm>=4.66.0",
-    "twine>=5.1.1",
-]
-
-# Everything
-all = [
-    "beautifulsoup4>=4.14.3",
-    "build>=1.2.2",
-    "html-to-markdown>=1.8.0",
     "hdbscan>=0.8.33",
     "hnswlib>=0.8.0",
+    "faiss-cpu>=1.7.4",
     "ipywidgets>=8.0.0",
-    "faiss-cpu>=1.7.4",
     "litellm>=1.83.7",
-    "matplotlib>=3.9.4",
-    "patchright>=1.58.0",
-    "pydantic>=2.0.0",
-    "pre-commit>=3.6",
-    "pytest>=9.0.3",
-    "ruff>=0.1.0",
     "seaborn>=0.13.2",
+    "tenacity>=9.0.0",
     "tqdm>=4.66.0",
-    "twine>=5.1.1",
-]
-
-# Full feature set (novelty + LLM + clustering)
-full = [
-    "pydantic>=2.0.0",
-    "hnswlib>=0.8.0",
-    "hdbscan>=0.8.33",
-    "faiss-cpu>=1.7.4",
-    "litellm>=1.83.7",
     "umap-learn>=0.5",
 ]
 
@@ -156,6 +85,7 @@ dev = [
     "types-pyyaml>=6.0.12.20250915",
     "types-requests>=2.32.4.20260107",
     "types-tqdm>=4.67.3.20260205",
+    "nbformat>=5.10.4",
 ]
 
 [tool.hatch.build.targets.wheel]

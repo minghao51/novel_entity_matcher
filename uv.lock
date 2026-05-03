@@ -1126,6 +1126,15 @@ wheels = [
 ]
 
 [[package]]
+name = "fastjsonschema"
+version = "2.21.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/20/b5/23b216d9d985a956623b6bd12d4086b60f0059b27799f23016af04a74ea1/fastjsonschema-2.21.2.tar.gz", hash = "sha256:b1eb43748041c880796cd077f1a07c3d94e93ae84bba5ed36800a33554ae05de", size = 374130 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cb/a8/20d0723294217e47de6d9e2e40fd4a9d2f7c4b6ef974babd482a59743694/fastjsonschema-2.21.2-py3-none-any.whl", hash = "sha256:1c797122d0a86c5cace2e54bf4e819c36223b552017172f32c5c024a6b77e463", size = 24024 },
+]
+
+[[package]]
 name = "fastuuid"
 version = "0.14.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2154,6 +2163,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/19/74/a633ee74eb36c44aa6d1095e7cc5569bebf04342ee146178e2d36600708b/jsonschema_specifications-2025.9.1.tar.gz", hash = "sha256:b540987f239e745613c7a9176f3edb72b832a4ac465cf02712288397832b5e8d", size = 32855 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/41/45/1a4ed80516f02155c51f51e8cedb3c1902296743db0bbc66608a0db2814f/jsonschema_specifications-2025.9.1-py3-none-any.whl", hash = "sha256:98802fee3a11ee76ecaca44429fda8a41bff98b00a0f2838151b113f210cc6fe", size = 18437 },
+]
+
+[[package]]
+name = "jupyter-core"
+version = "5.9.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "platformdirs", version = "4.4.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "platformdirs", version = "4.9.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "traitlets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/02/49/9d1284d0dc65e2c757b74c6687b6d319b02f822ad039e5c512df9194d9dd/jupyter_core-5.9.1.tar.gz", hash = "sha256:4d09aaff303b9566c3ce657f580bd089ff5c91f5f89cf7d8846c3cdf465b5508", size = 89814 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e7/e7/80988e32bf6f73919a113473a604f5a8f09094de312b9d52b79c2df7612b/jupyter_core-5.9.1-py3-none-any.whl", hash = "sha256:ebf87fdc6073d142e114c72c9e29a9d7ca03fad818c5d300ce2adc1fb0743407", size = 29032 },
 ]
 
 [[package]]
@@ -3434,6 +3457,21 @@ wheels = [
 ]
 
 [[package]]
+name = "nbformat"
+version = "5.10.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fastjsonschema" },
+    { name = "jsonschema" },
+    { name = "jupyter-core" },
+    { name = "traitlets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6d/fd/91545e604bc3dad7dca9ed03284086039b294c6b3d75c0d2fa45f9e9caf3/nbformat-5.10.4.tar.gz", hash = "sha256:322168b14f937a5d11362988ecac2a4952d3d8e3a2cbeb2319584631226d5b3a", size = 142749 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a9/82/0340caa499416c78e5d8f5f05947ae4bc3cba53c9f038ab6e9ed964e22f1/nbformat-5.10.4-py3-none-any.whl", hash = "sha256:3b48d6c8fbca4b299bf3982ea7db1af21580e4fec269ad087b9e81588891200b", size = 78454 },
+]
+
+[[package]]
 name = "networkx"
 version = "3.2.1"
 source = { registry = "https://pypi.org/simple" }
@@ -3533,79 +3571,24 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-all = [
-    { name = "beautifulsoup4" },
-    { name = "build" },
-    { name = "faiss-cpu", version = "1.13.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "faiss-cpu", version = "1.13.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "hdbscan" },
-    { name = "hnswlib" },
-    { name = "html-to-markdown" },
-    { name = "ipywidgets" },
-    { name = "litellm" },
-    { name = "matplotlib" },
-    { name = "patchright" },
-    { name = "pre-commit" },
-    { name = "pydantic" },
-    { name = "pytest" },
-    { name = "ruff" },
-    { name = "seaborn" },
-    { name = "tqdm" },
-    { name = "twine" },
-]
-clustering = [
-    { name = "hdbscan" },
-    { name = "umap-learn" },
-]
-dev = [
-    { name = "beautifulsoup4" },
-    { name = "build" },
-    { name = "html-to-markdown" },
-    { name = "ipywidgets" },
-    { name = "patchright" },
-    { name = "pytest" },
-    { name = "ruff" },
-    { name = "tqdm" },
-    { name = "twine" },
-]
 docs = [
     { name = "marimo" },
     { name = "mkdocs" },
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extra = ["python"] },
 ]
-full = [
-    { name = "faiss-cpu", version = "1.13.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "faiss-cpu", version = "1.13.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "hdbscan" },
-    { name = "hnswlib" },
-    { name = "litellm" },
-    { name = "pydantic" },
-    { name = "umap-learn" },
-]
-jupyter = [
-    { name = "ipywidgets" },
-    { name = "tqdm" },
-]
-llm = [
+opinion = [
     { name = "aiobreaker" },
-    { name = "litellm" },
-    { name = "pydantic" },
-    { name = "tenacity" },
-]
-notebooks = [
-    { name = "marimo" },
-]
-novelty = [
     { name = "faiss-cpu", version = "1.13.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "faiss-cpu", version = "1.13.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "hdbscan" },
     { name = "hnswlib" },
-    { name = "pydantic" },
-]
-viz = [
-    { name = "matplotlib" },
+    { name = "ipywidgets" },
+    { name = "litellm" },
     { name = "seaborn" },
+    { name = "tenacity" },
+    { name = "tqdm" },
+    { name = "umap-learn" },
 ]
 
 [package.dev-dependencies]
@@ -3614,6 +3597,7 @@ dev = [
     { name = "build" },
     { name = "html-to-markdown" },
     { name = "mypy" },
+    { name = "nbformat" },
     { name = "patchright" },
     { name = "pip-audit" },
     { name = "pre-commit" },
@@ -3629,35 +3613,15 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aiobreaker", marker = "extra == 'llm'", specifier = ">=1.1.0" },
-    { name = "beautifulsoup4", marker = "extra == 'all'", specifier = ">=4.14.3" },
-    { name = "beautifulsoup4", marker = "extra == 'dev'", specifier = ">=4.14.3" },
-    { name = "build", marker = "extra == 'all'", specifier = ">=1.2.2" },
-    { name = "build", marker = "extra == 'dev'", specifier = ">=1.2.2" },
+    { name = "aiobreaker", marker = "extra == 'opinion'", specifier = ">=1.1.0" },
     { name = "datasets", specifier = ">=2.14.0" },
-    { name = "faiss-cpu", marker = "extra == 'all'", specifier = ">=1.7.4" },
-    { name = "faiss-cpu", marker = "extra == 'full'", specifier = ">=1.7.4" },
-    { name = "faiss-cpu", marker = "extra == 'novelty'", specifier = ">=1.7.4" },
-    { name = "hdbscan", marker = "extra == 'all'", specifier = ">=0.8.33" },
-    { name = "hdbscan", marker = "extra == 'clustering'", specifier = ">=0.2" },
-    { name = "hdbscan", marker = "extra == 'full'", specifier = ">=0.8.33" },
-    { name = "hdbscan", marker = "extra == 'novelty'", specifier = ">=0.8.33" },
-    { name = "hnswlib", marker = "extra == 'all'", specifier = ">=0.8.0" },
-    { name = "hnswlib", marker = "extra == 'full'", specifier = ">=0.8.0" },
-    { name = "hnswlib", marker = "extra == 'novelty'", specifier = ">=0.8.0" },
-    { name = "html-to-markdown", marker = "extra == 'all'", specifier = ">=1.8.0" },
-    { name = "html-to-markdown", marker = "extra == 'dev'", specifier = ">=1.8.0" },
-    { name = "ipywidgets", marker = "extra == 'all'", specifier = ">=8.0.0" },
-    { name = "ipywidgets", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "ipywidgets", marker = "extra == 'jupyter'", specifier = ">=8.0.0" },
-    { name = "litellm", marker = "extra == 'all'", specifier = ">=1.83.7" },
-    { name = "litellm", marker = "extra == 'full'", specifier = ">=1.83.7" },
-    { name = "litellm", marker = "extra == 'llm'", specifier = ">=1.83.7" },
+    { name = "faiss-cpu", marker = "extra == 'opinion'", specifier = ">=1.7.4" },
+    { name = "hdbscan", marker = "extra == 'opinion'", specifier = ">=0.8.33" },
+    { name = "hnswlib", marker = "extra == 'opinion'", specifier = ">=0.8.0" },
+    { name = "ipywidgets", marker = "extra == 'opinion'", specifier = ">=8.0.0" },
+    { name = "litellm", marker = "extra == 'opinion'", specifier = ">=1.83.7" },
     { name = "marimo", marker = "extra == 'docs'", specifier = ">=0.23.4" },
-    { name = "marimo", marker = "extra == 'notebooks'", specifier = ">=0.23.4" },
     { name = "matplotlib", specifier = ">=3.9.4" },
-    { name = "matplotlib", marker = "extra == 'all'", specifier = ">=3.9.4" },
-    { name = "matplotlib", marker = "extra == 'viz'", specifier = ">=3.9.4" },
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.6.0" },
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5.0" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.25.0" },
@@ -3667,37 +3631,20 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.0.0" },
     { name = "optuna", specifier = ">=4.8.0" },
     { name = "pandas", specifier = ">=2.0.0" },
-    { name = "patchright", marker = "extra == 'all'", specifier = ">=1.58.0" },
-    { name = "patchright", marker = "extra == 'dev'", specifier = ">=1.58.0" },
-    { name = "pre-commit", marker = "extra == 'all'", specifier = ">=3.6" },
     { name = "pydantic", specifier = ">=2.0.0" },
-    { name = "pydantic", marker = "extra == 'all'", specifier = ">=2.0.0" },
-    { name = "pydantic", marker = "extra == 'full'", specifier = ">=2.0.0" },
-    { name = "pydantic", marker = "extra == 'llm'", specifier = ">=2.0.0" },
-    { name = "pydantic", marker = "extra == 'novelty'", specifier = ">=2.0.0" },
-    { name = "pytest", marker = "extra == 'all'", specifier = ">=9.0.3" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0.3" },
     { name = "pyyaml", specifier = ">=6.0.0" },
     { name = "rank-bm25", specifier = ">=0.2.2" },
     { name = "rapidfuzz", specifier = ">=3.0.0" },
     { name = "requests", specifier = ">=2.31.0" },
-    { name = "ruff", marker = "extra == 'all'", specifier = ">=0.1.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
     { name = "scikit-learn", specifier = ">=1.3.0" },
-    { name = "seaborn", marker = "extra == 'all'", specifier = ">=0.13.2" },
-    { name = "seaborn", marker = "extra == 'viz'", specifier = ">=0.13.2" },
+    { name = "seaborn", marker = "extra == 'opinion'", specifier = ">=0.13.2" },
     { name = "sentence-transformers", specifier = ">=3.0.0" },
     { name = "setfit", specifier = ">=1.0.0" },
-    { name = "tenacity", marker = "extra == 'llm'", specifier = ">=9.0.0" },
+    { name = "tenacity", marker = "extra == 'opinion'", specifier = ">=9.0.0" },
     { name = "torch", specifier = ">=2.0.0" },
-    { name = "tqdm", marker = "extra == 'all'", specifier = ">=4.66.0" },
-    { name = "tqdm", marker = "extra == 'dev'", specifier = ">=4.66.0" },
-    { name = "tqdm", marker = "extra == 'jupyter'", specifier = ">=4.66.0" },
+    { name = "tqdm", marker = "extra == 'opinion'", specifier = ">=4.66.0" },
     { name = "transformers", specifier = ">=4.45.0,<5.0.0" },
-    { name = "twine", marker = "extra == 'all'", specifier = ">=5.1.1" },
-    { name = "twine", marker = "extra == 'dev'", specifier = ">=5.1.1" },
-    { name = "umap-learn", marker = "extra == 'clustering'", specifier = ">=0.5" },
-    { name = "umap-learn", marker = "extra == 'full'", specifier = ">=0.5" },
+    { name = "umap-learn", marker = "extra == 'opinion'", specifier = ">=0.5" },
 ]
 
 [package.metadata.requires-dev]
@@ -3706,6 +3653,7 @@ dev = [
     { name = "build", specifier = ">=1.2.2" },
     { name = "html-to-markdown", specifier = ">=1.8.0" },
     { name = "mypy", specifier = ">=1.19.1" },
+    { name = "nbformat", specifier = ">=5.10.4" },
     { name = "patchright", specifier = ">=1.58.0" },
     { name = "pip-audit", specifier = ">=2.7.0" },
     { name = "pre-commit", specifier = ">=3.6" },
