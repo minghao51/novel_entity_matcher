@@ -184,6 +184,23 @@ class ScalableClusterer:
             raise RuntimeError("Clusterer must be fitted first")
         return np.where(self._labels == -1)[0]
 
+    def get_condensed_tree(self) -> dict[str, Any]:
+        """Return HDBSCAN condensed tree for visualization / multi-resolution selection."""
+        if self._backend_instance is None:
+            raise RuntimeError("Must call fit_predict first")
+        return self._backend_instance.get_condensed_tree()
+
+    def extract_clusters_at_stability(
+        self, min_persistence: float = 0.1
+    ) -> tuple[np.ndarray, dict[str, Any]]:
+        """Re-extract clusters at a different stability threshold."""
+        if self._backend_instance is None:
+            raise RuntimeError("Must call fit_predict first")
+        labels, info = self._backend_instance.extract_clusters_at_stability(
+            min_persistence
+        )
+        return labels, info
+
 
 def compute_cluster_quality(
     embeddings: np.ndarray,

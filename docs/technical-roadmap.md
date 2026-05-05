@@ -1,381 +1,956 @@
-# Technical Roadmap
+# Technical Roadmap: Novel Entity Matcher
 
-**Last Updated:** 2026-03-24
+**Last Updated:** 2026-05-05
 **Status:** Active technical plan
-**Version Path:** 0.1.0 package today -> 1.0.0 architecture target
+**Version Path:** 0.1.0 package today → 1.0.0 architecture target
+**Supersedes:** `technical-roadmap.md` (2026-03-24), `20260505-technical_roadmap.md` (draft)
 
-## Purpose
+---
 
-This document is the active technical source of truth for how `novel_entity_matcher` should evolve from its current matcher-first implementation into a modular discovery pipeline for entity matching, novelty detection, and human-reviewed class promotion.
+## Table of Contents
 
-It replaces the older milestone roadmap and the standalone modular-pipeline migration draft. Those documents are now archived so this file can stay tightly aligned with the current repository state.
+1. [Context & Architecture](#context--architecture)
+2. [Current vs Target Gap Analysis](#current-vs-target-gap-analysis)
+3. [Completed Milestones](#completed-milestones)
+4. [Quick Wins](#quick-wins)
+5. [B: Novelty & OOD Depth](#b-novelty--ood-depth)
+6. [C: Clustering & Discovery](#c-clustering--discovery)
+7. [D: Pipeline & Infrastructure](#d-pipeline--infrastructure)
+8. [E: LLM & HITL](#e-llm--hitl)
+9. [Deferred Features](#deferred-features)
+10. [Dependency Graph](#dependency-graph)
+11. [Suggested Sequencing](#suggested-sequencing)
+12. [Risks and Mitigations](#risks-and-mitigations)
 
-## Current Repository Baseline
+---
 
-### Product and package reality today
+## Context & Architecture
 
-- The published package metadata is still `0.1.0` in [`pyproject.toml`](./../pyproject.toml), even though older roadmap docs discuss `0.3.x`.
-- The project already exposes two public surfaces:
-  - `Matcher` as the primary general-purpose matching API
-  - `NovelEntityMatcher` as the novelty-aware orchestration layer
-- The README positions the library as a text-to-entity matcher with optional novelty detection, async support, benchmarking, and optional LLM-backed proposal features.
-- The codebase already contains substantial novelty infrastructure; the gap is not "add novelty support" but "turn the current novelty stack into a clearer, pipeline-first architecture."
+### Repository Baseline
 
-### Implemented architecture today
+The published package is at `0.1.0` in `pyproject.toml`. Two public surfaces exist:
+- `Matcher` — primary general-purpose matching API
+- `NovelEntityMatcher` — novelty-aware orchestration layer
+- `DiscoveryPipeline` — pipeline-first discovery entry point
 
-The current package layout is broader than the old roadmap summary implied:
+The README positions the library as a text-to-entity matcher with optional novelty detection, async support, benchmarking, and optional LLM-backed proposal features.
 
-- `core/`
-  - unified `Matcher`
-  - zero-shot, SetFit, BERT, and hybrid matching routes
-  - async execution helpers
-  - blocking, reranking, hierarchy, monitoring, normalization
-- `novelty/`
-  - modular detector core and strategy registry
-  - strategy implementations for confidence, KNN distance, clustering, one-class, pattern, prototypical, self-knowledge, and SetFit-based novelty signals
-  - clustering, proposal, schema, storage, config, evaluation, and utility subpackages
-  - `NovelEntityMatcher` orchestration API
-- `backends/`
-  - static embeddings
-  - sentence-transformer embeddings
-  - reranker backend
-  - LiteLLM integration
-- `benchmarks/`
-  - benchmark runner/registry/CLI scaffolding already exists in the package
-- `ingestion/`
-  - dataset-specific ingestion modules and CLI
-- `tests/`
-  - 31 test modules spanning core matchers, novelty behavior, backends, ingestion, packaging, and utilities
+### Implemented Architecture
 
-### Strengths already present
+```
+core/
+  unified Matcher, zero-shot / SetFit / BERT / hybrid routes
+  async execution, blocking, reranking, hierarchy, monitoring, normalization
+novelty/
+  modular detector core + strategy registry
+  strategies: confidence, KNN distance, clustering, one-class, pattern,
+  prototypical, self-knowledge, Mahalanobis, LOF
+  clustering (HDBSCAN / sOPTICS / UMAP+HDBSCAN), proposal (LLM),
+  schema enforcement, storage (ANN + review), config, evidence extraction
+backends/
+  static embeddings, sentence-transformer, reranker, LiteLLM integration
+benchmarks/
+  runner / registry / CLI scaffolding
+ingestion/
+  dataset-specific modules + CLI
+pipeline/
+  5-stage orchestrator: match → OOD → cluster → evidence → propose
+  PipelineBuilder, PipelineOrchestrator, PipelineConfig
+  DiscoveryPipeline as pipeline-first public API
+```
+
+### Strengths Already Present
 
 - Unified matcher API with sync and async flows
 - Training-aware model resolution and static-embedding defaults
-- A real novelty subsystem with pluggable strategies, evaluation helpers, schemas, and persistence
-- ANN, clustering, and LLM proposal primitives already present
-- Broad test coverage across the current public API surface
-- Documentation for architecture, async usage, models, experiments, and troubleshooting
+- Multi-strategy novelty subsystem with pluggable strategies, evaluation, schemas, persistence
+- ANN (HNSWlib / FAISS / exact), scalable clustering, LLM proposal with circuit breaker
+- 5-stage pipeline orchestrator with named stages and stable stage I/O
+- HITL review lifecycle: pending → approved/rejected → promoted
+- Schema-aware proposal with attribute discovery
+- Broad test coverage across public API surface
 
-### Key technical gaps
+### Architectural Principles
 
-- The public architecture is still matcher-first rather than pipeline-first.
-- Novelty stages exist, but they are not expressed as a single explicit discovery pipeline contract.
-- Current docs mix implemented capabilities with proposed future architecture.
-- OOD handling is still strategy-driven rather than a dedicated stage contract with stable interfaces.
-- Cluster-level extraction, schema-enforced proposal retries, and promotion workflows are not yet first-class end-to-end flows.
-- HITL review and promotion remain persistence-oriented rather than operationally complete.
+1. Pipeline-first orchestration as the main internal design.
+2. Existing matcher and novelty functionality reused where sound.
+3. Breaking API changes acceptable when they simplify the architecture materially.
+4. Configuration drives stage selection and optional capabilities.
+5. LLM usage stays optional, bounded, and cost-aware.
+6. Promotion of new classes is explicit, auditable, and computationally efficient.
 
-## Target Architecture
-
-### North-star outcome
-
-Ship a pipeline-first architecture that supports:
-
-1. fast known-entity matching for routine traffic
-2. structured routing of uncertain or out-of-distribution inputs
-3. cluster-level discovery of candidate novel concepts
-4. human-reviewed promotion of accepted concepts back into the reference system
-
-### Target execution model
-
-The long-term discovery flow should be:
-
-1. Normalize and vectorize input text.
-2. Run known-entity matching for standard retrieval/classification.
-3. Route out-of-distribution items using **Conformal Prediction** (statistically grounded p-values rather than raw distance thresholds).
-4. Cluster likely novel items into communities.
-5. Extract concise statistical evidence and keyword centroids for each cluster.
-6. Run LLM proposal/judgment to generate class names and **discovered attribute schemas**.
-7. Validate structured outputs and persist review-ready proposals.
-8. Support review, approval, and **instant promotion** (updating ANN indexes without full retraining).
-
-### Architectural principles
-
-- Pipeline-first orchestration should become the main internal design.
-- Existing matcher and novelty functionality should be reused where it is already sound.
-- Breaking API changes are acceptable when they simplify the architecture materially.
-- Configuration should drive stage selection and optional capabilities.
-- LLM usage should stay optional, bounded, and cost-aware.
-- Promotion of new classes should be explicit, auditable, and **computationally efficient**.
+---
 
 ## Current vs Target Gap Analysis
 
-| Area | Current state | Target state | Gap |
-|---|---|---|---|
-| Matching API | `Matcher` is the main public interface | Matching becomes one subsystem within a broader pipeline | Medium |
-| Novelty detection | Multi-strategy detector exists | **Conformalized OOD** with p-value calibration for rigorous routing | Medium |
-| Discovery orchestration | `NovelEntityMatcher` chains matcher, detector, proposer | Explicit pipeline orchestrator with named stages and stable stage I/O | High |
-| Clustering | Scalable clustering exists | Clustering becomes a standard pipeline stage with interchangeable backends | Medium |
-| Evidence extraction | No dedicated keyword/statistical extraction stage | Cluster summarization and keyword centroids before LLM calls | High |
-| LLM proposals | LLM proposer exists | Cluster-level judge/proposer with **Attribute Discovery (Schema Evolution)** | Medium |
-| Schema enforcement | Pydantic models exist | Retry-aware schema enforcement and cleaner proposal contracts | Medium |
-| HITL workflow | Persistence/export exists | **Active Learning Loop** with instant index updates and promotion workflow | High |
-| Configuration | Current config/model registries exist | Stage-oriented pipeline configuration | Medium |
-| Documentation | Multiple roadmap narratives, some stale | One active technical roadmap aligned to repo reality | Completed |
+| Area | Current State | Target State | Gap | Status |
+|---|---|---|---|---|
+| Matching API | `Matcher` is the main public interface | Matching becomes one subsystem within a broader pipeline | Medium | **Done** — `DiscoveryPipeline` wraps `Matcher` |
+| Novelty detection | Multi-strategy detector exists | Conformalized OOD with p-value calibration | Medium | Partial — Mahalanobis has calibration, rest need Q1 |
+| Discovery orchestration | `NovelEntityMatcher` chains stages | Explicit pipeline orchestrator with named stages | High | **Done** — 5-stage `PipelineOrchestrator` |
+| Clustering | Scalable clustering exists | Clustering as standard pipeline stage with interchangeable backends | Medium | **Done** — `ClusteringBackendRegistry`, but needs Leiden/Louvain |
+| Evidence extraction | `ClusterEvidenceExtractor` (TF-IDF/centroid/combined) | Cluster summarization and keyword centroids | Medium | **Done** — see `novelty/extraction/evidence.py` |
+| LLM proposals | LLM proposer with hierarchical summarization | Cluster-level judge/proposer with attribute discovery | Medium | **Done** — `propose_from_clusters_with_schema` |
+| Schema enforcement | Pydantic models with retry | Retry-aware schema enforcement | Medium | **Done** — `_run_structured_cluster_proposal` with retry |
+| HITL workflow | Review lifecycle with persistence | Active Learning Loop with instant index updates | High | Partial — review exists, active learning pending (E2) |
+| Configuration | Config registries exist | Stage-oriented pipeline configuration | Medium | **Done** — `PipelineConfig` + `PipelineBuilder` |
+| Documentation | Multiple roadmap narratives, some stale | One active technical roadmap | Completed | **This document** |
+| OOD score normalization | Raw scores combined by `SignalCombiner` | Calibrated [0,1] scores per strategy | High | **Pending** — Q1 |
+| Energy-based OOD | Not implemented | Energy score + ReAct strategy | High | **Pending** — B2 |
+| Concept drift | Not implemented | Distribution snapshots + drift scorer + pipeline hook | High | **Pending** — B1 |
+| Incremental entities | Full rebuild required | `add_entities` without retraining | High | **Pending** — D2 |
+| Vector DB integration | In-memory ANN only | Pluggable VectorStore protocol + ChromaDB | Medium | **Pending** — D1 |
+| Proposal conflict resolution | No overlap detection | Pairwise overlap detector + resolver | Medium | **Pending** — E1 |
+| Cluster stability | Cohesion/separation only | Bootstrap Jaccard stability + filter stage | Medium | **Pending** — C2 |
+| Graph community detection | Not implemented | Leiden / Louvain on k-NN similarity graph | Medium | **Pending** — C3 |
 
-## Roadmap Phases
+---
 
-### Phase 0: Documentation and Baseline Alignment
+## Completed Milestones
 
-Goal: make the repository truth and the roadmap agree before major architecture work continues.
+Items from the previous roadmap (2026-03-24) that are now **done**:
 
-- Consolidate roadmap material into this document.
-- Archive superseded roadmap drafts.
-- Keep architecture docs honest about what is implemented versus planned.
-- Treat the current public API as supported while the new internal architecture is shaped.
-- Establish a habit that new technical design work updates this roadmap and the architecture doc together.
+| Previous Phase | Item | Completed As |
+|---|---|---|
+| Phase 2: Pipeline Contracts | Stage context, stage result, orchestrator contract | `pipeline/contracts.py`, `pipeline/orchestrator.py` |
+| Phase 2: Pipeline Contracts | Adapters around existing capabilities | `pipeline/adapters.py` (5 stage adapters) |
+| Phase 3: Community Detection | Clustering backends pluggable through stage contract | `ClusteringBackendRegistry`, `CommunityDetectionStage` |
+| Phase 3: Evidence Extraction | Statistical keywords, representative examples, token budgets | `ClusterEvidenceExtractor` (tfidf/centroid/combined) |
+| Phase 3: Schema Evolution | LLM proposer discovers common attributes/fields | `propose_from_clusters_with_schema` |
+| Phase 3: Schema Enforcement | Retry-aware validation of LLM outputs | `_build_retry_prompt` with Pydantic schema |
+| Phase 4: Review Persistence | Review-state persistence for proposed classes | `ProposalReviewManager` with JSON storage |
+| Phase 4: Promotion Mechanics | Promotion APIs | `promote_proposal()` with default promoter |
+| Phase 5: Public Pipeline API | Pipeline-first entry point | `DiscoveryPipeline` |
+| Immediate: Unify Discovery | Shared orchestration core | `DiscoveryPipeline` + `NovelEntityMatcher` share `DiscoveryBase` |
+| Immediate: Refactor Matcher | Decompose matcher.py | `MatcherRuntimeState`, `MatcherComponentFactory`, engine classes |
+| Medium: Model Caching | Global model registry | `get_cached_sentence_transformer`, `get_cached_setfit_model` |
+| Medium: Attribute Discovery | Enhanced LLM proposer | `propose_from_clusters_with_schema` + `DiscoveredAttribute` |
 
-Exit criteria:
+---
 
-- one active roadmap document
-- no contributor-facing docs still pointing to archived roadmap files as the current plan
-- roadmap statements match current package structure, extras, and test reality
+## Quick Wins
 
-### Phase 1: Stabilize Current Matcher and Novelty Foundations
+> High-impact, low-effort items shippable in 1–2 days each.
 
-Goal: reduce ambiguity and technical drift before introducing a new orchestrator.
+### Q1. OOD Score Calibration
 
-- Normalize internal contracts across `Matcher`, `NovelEntityMatcher`, novelty detector outputs, and match metadata.
-- Tighten boundaries between:
-  - known-entity matching
-  - novelty scoring
-  - proposal generation
-  - persistence/reporting
-- Audit the novelty strategy registry and mark which strategies are production-facing, experimental, or internal.
-- Ensure async and sync paths produce equivalent metadata needed for downstream novelty/discovery stages.
-- Expand tests around metadata contracts, top-k outputs, detector configuration, and persistence behavior.
+**Why:** Strategy outputs live on different scales (confidence ∈ [0,1], KNN distance ∈ [0,2], Mahalanobis ∈ [0,∞)). `SignalCombiner` combines raw scores — producing unpredictable composite novelty scores.
 
-Exit criteria:
+**Deliverable:** `OODScoreCalibrator` — per-strategy min-max + quantile normalization.
 
-- stable result objects and metadata shape for downstream discovery work
-- documented boundaries between matching and novelty subsystems
-- reduced doc drift around what strategies and backends are actually supported
+```python
+# novelty/core/score_calibrator.py
 
-### Phase 2: Introduce Pipeline Contracts Internally
+class OODScoreCalibrator:
+    """Normalize OOD strategy outputs to a shared [0, 1] scale."""
 
-Goal: establish the internal abstraction needed for staged discovery without breaking everything at once.
+    def __init__(self, method: str = "minmax"):
+        self.method = method
+        self._stats: dict[str, dict[str, float]] = {}
 
-- Add a pipeline package or equivalent internal module defining:
-  - stage context
-  - stage result
-  - stage lifecycle/init hooks
-  - pipeline orchestrator contract
-- Implement adapters around existing capabilities rather than rewriting them immediately:
-  - embedding/vectorization adapter
-  - matcher/routing adapter
-  - OOD detection adapter
-  - clustering adapter
-  - proposal adapter
-- Keep `Matcher` and `NovelEntityMatcher` usable, but start routing their internals through shared stage contracts where practical.
-- Define the minimum configuration surface for stage selection and optional stage enablement.
+    def fit(self, strategy_scores: dict[str, np.ndarray]) -> OODScoreCalibrator:
+        for strategy_id, scores in strategy_scores.items():
+            self._stats[strategy_id] = {
+                "min": float(np.min(scores)),
+                "max": float(np.max(scores)),
+                "p5": float(np.percentile(scores, 5)),
+                "p95": float(np.percentile(scores, 95)),
+            }
+        return self
 
-Planned public/interface changes:
+    def transform(self, strategy_id: str, scores: np.ndarray) -> np.ndarray:
+        stats = self._stats.get(strategy_id)
+        if stats is None:
+            return scores
+        if self.method == "minmax":
+            lo, hi = stats["p5"], stats["p95"]
+            if hi - lo < 1e-9:
+                return np.zeros_like(scores)
+            return np.clip((scores - lo) / (hi - lo), 0, 1)
+        raise ValueError(f"Unknown method: {self.method}")
+```
 
-- Introduce a pipeline-first internal API before exposing a new top-level public class.
-- Avoid exposing unstable stage internals until contracts settle.
+**Integration point:** `NoveltyDetector.detect_novel_samples` — calibrate each strategy's metric dict before passing to `SignalCombiner`.
 
-Exit criteria:
+**Test strategy:**
+- Unit: verify `[0,1]` output for each method with random scores
+- Unit: verify constant scores → all zeros
+- Integration: run full pipeline with calibrator enabled, assert novelty scores ∈ [0,1]
 
-- end-to-end internal discovery flow can execute through stage contracts
-- existing public APIs continue to work or have explicit compatibility shims
-- stage interfaces are documented well enough to support experimentation
+---
 
-### Phase 3: Upgrade Discovery-Specific Stages
+### Q2. Embedding Cache with LRU Eviction
 
-Goal: improve the quality and efficiency of novel class discovery.
+**Why:** Model-level caching only. Production workloads re-encode identical texts across calls.
 
-- Split discovery into explicit stages:
-  - **Conformal OOD Filtering:** Replace raw thresholding with p-value calibration. Implement a calibration step during initialization to provide statistical guarantees on novelty.
-  - **Community Detection:** Make clustering backends pluggable through a stage contract.
-  - **Cluster Evidence Extraction:** Add statistical keywords, representative examples, and **keyword centroids**. Implement token-budget-aware context packaging.
-  - **Schema Evolution (Proposal):** Update the LLM proposer to discover common attributes/fields, proposing a data structure (Pydantic schema) for the new class.
-  - **Schema Enforcement:** Retry-aware validation of LLM outputs against discovered schemas.
-- Add stronger OOD methods where they materially outperform threshold-only logic.
-  - candidate methods include Mahalanobis distance with conformal wrapping and local outlier approaches.
-- Keep current clustering support, but make clustering backends pluggable through a stage contract.
-- Refactor proposal generation toward cluster-level calls instead of sample-level prompting.
+**Deliverable:** `LRUEmbeddingCache` — hash-keyed embedding store with max-size eviction.
 
-Planned public/interface changes:
+```python
+# utils/embedding_cache.py
 
-- discovery report objects should expose stage outputs and diagnostics more explicitly
-- proposal interfaces should accept cluster/evidence inputs rather than raw loose sample lists
+class LRUEmbeddingCache:
+    """LRU cache for text embeddings with configurable max size."""
 
-Exit criteria:
+    def __init__(self, max_entries: int = 10_000, dim: int | None = None):
+        self.max_entries = max_entries
+        self.dim = dim
+        self._cache: OrderedDict[str, np.ndarray] = OrderedDict()
+        self._hits = 0
+        self._misses = 0
 
-- cluster-level discovery path works without per-sample LLM dependence
-- structured proposal generation uses evidence extracted from clusters
-- discovery cost and latency are meaningfully improved on benchmark scenarios
-- novelty signals use calibrated p-values
-- proposal generation includes attribute/field discovery
+    def get(self, text: str) -> np.ndarray | None:
+        if text in self._cache:
+            self._cache.move_to_end(text)
+            self._hits += 1
+            return self._cache[text]
+        self._misses += 1
+        return None
 
-### Phase 4: Human-in-the-Loop Review and Promotion
+    def put(self, text: str, embedding: np.ndarray) -> None:
+        if text in self._cache:
+            self._cache.move_to_end(text)
+        self._cache[text] = embedding
+        if len(self._cache) > self.max_entries:
+            self._cache.popitem(last=False)
 
-Goal: make novel concept handling operational rather than just analytical.
+    def get_batch(
+        self, texts: list[str]
+    ) -> tuple[list[np.ndarray | None], list[int]]:
+        """Return (cached_or_none_per_text, uncached_indices)."""
+        results: list[np.ndarray | None] = []
+        uncached: list[int] = []
+        for i, text in enumerate(texts):
+            emb = self.get(text)
+            results.append(emb)
+            if emb is None:
+                uncached.append(i)
+        return results, uncached
+```
 
-- Introduce explicit review-state persistence for proposed classes.
-- Model proposal lifecycle states such as:
-  - pending review
-  - approved
-  - rejected
-  - promoted
-- **Close the Active Learning Loop:** Add promotion mechanics that instantly update the `Matcher`'s ANN index (FAISS/HNSW) with new centroids, avoiding the need for heavy model retraining for every discovery.
-- Define safe promotion boundaries for:
-  - embedding index updates
-  - matcher retraining requirements (batched or scheduled)
-  - proposal provenance and audit metadata
-- Provide a thin operational surface first.
-  - CLI or programmatic review flows are enough initially
-  - API/server/dashboard work can follow after the underlying lifecycle is stable
+**Integration point:** Wrap `model.encode()` calls in `EmbeddingMatcher.build_index()` and `Matcher.match()`.
 
-Planned public/interface changes:
+**Test strategy:**
+- Unit: verify cache hit/miss counts
+- Unit: verify LRU eviction at capacity
+- Unit: verify batch API correctness
 
-- proposal storage moves from export-only behavior to lifecycle-aware review records
-- promotion APIs become explicit, auditable operations rather than implied manual follow-up
+---
 
-Exit criteria:
+### Q3. Expose HDBSCAN Condensed Tree
 
-- approved concepts can be promoted through a documented workflow
-- promotion updates are traceable and testable
-- rejected proposals do not silently re-enter the system as if they were unresolved
-- **instant searchable availability** of promoted entities
+**Why:** HDBSCAN computes a full hierarchy internally but `ScalableClusterer` only returns flat labels. Exposing the dendrogram enables multi-resolution analysis.
 
-### Phase 5: Public Pipeline API and 1.0 Readiness
+**Deliverable:** Add `get_condensed_tree()` and `extract_clusters_at_stability()` to `ScalableClusterer`.
 
-Goal: expose the final architecture cleanly and retire transitional seams.
+```python
+# In ScalableClusterer:
 
-- Introduce the long-term public orchestrator, likely a pipeline-first entry point such as `DiscoveryPipeline`.
-- Decide the final relationship among:
-  - `Matcher`
-  - `NovelEntityMatcher`
-  - the new pipeline API
-- Consolidate configuration around stable pipeline concepts rather than ad hoc feature toggles.
-- Remove or demote transitional wrappers once the final public story is clear.
-- Finish packaging, examples, and docs for the final public API.
+def get_condensed_tree(self) -> dict[str, Any]:
+    """Return HDBSCAN condensed tree for visualization / multi-res selection."""
+    if self._backend_instance is None:
+        raise RuntimeError("Must call fit_predict first")
+    return self._backend_instance.get_condensed_tree()
 
-Public API expectations for 1.0:
+def extract_clusters_at_stability(
+    self, min_persistence: float = 0.1
+) -> tuple[np.ndarray, dict]:
+    """Re-extract clusters at a different stability threshold."""
+    ...
+```
 
-- clear primary entry point for known matching
-- clear primary entry point for discovery
-- stable result models for match, novelty, cluster, and proposal outputs
-- documented optional extras for novelty, LLM, visualization, and future review tooling
+**Integration point:** `HDBSCANBackend` already has access to `clusterer.condensed_tree_`. Expose through the backend protocol.
 
-Exit criteria:
+**Test strategy:**
+- Unit: verify tree structure contains expected keys
+- Unit: verify re-extraction produces valid labels
+- Visual: plot dendrogram in notebook
 
-- one coherent public architecture
-- upgrade path documented from current APIs
-- benchmark and evaluation guidance updated for the final architecture
-- docs no longer describe experimental internals as if they were the stable interface
+---
 
-## Planned Public API and Module Evolution
+## B: Novelty & OOD Depth
 
-### Short term
+### Epic B1: Temporal / Concept Drift Detection
 
-- Keep `Matcher` as the recommended known-entity matching interface.
-- Keep `NovelEntityMatcher` as the novelty-aware orchestration layer while internal pipeline contracts are introduced.
-- Strengthen result/metadata contracts instead of adding many new top-level classes immediately.
+**Problem:** As the entity landscape evolves, the trained matcher silently degrades. No signal tells the operator "your model is stale."
 
-### Medium term
+**Stories:**
 
-- Introduce stage contracts and a reusable internal orchestrator.
-- Refactor novelty and proposal modules around stage inputs/outputs rather than loose chaining.
-- Add explicit review/promotion APIs and storage models.
+#### B1.1 — Reference Distribution Snapshot
 
-### Long term
+```python
+# novelty/drift/distribution_snapshot.py
 
-- Expose a pipeline-first API for discovery.
-- Clarify whether `NovelEntityMatcher` remains as a friendly facade, becomes a compatibility shim, or is replaced entirely.
-- Reorganize module boundaries so discovery stages, configuration, and promotion workflows are easier to reason about than the current mixed orchestration layout.
+@dataclass
+class DistributionSnapshot:
+    """Statistical summary of the reference embedding distribution."""
+    timestamp: datetime
+    n_points: int
+    mean: np.ndarray
+    covariance: np.ndarray
+    per_class_stats: dict[str, dict[str, np.ndarray]]
+    embedding_hash: str
 
-## Testing, Benchmarking, and Validation Work
+    @classmethod
+    def from_embeddings(
+        cls, embeddings: np.ndarray, labels: list[str]
+    ) -> DistributionSnapshot:
+        mean = embeddings.mean(axis=0)
+        cov = np.cov(embeddings.T)
+        per_class = {}
+        for label in set(labels):
+            mask = np.array(labels) == label
+            class_embs = embeddings[mask]
+            per_class[label] = {
+                "mean": class_embs.mean(axis=0),
+                "cov": np.cov(class_embs.T),
+                "count": int(mask.sum()),
+            }
+        hasher = hashlib.sha256()
+        hasher.update(embeddings.tobytes())
+        return cls(
+            timestamp=datetime.now(),
+            n_points=len(embeddings),
+            mean=mean,
+            covariance=cov,
+            per_class_stats=per_class,
+            embedding_hash=hasher.hexdigest(),
+        )
 
-Technical roadmap work is only complete when accompanied by verification.
+    def save(self, path: str | Path) -> None:
+        np.savez_compressed(
+            path,
+            mean=self.mean,
+            covariance=self.covariance,
+            metadata=json.dumps({
+                "timestamp": self.timestamp.isoformat(),
+                "n_points": self.n_points,
+                "embedding_hash": self.embedding_hash,
+                "per_class_stats": {
+                    k: {"mean": v["mean"].tolist(), "count": v["count"]}
+                    for k, v in self.per_class_stats.items()
+                },
+            }),
+        )
 
-### Testing priorities
+    @classmethod
+    def load(cls, path: str | Path) -> DistributionSnapshot: ...
+```
 
-- Preserve and extend unit coverage for current matcher and novelty behavior.
-- Add contract tests for:
-  - metadata emitted by matcher flows
-  - novelty detector stage inputs/outputs
-  - proposal schema validation
-  - persistence and promotion lifecycle state transitions
-- Add async/sync parity tests for any shared pipeline path.
-- Keep LLM-dependent tests isolated and clearly marked.
+**Test strategy:**
+- Unit: snapshot equality for identical inputs
+- Unit: snapshot difference for perturbed inputs
+- Integration: save/load round-trip preserves all fields
 
-### Benchmarking priorities
+#### B1.2 — Drift Scorer
 
-- Maintain baseline benchmarks for:
-  - known-entity match quality
-  - novelty detection quality
-  - clustering quality for novel pools
-  - end-to-end latency and cost for discovery runs
-- Compare any new OOD strategy against the current confidence/KNN-driven baseline before adoption.
-- Measure cluster-level proposal generation against sample-level prompting for both quality and cost.
+```python
+# novelty/drift/drift_scorer.py
 
-### Documentation priorities
+@dataclass
+class DriftReport:
+    global_drift_score: float
+    per_class_drift: dict[str, float]
+    drift_detected: bool
+    method: str
+    recommendation: str  # "retrain" | "add_entities" | "monitor"
 
-- Update [`architecture.md`](./architecture.md) whenever module boundaries materially change.
-- Keep examples aligned with whichever public discovery API is current.
-- Keep planning docs out of the user-guide path once they are archived.
+class DriftScorer:
+    """Compare current distribution against a baseline snapshot."""
 
-## Sequencing Dependencies
+    def __init__(self, method: str = "mmd_linear"):
+        self.method = method
 
-- Documentation alignment must happen before more architectural divergence accumulates.
-- Stable metadata/result contracts should precede major orchestrator refactors.
-- Pipeline contracts should exist before large new stage implementations are introduced.
-- Review/promotion workflows should build on stable proposal schemas and storage models.
-- Final public API decisions should wait until the internal stage architecture has proven itself in tests and benchmarks.
+    def score(self, current: np.ndarray, baseline: DistributionSnapshot) -> DriftReport:
+        # MMD with linear kernel for speed, KL-gaussian for accuracy
+        # Per-class drift via cosine distance between centroids
+        ...
+```
+
+**Algorithm options:**
+- **MMD (Maximum Mean Discrepancy):** Linear kernel for speed, RBF for accuracy.
+- **KL-divergence approximation:** Fit Gaussians, compute closed-form KL.
+- **Per-class drift:** Cosine distance between centroids.
+
+**Test strategy:**
+- Unit: identical → score ≈ 0, shifted → > threshold
+- Property: MMD is symmetric
+
+#### B1.3 — Drift-Aware Pipeline Hook
+
+```python
+class DriftCheckStage(PipelineStage):
+    name = "drift_check"
+
+    def run(self, context: StageContext) -> StageResult:
+        current = context.artifacts.get("query_embeddings")
+        baseline = DistributionSnapshot.load(self.baseline_path)
+        report = DriftScorer(method="mmd_linear").score(current, baseline)
+        if report.drift_detected:
+            logger.warning("Drift detected: %.3f — %s", report.global_drift_score, report.recommendation)
+        return StageResult(artifacts={"drift_report": report}, metadata={...})
+```
+
+**Integration:** Optional pipeline stage, disabled by default. `PipelineConfig(drift_check_enabled=True)`.
+
+**Test strategy:** Integration: full pipeline with drift stage, verify report in artifacts.
+
+---
+
+### Epic B2: Energy-Based OOD Detection
+
+**Problem:** Distance/threshold heuristics are suboptimal. Energy-based scoring (Liu et al., NeurIPS 2020) is provably better aligned with input density.
+
+#### B2.1 — Energy Score Strategy
+
+```python
+# novelty/core/strategies/energy.py
+
+class EnergyOODStrategy(BaseStrategy):
+    """Energy(x) = -T * log sum_i exp(logit_i(x) / T)
+    Lower energy = more likely in-distribution."""
+
+    def initialize(self, reference_embeddings, reference_labels, config):
+        for label in set(reference_labels):
+            mask = np.array(reference_labels) == label
+            self._centroids[label] = reference_embeddings[mask].mean(axis=0)
+        ref_logits = self._compute_logits(reference_embeddings)
+        ref_energies = self._compute_energy(ref_logits)
+        self._threshold = float(np.mean(ref_energies) - 2 * np.std(ref_energies))
+
+    def _compute_logits(self, embeddings):
+        centroid_matrix = np.array([self._centroids[l] for l in self._centroids])
+        return cosine_similarity(embeddings, centroid_matrix) * self._scale
+
+    def _compute_energy(self, logits):
+        return -self._temperature * np.log(np.sum(np.exp(logits / self._temperature), axis=1))
+
+    def detect(self, texts, embeddings, predicted_classes, confidences, **kwargs):
+        logits = self._compute_logits(embeddings)
+        energies = self._compute_energy(logits)
+        flags = set(np.where(energies < self._threshold)[0])
+        ...
+```
+
+**Key params:** `T=1.0` (temperature), `scale=25.0` (logit scaling).
+
+**Test strategy:** Unit: in-distribution > OOD energy. Benchmark: AUROC vs KNN-distance.
+
+#### B2.2 — Energy + ReAct Hybrid
+
+```python
+class ReActStrategy(BaseStrategy):
+    """ReAct-style OOD: trim top activations then compute energy."""
+
+    def _trim_features(self, embeddings):
+        threshold = np.percentile(embeddings, self._trim_percentile * 100)
+        trimmed = embeddings.copy()
+        trimmed[trimmed > threshold] = threshold
+        return trimmed
+
+    def detect(self, texts, embeddings, predicted_classes, confidences, **kwargs):
+        return self._energy_strategy.detect(
+            texts, self._trim_features(embeddings), predicted_classes, confidences, **kwargs
+        )
+```
+
+**Test strategy:** Benchmark: ReAct vs vanilla energy AUROC.
+
+---
+
+### Epic B3: Class-Conditional Fine-Grained OOD
+
+**Problem:** Current Mahalanobis uses diagonal covariance only. Richer class models catch subtle near-OOD.
+
+#### B3.1 — Mixture of Gaussians OOD
+
+```python
+# novelty/core/strategies/mixture_gaussian.py
+
+class MixtureGaussianStrategy(BaseStrategy):
+    """Fit per-class multivariate Gaussians, score via log-likelihood."""
+
+    def initialize(self, reference_embeddings, reference_labels, config):
+        dim = reference_embeddings.shape[1]
+        for label in set(reference_labels):
+            mask = np.array(reference_labels) == label
+            class_embs = reference_embeddings[mask]
+            self._class_models[label] = {
+                "mean": class_embs.mean(axis=0),
+                "cov": np.cov(class_embs.T) + np.eye(dim) * 1e-6,
+                "prior": len(class_embs) / len(reference_labels),
+            }
+
+    def _log_likelihood(self, x, label):
+        model = self._class_models[label]
+        diff = x - model["mean"]
+        cov_inv = np.linalg.inv(model["cov"])
+        return -0.5 * (diff @ cov_inv @ diff) + np.log(model["prior"])
+```
+
+**Test strategy:** Unit: in-distribution > near-OOD. Unit: regularization prevents singular covariance. Benchmark: AUROC vs Mahalanobis.
+
+---
+
+## C: Clustering & Discovery
+
+### Epic C1: Online / Incremental Clustering
+
+**Problem:** Full refit required for every new batch. No incremental assignment.
+
+#### C1.1 — Incremental Point Assignment
+
+```python
+# novelty/clustering/incremental.py
+
+class IncrementalClusterer:
+    """Assign new points to existing clusters; create new clusters when needed."""
+
+    def assign(self, new_embeddings: np.ndarray) -> np.ndarray:
+        # 1. Try assigning to existing centroids (cosine sim > threshold)
+        # 2. Cluster unassigned among themselves via HDBSCAN
+        # 3. Update centroids and state
+        ...
+```
+
+**Test strategy:** Unit: existing → correct cluster. Unit: novel → new IDs. Unit: centroids update.
+
+#### C1.2 — Cluster Merge Detection
+
+```python
+def detect_merges(centroids, merge_threshold=0.85) -> list[tuple[int, int]]:
+    """Detect cluster pairs that should merge based on centroid similarity."""
+    ...
+```
+
+**Test strategy:** Unit: identical → merge. Unit: distant → no merge.
+
+---
+
+### Epic C2: Cluster Stability Analysis
+
+**Problem:** Single HDBSCAN run may produce unstable clusters. No robustness signal.
+
+#### C2.1 — Bootstrap Stability Scorer
+
+```python
+# novelty/clustering/stability.py
+
+class ClusterStabilityScorer:
+    """Assess cluster stability via bootstrap resampling.
+    Score > 0.7 = stable, < 0.3 = unstable."""
+
+    def score(self, embeddings, base_labels, clusterer_factory) -> dict[int, float]:
+        # n_bootstrap subsampled runs, per-cluster best Jaccard match averaged
+        ...
+```
+
+**Test strategy:** Unit: separable → >0.9. Unit: noise → <0.3. Property: scores ∈ [0,1].
+
+#### C2.2 — Stability-Gated Discovery Stage
+
+```python
+class StabilityFilterStage(PipelineStage):
+    name = "stability_filter"
+    # Insert between CommunityDetectionStage and ClusterEvidenceStage
+    # Filter clusters with stability < 0.5
+```
+
+**Test strategy:** Integration: only stable clusters reach evidence stage.
+
+---
+
+### Epic C3: Graph-based Community Detection
+
+**Problem:** HDBSCAN struggles with variable-density clusters, overlapping communities, non-globular shapes.
+
+#### C3.1 — Similarity Graph Builder
+
+```python
+# novelty/clustering/graph.py
+
+class SimilarityGraphBuilder:
+    """Build a k-NN similarity graph from embeddings. Returns igraph.Graph."""
+
+    def build(self, embeddings):
+        knn = kneighbors_graph(embeddings, n_neighbors=self.k, metric=self.metric, mode="distance")
+        knn.data = 1.0 - knn.data  # distance → similarity
+        knn = knn.maximum(knn.T)    # symmetrize
+        # Build igraph from sparse matrix
+        ...
+```
+
+#### C3.2 — Leiden Community Detection Backend
+
+```python
+class LeidenBackend(ClusteringBackend):
+    def fit_predict(self, X, min_cluster_size=5, metric="cosine", **kwargs):
+        graph = SimilarityGraphBuilder(k=self.k, metric=metric).build(X)
+        partition = graph.community_leiden(weights="weight", resolution_parameter=self.resolution)
+        labels = np.array(partition.membership)
+        # Filter small communities → -1
+        ...
+```
+
+**Registration:** `ClusteringBackendRegistry.register("leiden", LeidenBackend)`
+
+**Test strategy:** Unit: well-separated → correct labels. Benchmark: Leiden vs HDBSCAN on variable-density data.
+
+#### C3.3 — Louvain Backend
+
+Same interface, `graph.community_multilevel()`. Registered as `"louvain"`.
+
+---
+
+## D: Pipeline & Infrastructure
+
+### Epic D1: Vector DB Integration
+
+**Problem:** ANN index is in-memory only. No persistence, scaling, or hybrid metadata+vector search.
+
+#### D1.1 — Vector Store Protocol
+
+```python
+# core/vector_store.py
+
+class VectorStore(Protocol):
+    def upsert(self, ids: list[str], vectors: np.ndarray, metadata: list[dict] | None = None) -> None: ...
+    def query(self, vector: np.ndarray, top_k: int = 10, filter: dict | None = None) -> list[dict]: ...
+    def delete(self, ids: list[str]) -> None: ...
+    def count(self) -> int: ...
+```
+
+#### D1.2 — ChromaDB Backend
+
+```python
+class ChromaVectorStore:
+    def __init__(self, collection_name="entities", persist_directory=None): ...
+
+    def upsert(self, ids, vectors, metadata=None):
+        self._collection.upsert(ids=ids, embeddings=vectors.tolist(), metadatas=metadata)
+
+    def query(self, vector, top_k=10, filter=None):
+        results = self._collection.query(query_embeddings=..., n_results=top_k, where=filter)
+        return [{"id": id, "score": score, "metadata": meta} for id, score, meta in ...]
+```
+
+**Test strategy:** Unit: upsert+query round-trip, metadata filter, delete. Integration: as EmbeddingMatcher backend.
+
+#### D1.3 — In-Memory Backend (Default)
+
+Wraps existing `ANNIndex` to satisfy `VectorStore` protocol. Zero external deps.
+
+```python
+class InMemoryVectorStore:
+    def __init__(self, dim, backend="hnswlib", **kwargs):
+        self._index = ANNIndex(dim=dim, backend=backend, **kwargs)
+```
+
+---
+
+### Epic D2: Incremental Entity Addition
+
+**Problem:** Adding entities requires full index rebuild + classifier retrain.
+
+#### D2.1 — Incremental Embedding Index Update
+
+```python
+# In EmbeddingMatcher:
+def add_entities(self, new_entities):
+    new_embeddings = self.model.encode(new_texts)
+    self.embeddings = np.vstack([self.embeddings, new_embeddings])
+    if self._ann_index is not None:
+        self._ann_index.add_vectors(new_embeddings, labels=new_ids)
+```
+
+**Test strategy:** Unit: new entities appear. Property: existing results unchanged.
+
+#### D2.2 — Incremental Classifier Update
+
+```python
+# In SetFitClassifier:
+def add_class(self, class_name, examples):
+    embeddings = self.model.encode(examples)
+    if self._use_sentence_transformer_fallback:
+        self.class_centroids[class_name] = embeddings.mean(axis=0)
+        self.labels.append(class_name)
+    else:
+        self._pending_new_class_examples[class_name] = examples  # queue for retrain
+```
+
+**Test strategy:** Unit: new class in labels, predict returns it, existing classes unaffected.
+
+#### D2.3 — Pipeline-Level add_entities
+
+```python
+# In DiscoveryPipeline:
+def add_entities(self, new_entities):
+    self.matcher.add_entities(new_entities)
+    self.entities.extend(new_entities)
+    self.detector.reset()
+```
+
+**Test strategy:** Integration: add → match → verify. discover after add → verify new classes in reference.
+
+---
+
+## E: LLM & HITL
+
+### Epic E1: Conflict Resolution Between Proposals
+
+**Problem:** Proposals may overlap ("Technology Startup" vs "SaaS Company" for same clusters).
+
+#### E1.1 — Proposal Overlap Detector + Resolver
+
+```python
+# novelty/proposal/conflict_resolver.py
+
+@dataclass
+class ProposalConflict:
+    proposal_a: ClassProposal
+    proposal_b: ClassProposal
+    overlap_type: str       # "subset" | "superset" | "partial" | "duplicate"
+    overlap_score: float    # 0-1
+    shared_cluster_ids: list[int]
+    recommendation: str     # "merge" | "keep_both" | "keep_a" | "keep_b"
+
+class ProposalConflictResolver:
+    def detect_conflicts(self, proposals) -> list[ProposalConflict]:
+        # Pairwise: cluster overlap + name embedding similarity + example Jaccard
+        ...
+
+    def resolve(self, proposals) -> list[ClassProposal]:
+        # Remove lower-confidence proposals from conflicts
+        ...
+```
+
+**Test strategy:** Unit: identical→conflict, disjoint→no conflict, subset/superset classification. Integration: pipeline with overlapping clusters.
+
+---
+
+### Epic E2: Active Learning Loop
+
+**Problem:** No mechanism to surface uncertain samples for annotation.
+
+#### E2.1 — Uncertainty Sampler
+
+```python
+# novelty/active_learning/sampler.py
+
+class UncertaintySampler:
+    """Strategies: entropy, margin, least_confident."""
+
+    def sample(self, texts, confidences, predicted_classes, n_samples=10) -> list[dict]:
+        # Score by uncertainty, return top-n
+        ...
+```
+
+#### E2.2 — Annotation Interface Adapter
+
+```python
+# novelty/active_learning/annotation.py
+
+@dataclass
+class AnnotationResult:
+    text: str
+    assigned_label: str  # "existing_class" or "novel:<new_class>"
+    annotator: str
+
+class AnnotationCollector:
+    def apply_annotations(self, annotations, matcher):
+        # Parse labels, add new entities + training data, partial retrain
+        ...
+```
+
+**Test strategy:** Unit: entropy selects lowest-confidence. Integration: full loop: sample → annotate → apply → verify improvement.
+
+---
+
+## Deferred Features
+
+> Valuable but postponed to reduce current scope complexity.
+
+### Deferred 1: LLM Cost Tracking & Budget Enforcement
+
+**Rationale:** Useful for production cost control but not blocking any other feature.
+
+**Sketch:** `LLMCostTracker` wrapping `_call_litellm` — per-call token counting via `response.usage`, pricing table per model, budget cap raising `BudgetExceededError`.
+
+### Deferred 2: PII Redaction Before LLM
+
+**Rationale:** Important for compliance but current use cases are entity names/titles, not PII-heavy.
+
+**Sketch:** `PIIRedactor` — regex patterns for email, phone, SSN, credit card. Apply in `sanitize_prompt_input()`.
+
+### Deferred 3: Few-Shot Proposal Prompting via DSPy/GEPA
+
+**Rationale:** Custom example store + handcrafted few-shot prompts are fragile. DSPy or GEPA can optimize proposal prompts programmatically.
+
+**Sketch:**
+- Replace handcrafted prompts with a DSPy `Module` (Signature → Predict → BootstrapFewShot)
+- GEPA for genetic prompt evolution if DSPy optimization plateaus
+- Training signal: approved vs rejected proposals from `ProposalReviewManager`
+- Requires `dspy` and/or `gepa` as optional dependencies
+
+### Deferred 4: Streaming / Real-time Pipeline & Event Hooks
+
+**Rationale:** Significant architectural complexity (async queues, consumers, backpressure). Current sync/single-query async covers primary use case.
+
+**Sketch:**
+- `MicroBatchProcessor`: async queue → accumulate → `match_batch` → resolve futures
+- `EventSource` protocol: `KafkaEventSource`, `RedisStreamSource`, `FileWatchSource`
+- `EventConsumer` bridge: event source → micro-batch processor
+- Backpressure: configurable queue size + drop policy
+
+---
+
+## Dependency Graph
+
+```
+Quick Wins (independent):
+  Q1 (OOD Calibration) ← no deps
+  Q2 (Embedding Cache) ← no deps
+  Q3 (HDBSCAN Condensed Tree) ← no deps
+
+B1 (Drift Detection):
+  B1.1 (Distribution Snapshot) ← no deps
+  B1.2 (Drift Scorer) ← B1.1
+  B1.3 (Pipeline Hook) ← B1.2
+
+B2 (Energy OOD):
+  B2.1 (Energy Score) ← Q1
+  B2.2 (ReAct Hybrid) ← B2.1, B3.1
+
+B3 (Class-Conditional):
+  B3.1 (MoG Strategy) ← Q1
+
+C1 (Incremental Clustering):
+  C1.1 (Point Assignment) ← no deps
+  C1.2 (Merge Detection) ← C1.1
+
+C2 (Stability Analysis):
+  C2.1 (Bootstrap Scorer) ← no deps
+  C2.2 (Stability Filter Stage) ← C2.1
+
+C3 (Graph Community Detection):
+  C3.1 (Similarity Graph) ← no deps
+  C3.2 (Leiden Backend) ← C3.1
+  C3.3 (Louvain Backend) ← C3.1
+
+D1 (Vector DB):
+  D1.1 (Vector Store Protocol) ← no deps
+  D1.2 (ChromaDB Backend) ← D1.1
+  D1.3 (In-Memory Backend) ← D1.1
+
+D2 (Incremental Entities):
+  D2.1 (Embedding Update) ← D1.1
+  D2.2 (Classifier Update) ← D2.1
+  D2.3 (Pipeline-Level) ← D2.1, D2.2
+
+E1 (Conflict Resolution):
+  E1.1 (Overlap Detector) ← no deps
+
+E2 (Active Learning):
+  E2.1 (Uncertainty Sampler) ← no deps
+  E2.2 (Annotation Collector) ← E2.1, D2.3
+```
+
+---
+
+## Suggested Sequencing
+
+### Phase 1 — Foundation (Week 1–2)
+
+| Item | Days | Reason |
+|---|---|---|
+| Q1: OOD Score Calibration | 1 | Unblocks all OOD improvements |
+| Q2: Embedding Cache | 2 | Performance prerequisite |
+| Q3: HDBSCAN Condensed Tree | 1 | Standalone value |
+| D1.1: Vector Store Protocol | 1 | Unlocks D1.2, D2.1 |
+| D1.3: In-Memory Backend | 1 | Wraps existing ANN |
+
+### Phase 2 — OOD Depth (Week 3–4)
+
+| Item | Days | Reason |
+|---|---|---|
+| B2.1: Energy OOD | 3 | High-value standalone strategy |
+| B3.1: MoG Strategy | 3 | Better class-conditional modeling |
+| B1.1: Distribution Snapshot | 2 | Foundation for drift |
+| B2.2: ReAct Hybrid | 2 | Combines B2.1 + B3.1 |
+| B1.2: Drift Scorer | 2 | Depends on B1.1 |
+| B1.3: Drift Pipeline Hook | 1 | Depends on B1.2 |
+
+### Phase 3 — Clustering & Discovery (Week 5–6)
+
+| Item | Days | Reason |
+|---|---|---|
+| C3.1: Similarity Graph Builder | 2 | Foundation for C3.2/C3.3 |
+| C3.2: Leiden Backend | 2 | Primary graph community method |
+| C2.1: Bootstrap Stability | 3 | Quality assurance for clusters |
+| C1.1: Incremental Assignment | 3 | Production clustering |
+| C2.2: Stability Filter Stage | 1 | Depends on C2.1 |
+| C1.2: Merge Detection | 1 | Depends on C1.1 |
+| C3.3: Louvain Backend | 1 | Alternative to Leiden |
+
+### Phase 4 — Infrastructure (Week 7–8)
+
+| Item | Days | Reason |
+|---|---|---|
+| D1.2: ChromaDB Backend | 3 | Persistent vector storage |
+| D2.1: Incremental Embeddings | 2 | Depends on D1.1 |
+| D2.2: Incremental Classifier | 3 | Depends on D2.1 |
+| D2.3: Pipeline-Level add_entities | 1 | Depends on D2.1, D2.2 |
+
+### Phase 5 — LLM & HITL (Week 9–10)
+
+| Item | Days | Reason |
+|---|---|---|
+| E1.1: Proposal Conflict Resolver | 3 | Standalone |
+| E2.1: Uncertainty Sampler | 2 | Standalone |
+| E2.2: Annotation Collector | 3 | Depends on E2.1, D2.3 |
+
+### Phase 6 — Deferred (Future)
+
+| Item | Reason |
+|---|---|
+| LLM Cost Tracking | Production cost control |
+| PII Redaction | Compliance for personal-data domains |
+| DSPy/GEPA Proposal Optimization | When LLM proposal quality bottlenecks |
+| Streaming / Event-Driven Pipeline | When real-time consumption required |
+
+---
 
 ## Risks and Mitigations
 
-| Risk | Why it matters | Mitigation |
+| Risk | Why It Matters | Mitigation |
 |---|---|---|
-| Doc drift returns | The repo already contains roadmap statements that no longer match implementation details | Treat roadmap and architecture updates as part of feature work |
-| Premature API redesign | A public pipeline API too early could freeze weak internal contracts | Build internal stage contracts first, then expose the final surface |
-| Discovery complexity balloons | Novelty, clustering, LLM, and review flows can sprawl quickly | Keep stage boundaries explicit and verify each stage independently |
-| LLM cost/latency creep | Proposal generation can become expensive at sample level | Prefer cluster-level evidence extraction and bounded prompting |
-| Promotion workflow mistakes | Poorly governed promotion can corrupt the known entity index | Make approval state explicit and promotion auditable |
-| Experimental method sprawl | Too many novelty strategies can blur the supported path | Label experimental vs supported paths and benchmark before promoting |
+| Doc drift returns | Repo already had roadmap statements mismatching implementation | Treat roadmap updates as part of feature work |
+| Premature API redesign | Public pipeline API too early could freeze weak contracts | Internal stage contracts proven first, then exposed |
+| Discovery complexity balloons | Novelty, clustering, LLM, review flows sprawl | Explicit stage boundaries, verify each independently |
+| LLM cost/latency creep | Proposal generation expensive at sample level | Cluster-level evidence extraction + bounded prompting |
+| Promotion workflow mistakes | Poorly governed promotion corrupts known entity index | Explicit approval state + auditable promotion |
+| Experimental method sprawl | Too many novelty strategies blur supported path | Label experimental vs supported, benchmark before promoting |
+| OOD score miscalibration | New strategies add uncalibrated signals | Q1 calibrator ships before any new strategy |
 
-## Near-Term Implementation Priorities
+---
 
-These should guide the next few engineering cycles:
+## Out of Scope
 
- 1. Keep docs, package metadata, and architecture notes aligned with the current repository.
- 2. Stabilize matcher-to-novelty metadata contracts used by downstream discovery logic.
- 3. Introduce internal pipeline contracts with minimal disruption to the current public API.
- 4. Upgrade discovery stages toward cluster-level evidence extraction and proposal generation.
- 5. Add review/promotion lifecycle support before attempting a polished dashboard or service layer.
+- **A1–A5 (Matching & Classification):** Calibration, cascading, ensembles, rules layer, adaptive thresholds — not prioritized this cycle.
+- **B3.2 (KDE OOD):** Marginal improvement over MoG at high dimensionality cost.
+- **F1 (Multi-lingual):** Requires embedding model change — cross-cutting concern.
+- **F2 (XAI):** Model-specific interpretability (SHAP, attention visualization).
+- **F3 (Domain Adaptation):** Unsupervised fine-tuning pipeline (TSDAE, GPL).
+- **F4 (Entity Resolution):** Different problem class (dedup vs classification).
+- **F5 (Data Augmentation):** Low priority given few-shot classifier exists.
 
-## Implementation Priorities (2026)
+---
 
-### Immediate Priority (Stability & Rigor)
+## Definition of Done
 
- 1. **Synchronize Tests:** Update `tests/test_pipeline_contracts.py` to match current `CommunityDetectionStage` and stage contracts.
- 2. **Conformal Calibration:** Implement a calibration stage for the `MahalanobisDistanceStrategy` to output p-values.
- 3. **Instant Promotion:** Implement `Matcher.add_entity()` and `Matcher.add_entities()` to support hot-swapping/updating the internal vector index without full retraining.
- 4. **Unify Discovery Logic:** Refactor `NovelEntityMatcher` and `DiscoveryPipeline` to share a common orchestration core.
- 5. **Refactor Matcher:** Decompose `matcher.py` by extracting `MatcherRuntimeState`, `MatcherComponentFactory`, and specific strategy implementations into separate modules within `src/novelentitymatcher/core/`.
+This roadmap remains the active source of truth until replaced. Update when:
+- The primary public API changes
+- The stage architecture materially changes
+- Promotion/review workflows become more concrete
+- Package extras, supported backends, or test strategy change
 
-### Medium Term (Robustness & Performance)
-
- 6. **Attribute Discovery Prompting:** Enhance `LLMClassProposer` prompts and schemas to extract common fields and data structures (schemas) from novel clusters.
- 7. **Standardize Observability:** Replace all `print()` calls with `logger.info()` or `logger.error()`. Standardize on specific exception types instead of broad `except Exception:` blocks.
- 8. **Implement Model Caching:** Introduce a global model registry/cache in `src/novelentitymatcher/backends/` to ensure that expensive models (SentenceTransformers, LLM clients) are only loaded once.
- 9. **Harden Ingestion:** Add validation logic to `src/novelentitymatcher/ingestion/` to check status codes, file sizes, and data integrity before processing external datasets.
-
-### Long Term (Scalability)
-
- 10. **Input Validation Layer:** Add Pydantic or explicit type validation at the public API boundaries (`Matcher.match`, `DiscoveryPipeline.discover`) to provide clearer error messages for malformed inputs.
- 11. **Streaming & Batching:** Implement chunked/streaming processing for large-scale entity sets to reduce the memory footprint of holding all embeddings in RAM.
- 12. **Streaming Active Learning:** Support high-throughput telemetry where novelty detection and promotion happen as a background "learning" task.
-
-## Definition of Done for This Roadmap
-
-This roadmap remains the active source of truth until replaced. It should be updated whenever one of the following changes:
-
-- the primary public API changes
-- the stage architecture materially changes
-- promotion/review workflows become more concrete
-- package extras, supported backends, or test strategy change in a way that affects implementation planning
-
-When a future roadmap replaces this one, it should supersede this document explicitly and move this file into the archive.
+When a future roadmap replaces this one, it should supersede explicitly and archive this file.

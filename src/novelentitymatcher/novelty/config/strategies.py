@@ -200,3 +200,39 @@ class SetFitCentroidConfig(BaseModel):
     Samples with min centroid distance above this are flagged as novel.
     If None, threshold is auto-calibrated from reference set (95th percentile).
     """
+
+
+class EnergyConfig(BaseModel):
+    """Configuration for energy-based OOD strategy."""
+
+    temperature: float = Field(default=1.0, gt=0.0)
+    """Temperature T for energy score scaling."""
+
+    scale: float = Field(default=25.0, gt=0.0)
+    """Scaling factor applied to cosine similarities to produce logits."""
+
+    threshold_std_multiplier: float = Field(default=2.0, gt=0.0)
+    """Number of standard deviations below mean reference energy to set threshold."""
+
+
+class MixtureGaussianConfig(BaseModel):
+    """Configuration for mixture of Gaussians OOD strategy."""
+
+    regularization: float = Field(default=1e-6, gt=0.0)
+    """Ridge regularization added to covariance matrices for numerical stability."""
+
+    use_priors: bool = Field(default=True)
+    """Whether to include log(prior) in the log-likelihood score."""
+
+    threshold_std_multiplier: float = Field(default=2.0, gt=0.0)
+    """Std-dev multiplier below mean reference log-likelihood for threshold."""
+
+
+class ReActConfig(BaseModel):
+    """Configuration for ReAct-style feature trimming."""
+
+    trim_percentile: float = Field(default=0.9, ge=0.0, le=1.0)
+    """Percentile above which activations are trimmed before energy scoring."""
+
+    base_strategy_id: str = Field(default="energy_ood")
+    """Strategy ID to wrap with ReAct trimming."""

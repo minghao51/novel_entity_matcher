@@ -33,3 +33,17 @@ class ClusteringBackend(ABC):
             - info: dict with backend-specific metadata
         """
         ...
+
+    def get_condensed_tree(self) -> dict[str, Any]:
+        """Return the cluster hierarchy condensed tree for multi-resolution analysis."""
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support condensed tree"
+        )
+
+    def extract_clusters_at_stability(
+        self, min_persistence: float = 0.1
+    ) -> tuple[np.ndarray, dict[str, Any]]:
+        """Re-extract clusters at a different stability threshold."""
+        raise NotImplementedError(
+            f"{type(self).__name__} does not support cluster re-extraction"
+        )

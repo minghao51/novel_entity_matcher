@@ -6,6 +6,7 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 from ..config import is_static_embedding_model, resolve_model_alias
+from ..utils.embedding_cache import LRUEmbeddingCache
 from ..utils.embeddings import ModelCache, get_default_cache
 from ..utils.validation import (
     validate_entities,
@@ -44,6 +45,7 @@ class EmbeddingMatcher:
         normalize: bool = True,
         embedding_dim: int | None = None,
         cache: ModelCache | None = None,
+        embedding_cache: LRUEmbeddingCache | None = None,
     ):
         validate_entities(entities)
         validate_model_name(model_name)
@@ -56,6 +58,7 @@ class EmbeddingMatcher:
 
         self.normalizer = TextNormalizer() if normalize else None
         self.cache = cache if cache is not None else get_default_cache()
+        self.embedding_cache = embedding_cache
         self.model: EmbeddingModel | None = None
         self.entity_texts: list[str] = []
         self.entity_ids: list[str] = []
@@ -108,12 +111,9 @@ class EmbeddingMatcher:
             self.entity_texts, self.normalizer, self.normalize
         )
 
-        if batch_size is not None:
-            self.embeddings = self.model.encode(  # type: ignore[assignment]
-                self.entity_texts, batch_size=batch_size
-            )
-        else:
-            self.embeddings = self.model.encode(self.entity_texts)  # type: ignore[assignment]
+        self.embeddings = self._encode_with_cache(
+            self.entity_texts, batch_size=batch_size
+        )
 
         if isinstance(self.embeddings, list):
             self.embeddings = np.array(self.embeddings)
@@ -124,6 +124,31 @@ class EmbeddingMatcher:
             and self.embeddings.shape[1] > self.embedding_dim
         ):
             self.embeddings = self.embeddings[:, : self.embedding_dim]
+
+    def _encode_with_cache(
+        self, texts: list[str], batch_size: int | None = None
+    ) -> np.ndarray:
+        assert self.model is not None
+        if self.embedding_cache is None:
+            if batch_size is not None:
+                result = self.model.encode(texts, batch_size=batch_size)
+            else:
+                result = self.model.encode(texts)
+            return np.asarray(result)
+
+        cached, uncached = self.embedding_cache.get_batch(texts)
+        if uncached:
+            to_encode = [texts[i] for i in uncached]
+            encoded = np.asarray(
+                self.model.encode(to_encode, batch_size=batch_size)
+                if batch_size is not None
+                else self.model.encode(to_encode)
+            )
+            self.embedding_cache.put_batch(to_encode, encoded)
+            for pos, idx in enumerate(uncached):
+                cached[idx] = encoded[pos]
+
+        return np.array(cached)
 
     def match(
         self,
@@ -160,13 +185,7 @@ class EmbeddingMatcher:
         candidate_embeddings = self.embeddings[candidate_indices]
         candidate_ids_list = [self.entity_ids[i] for i in candidate_indices]
 
-        if batch_size is not None:
-            query_embeddings = self.model.encode(texts, batch_size=batch_size)
-        else:
-            query_embeddings = self.model.encode(texts)
-
-        if isinstance(query_embeddings, list):
-            query_embeddings = np.array(query_embeddings)
+        query_embeddings = self._encode_with_cache(texts, batch_size)
 
         effective_dim = (
             self.embedding_dim

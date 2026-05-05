@@ -66,12 +66,15 @@ def _register_all() -> None:
     from . import (
         clustering,  # noqa: F401
         confidence,  # noqa: F401
+        energy,  # noqa: F401
         knn_distance,  # noqa: F401
         lof,  # noqa: F401
         mahalanobis,  # noqa: F401
+        mixture_gaussian,  # noqa: F401
         oneclass,  # noqa: F401
         pattern,  # noqa: F401
         prototypical,  # noqa: F401
+        react_hybrid,  # noqa: F401
         self_knowledge,  # noqa: F401
         setfit,  # noqa: F401
         setfit_centroid,  # noqa: F401

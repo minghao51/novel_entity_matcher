@@ -97,6 +97,44 @@ class HDBSCANBackend(ClusteringBackend):
         }
         return labels, probabilities, info
 
+    def get_condensed_tree(self) -> dict[str, Any]:
+        if self._clusterer is None:
+            raise RuntimeError("Must call fit_predict first")
+        tree_data = self._clusterer.condensed_tree_.to_numpy()
+        return {
+            "tree": tree_data.tolist(),
+            "n_points": len(self._clusterer.labels_),
+            "n_clusters": len(set(self._clusterer.labels_))
+            - (1 if -1 in self._clusterer.labels_ else 0),
+            "persistence": getattr(self._clusterer, "cluster_persistence_", []),
+        }
+
+    def extract_clusters_at_stability(
+        self, min_persistence: float = 0.1
+    ) -> tuple[np.ndarray, dict[str, Any]]:
+        if self._clusterer is None:
+            raise RuntimeError("Must call fit_predict first")
+        labels = self._clusterer.labels_
+        cluster_persistence = getattr(self._clusterer, "cluster_persistence_", [])
+        stable_clusters = {
+            i for i, p in enumerate(cluster_persistence) if p >= min_persistence
+        }
+        new_labels = np.full_like(labels, -1)
+        cluster_map: dict[int, int] = {}
+        next_id = 0
+        for orig_label in sorted(stable_clusters):
+            mask = labels == orig_label
+            new_labels[mask] = next_id
+            cluster_map[orig_label] = next_id
+            next_id += 1
+        info: dict[str, Any] = {
+            "min_persistence": min_persistence,
+            "n_clusters": len(stable_clusters),
+            "n_noise": int(np.sum(new_labels == -1)),
+            "cluster_map": cluster_map,
+        }
+        return new_labels, info
+
     def _compute_distances(self, embeddings: np.ndarray) -> np.ndarray:
         if self.metric == "precomputed":
             return embeddings

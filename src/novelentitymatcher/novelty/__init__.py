@@ -21,12 +21,15 @@ from .config.base import DetectionConfig
 from .config.strategies import (
     ClusteringConfig,
     ConfidenceConfig,
+    EnergyConfig,
     KNNConfig,
     LOFConfig,
     MahalanobisConfig,
+    MixtureGaussianConfig,
     OneClassConfig,
     PatternConfig,
     PrototypicalConfig,
+    ReActConfig,
     SelfKnowledgeConfig,
     SetFitCentroidConfig,
     SetFitConfig,
@@ -34,6 +37,8 @@ from .config.strategies import (
 from .config.weights import WeightConfig
 from .core.detector import NoveltyDetector
 from .core.strategies import StrategyRegistry
+from .drift.scorer import DriftReport, DriftScorer
+from .drift.snapshot import DistributionSnapshot
 
 # Evaluation
 from .evaluation.evaluator import NoveltyEvaluator
@@ -93,6 +98,10 @@ __all__ = [
     # Configuration
     "DetectionConfig",
     "DiscoveryCluster",
+    "DistributionSnapshot",
+    "DriftReport",
+    "DriftScorer",
+    "EnergyConfig",
     "EvaluationReport",
     "GradualNoveltySplitter",
     "KNNConfig",
@@ -100,6 +109,7 @@ __all__ = [
     "LLMClassProposer",
     "LOFConfig",
     "MahalanobisConfig",
+    "MixtureGaussianConfig",
     "NovelClassAnalysis",
     "NovelClassDiscoveryReport",
     # Results
@@ -116,6 +126,7 @@ __all__ = [
     "ProposalReviewManager",
     "ProposalReviewRecord",
     "PrototypicalConfig",
+    "ReActConfig",
     "RetrievalAugmentedProposer",
     # Clustering
     "ScalableClusterer",

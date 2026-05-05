@@ -19,6 +19,9 @@ _VALID_OOD_STRATEGIES = {
     "mahalanobis",
     "lof",
     "setfit_centroid",
+    "energy_ood",
+    "mixture_gaussian",
+    "react_energy",
 }
 
 _VALID_CLUSTERING_BACKENDS = {"auto", "hdbscan", "soptics", "umap_hdbscan"}
@@ -45,6 +48,14 @@ class PipelineConfig(BaseModel):
     ood_mahalanobis_mode: Literal["global", "class_conditional"] = Field(
         default="class_conditional"
     )
+
+    # --- Drift detection ---
+    drift_check_enabled: bool = Field(default=False)
+    drift_baseline_path: str | None = Field(default=None)
+    drift_method: Literal["mmd_linear", "kl_gaussian", "cosine_centroid"] = Field(
+        default="mmd_linear"
+    )
+    drift_threshold: float = Field(default=0.05, gt=0.0)
 
     # --- Clustering ---
     clustering_enabled: bool = Field(default=True)

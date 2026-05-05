@@ -18,11 +18,6 @@ Usage:
 
 from __future__ import annotations
 
-# --- Core matching ---
-# --- Novelty-aware orchestration ---
-# --- Pipeline ---
-# --- Clustering ---
-# --- Exceptions ---
 from novelentitymatcher import (
     BlockingStrategy,
     BM25Blocking,
@@ -51,13 +46,10 @@ from novelentitymatcher import (
     TrainingError,
     ValidationError,
 )
-
-# --- Core extras ---
 from novelentitymatcher.core.bert_classifier import BERTClassifier
 from novelentitymatcher.core.embedding_matcher import EmbeddingMatcher
 from novelentitymatcher.core.hierarchy import HierarchicalScoring, HierarchyIndex
-
-# --- Clustering backends ---
+from novelentitymatcher.core.vector_store import InMemoryVectorStore, VectorStore
 from novelentitymatcher.novelty.clustering.backends import (
     HDBSCANBackend,
     SOPTICSBackend,
@@ -65,8 +57,6 @@ from novelentitymatcher.novelty.clustering.backends import (
 )
 from novelentitymatcher.novelty.clustering.scalable import ScalableClusterer
 from novelentitymatcher.novelty.clustering.validation import ClusterValidator
-
-# --- Configs ---
 from novelentitymatcher.novelty.config.base import DetectionConfig
 from novelentitymatcher.novelty.config.strategies import (
     ClusteringConfig,
@@ -83,28 +73,19 @@ from novelentitymatcher.novelty.config.strategies import (
 )
 from novelentitymatcher.novelty.config.weights import WeightConfig
 from novelentitymatcher.novelty.core.metadata import MetadataBuilder
+from novelentitymatcher.novelty.core.score_calibrator import OODScoreCalibrator
 from novelentitymatcher.novelty.core.signal_combiner import SignalCombiner
-
-# --- Novelty core ---
 from novelentitymatcher.novelty.core.strategies import StrategyRegistry
-
-# --- Novelty entity matcher ---
 from novelentitymatcher.novelty.entity_matcher import NovelEntityMatchResult
 from novelentitymatcher.novelty.evaluation.evaluator import NoveltyEvaluator
-
-# --- Evaluation ---
 from novelentitymatcher.novelty.evaluation.splitters import (
     GradualNoveltySplitter,
     OODSplitter,
 )
-
-# --- Proposal ---
 from novelentitymatcher.novelty.proposal.retrieval import (
     BGERetriever,
     RetrievalAugmentedProposer,
 )
-
-# --- Schemas ---
 from novelentitymatcher.novelty.schemas.models import (
     ClassProposal,
     ClusterEvidence,
@@ -122,14 +103,10 @@ from novelentitymatcher.novelty.schemas.results import (
     StrategyMetrics,
 )
 from novelentitymatcher.novelty.storage.index import ANNBackend, ANNIndex
-
-# --- Storage ---
 from novelentitymatcher.novelty.storage.review import (
     PromotionResult,
     ProposalReviewManager,
 )
-
-# --- Novelty strategies ---
 from novelentitymatcher.novelty.strategies.base import NoveltyStrategy
 from novelentitymatcher.novelty.strategies.clustering import ClusteringStrategy
 from novelentitymatcher.novelty.strategies.confidence import ConfidenceStrategy
@@ -143,12 +120,11 @@ from novelentitymatcher.novelty.strategies.pattern import PatternStrategy
 from novelentitymatcher.novelty.strategies.prototypical import PrototypicalStrategy
 from novelentitymatcher.novelty.strategies.self_knowledge import SelfKnowledgeStrategy
 from novelentitymatcher.novelty.strategies.uncertainty import UncertaintyStrategy
-
-# --- Pipeline helpers ---
 from novelentitymatcher.pipeline.match_result import (
     MatchRecord,
     MatchResultWithMetadata,
 )
+from novelentitymatcher.utils.embedding_cache import LRUEmbeddingCache
 
 __all__ = [
     "ANNBackend",
@@ -160,7 +136,6 @@ __all__ = [
     "ClassProposal",
     "ClusterEvidence",
     "ClusterValidator",
-    # Clustering
     "ClusteringBackend",
     "ClusteringBackendRegistry",
     "ClusteringConfig",
@@ -168,11 +143,9 @@ __all__ = [
     "ConfidenceConfig",
     "ConfidenceStrategy",
     "CrossEncoderReranker",
-    # Configs
     "DetectionConfig",
     "DetectionReport",
     "DiscoveryCluster",
-    # Pipeline
     "DiscoveryPipeline",
     "EmbeddingMatcher",
     "EvaluationReport",
@@ -182,16 +155,17 @@ __all__ = [
     "HierarchicalMatcher",
     "HierarchicalScoring",
     "HierarchyIndex",
+    "InMemoryVectorStore",
     "KNNConfig",
     "KNNDistanceStrategy",
     "LLMClassProposer",
     "LOFConfig",
     "LOFStrategy",
+    "LRUEmbeddingCache",
     "MahalanobisConfig",
     "MahalanobisDistanceStrategy",
     "MatchRecord",
     "MatchResultWithMetadata",
-    # Matching
     "Matcher",
     "MatchingError",
     "MetadataBuilder",
@@ -200,16 +174,13 @@ __all__ = [
     "NovelClassAnalysis",
     "NovelClassDiscoveryReport",
     "NovelEntityMatchResult",
-    # Novelty orchestration
     "NovelEntityMatcher",
-    # Schemas
     "NovelSampleMetadata",
     "NovelSampleReport",
     "NoveltyDetector",
     "NoveltyEvaluator",
-    # Novelty strategies
     "NoveltyStrategy",
-    # Evaluation
+    "OODScoreCalibrator",
     "OODSplitter",
     "OneClassConfig",
     "OneClassStrategy",
@@ -218,20 +189,17 @@ __all__ = [
     "PipelineConfig",
     "PipelineRunResult",
     "PipelineStage",
-    # Storage
     "PromotionResult",
     "ProposalReviewManager",
     "ProposalReviewRecord",
     "PrototypicalConfig",
     "PrototypicalStrategy",
-    # Proposal
     "RetrievalAugmentedProposer",
     "SOPTICSBackend",
     "SampleMetrics",
     "ScalableClusterer",
     "SelfKnowledgeConfig",
     "SelfKnowledgeStrategy",
-    # Exceptions
     "SemanticMatcherError",
     "SetFitClassifier",
     "SetFitConfig",
@@ -239,7 +207,6 @@ __all__ = [
     "StageContext",
     "StageResult",
     "StrategyMetrics",
-    # Novelty core
     "StrategyRegistry",
     "TFIDFBlocking",
     "TextNormalizer",
@@ -248,5 +215,6 @@ __all__ = [
     "UncertaintyConfig",
     "UncertaintyStrategy",
     "ValidationError",
+    "VectorStore",
     "WeightConfig",
 ]

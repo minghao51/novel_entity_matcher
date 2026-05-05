@@ -13,8 +13,24 @@ import numpy as np
 from ..config.base import DetectionConfig
 from ..schemas import NovelSampleReport
 from .metadata import MetadataBuilder
+from .score_calibrator import OODScoreCalibrator
 from .signal_combiner import SignalCombiner
 from .strategies import StrategyRegistry
+
+_STRATEGY_SCORE_KEYS: dict[str, list[str]] = {
+    "confidence": ["confidence_score"],
+    "uncertainty": ["uncertainty_score"],
+    "knn_distance": ["knn_novelty_score"],
+    "clustering": ["cluster_support_score"],
+    "self_knowledge": ["self_knowledge_score"],
+    "pattern": ["pattern_score"],
+    "oneclass": ["oneclass_score"],
+    "prototypical": ["prototypical_score"],
+    "setfit": ["setfit_score"],
+    "setfit_centroid": ["setfit_centroid_score"],
+    "mahalanobis": ["mahalanobis_novelty_score"],
+    "lof": ["lof_novelty_score"],
+}
 
 
 class NoveltyDetector:
@@ -32,12 +48,17 @@ class NoveltyDetector:
     - Delegates metadata creation to MetadataBuilder
     """
 
-    def __init__(self, config: DetectionConfig):
+    def __init__(
+        self,
+        config: DetectionConfig,
+        calibrator: OODScoreCalibrator | None = None,
+    ):
         """
         Initialize the novelty detector.
 
         Args:
             config: Detection configuration
+            calibrator: Optional OOD score calibrator for normalizing raw scores to [0,1]
         """
         # Validate configuration
         config.validate_strategies()
@@ -46,8 +67,10 @@ class NoveltyDetector:
         self._strategies: dict[str, Any] = {}
         self._combiner = SignalCombiner(config)
         self._metadata_builder = MetadataBuilder()
+        self._calibrator = calibrator
         self._is_initialized = False
         self._reference_signature: str | None = None
+        self._calibrator_reference_signature: str | None = None
 
     @staticmethod
     def _compute_reference_signature(
@@ -104,6 +127,11 @@ class NoveltyDetector:
             reference_embeddings,
             reference_labels,
         )
+        # Reset calibrator when reference corpus changes so it will be re-fitted
+        # on the next detection batch.
+        if self._calibrator is not None:
+            self._calibrator.reset()
+            self._calibrator_reference_signature = None
 
     def detect_novel_samples(
         self,
@@ -172,6 +200,57 @@ class NoveltyDetector:
                     all_metrics[idx] = {}
                 all_metrics[idx].update(metric_dict)
 
+        # Calibrate raw scores before signal combination.
+        # The calibrator is fitted once per reference corpus (on the first
+        # detection batch) and reused for subsequent batches so that scores
+        # are comparable across calls.
+        if self._calibrator is not None:
+            # Build score keys: hardcoded mapping + dynamically discovered
+            # numeric keys from each strategy's raw metrics.
+            score_keys_by_strategy: dict[str, list[str]] = {
+                k: list(v) for k, v in _STRATEGY_SCORE_KEYS.items()
+            }
+            for strategy_id, (_flags, metrics) in strategy_outputs.items():
+                discovered: set[str] = set()
+                for metric_dict in metrics.values():
+                    for key, val in metric_dict.items():
+                        if isinstance(val, (int, float)) and not isinstance(val, bool):
+                            discovered.add(key)
+                existing = set(score_keys_by_strategy.get(strategy_id, []))
+                score_keys_by_strategy[strategy_id] = sorted(existing | discovered)
+
+            strategy_scores: dict[str, list[float]] = {}
+            for strategy_id, score_keys in score_keys_by_strategy.items():
+                if strategy_id not in strategy_outputs:
+                    continue
+                scores = []
+                for idx_metrics in all_metrics.values():
+                    for key in score_keys:
+                        val = idx_metrics.get(key)
+                        if val is not None:
+                            scores.append(float(val))
+                if scores:
+                    strategy_scores[strategy_id] = scores
+
+            if strategy_scores:
+                score_arrays = {k: np.array(v) for k, v in strategy_scores.items()}
+                # Fit once per reference corpus; reuse stats afterward.
+                if self._calibrator_reference_signature != reference_signature:
+                    self._calibrator.fit(score_arrays)
+                    self._calibrator_reference_signature = reference_signature
+                for strategy_id, score_keys in score_keys_by_strategy.items():
+                    if strategy_id not in strategy_outputs:
+                        continue
+                    for idx_metrics in all_metrics.values():
+                        for key in score_keys:
+                            val = idx_metrics.get(key)
+                            if val is not None:
+                                idx_metrics[key] = float(
+                                    self._calibrator.transform(
+                                        strategy_id, np.array([val])
+                                    )[0]
+                                )
+
         # Combine signals
         novel_indices, novelty_scores = self._combiner.combine(
             strategy_outputs=strategy_outputs,
@@ -193,14 +272,13 @@ class NoveltyDetector:
         return report
 
     def reset(self) -> None:
-        """
-        Reset the detector, clearing all initialized strategies.
-
-        This allows the detector to be re-used with different reference data.
-        """
+        """Reset the detector, clearing all initialized strategies and calibrator state."""
         self._strategies.clear()
         self._is_initialized = False
         self._reference_signature = None
+        self._calibrator_reference_signature = None
+        if self._calibrator is not None:
+            self._calibrator.reset()
 
     def get_strategy(self, strategy_id: str) -> Any:
         """
