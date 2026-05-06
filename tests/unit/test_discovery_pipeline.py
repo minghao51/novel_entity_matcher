@@ -7,6 +7,7 @@ from novelentitymatcher.novelty.schemas import (
     NovelClassAnalysis,
 )
 from novelentitymatcher.pipeline.config import PipelineConfig
+from novelentitymatcher.pipeline.stages.drift_hook import DriftCheckStage
 
 
 def _build_trained_matcher() -> Matcher:
@@ -54,6 +55,36 @@ def test_discovery_pipeline_builds_detector_from_pipeline_config():
     assert pipeline.clusterer.min_samples == 7
     assert pipeline.clusterer.cluster_selection_epsilon == 0.15
     assert pipeline.clusterer.umap_metric == "euclidean"
+
+
+def test_discovery_pipeline_accepts_phase67_detection_config():
+    pipeline = DiscoveryPipeline(
+        matcher=_build_trained_matcher(),
+        auto_save=False,
+        config=PipelineConfig(ood_strategies=["energy_ood", "react_energy"]),
+        energy_ood={"temperature": 2.0, "scale": 30.0},
+        react_energy={"trim_percentile": 0.85},
+    )
+    assert pipeline.detector.config.energy_ood is not None
+    assert pipeline.detector.config.energy_ood.temperature == 2.0
+    assert pipeline.detector.config.react_energy is not None
+    assert pipeline.detector.config.react_energy.trim_percentile == 0.85
+
+
+def test_discovery_pipeline_includes_drift_stage_when_enabled():
+    pipeline = DiscoveryPipeline(
+        matcher=_build_trained_matcher(),
+        auto_save=False,
+        config=PipelineConfig(
+            drift_check_enabled=True,
+            drift_baseline_path="/tmp/baseline",
+            drift_method="cosine_centroid",
+            drift_threshold=0.3,
+        ),
+    )
+    assert any(
+        isinstance(stage, DriftCheckStage) for stage in pipeline._orchestrator.stages
+    )
 
 
 def test_discovery_pipeline_creates_review_records(tmp_path: Path):

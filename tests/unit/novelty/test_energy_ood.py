@@ -79,3 +79,20 @@ class TestEnergyOODStrategy:
         )
         assert flags == set()
         assert metrics == {}
+
+    def test_energy_stable_under_large_scale(
+        self, reference_embeddings, reference_labels
+    ):
+        strategy = EnergyOODStrategy()
+        strategy.initialize(
+            reference_embeddings,
+            reference_labels,
+            EnergyConfig(scale=1e4, temperature=0.5),
+        )
+        _flags, metrics = strategy.detect(
+            texts=["x"],
+            embeddings=np.array([[0.9, 0.1, 0.0]], dtype=np.float32),
+            predicted_classes=["a"],
+            confidences=np.array([0.9]),
+        )
+        assert np.isfinite(metrics[0]["energy_score"])

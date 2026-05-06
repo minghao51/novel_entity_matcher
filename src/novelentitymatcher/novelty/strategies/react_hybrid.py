@@ -87,6 +87,7 @@ class ReActEnergyStrategy(NoveltyStrategy):
         # Annotate metrics with ReAct info
         for idx in metrics:
             metrics[idx]["react_trim_percentile"] = self._config.trim_percentile
+            metrics[idx]["react_energy_is_novel"] = idx in flags
         return flags, metrics
 
     @property

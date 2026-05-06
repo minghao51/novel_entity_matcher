@@ -31,6 +31,8 @@ _SCORE_KEYS = [
     "setfit_centroid_score",
     "mahalanobis_novelty_score",
     "lof_novelty_score",
+    "energy_score",
+    "log_likelihood",
 ]
 
 _FLAG_KEYS = [
@@ -46,6 +48,9 @@ _FLAG_KEYS = [
     "setfit_centroid_is_novel",
     "mahalanobis_is_novel",
     "lof_is_outlier",
+    "energy_is_novel",
+    "mixture_gaussian_is_novel",
+    "react_energy_is_novel",
 ]
 
 
@@ -88,6 +93,9 @@ class SignalCombiner:
             "setfit_centroid": self.weights.setfit_centroid,
             "mahalanobis": self.weights.mahalanobis,
             "lof": self.weights.lof,
+            "energy_ood": self.weights.energy_ood,
+            "mixture_gaussian": self.weights.mixture_gaussian,
+            "react_energy": self.weights.react_energy,
         }
         return weight_map.get(strategy_id, 0.0)
 
@@ -195,6 +203,13 @@ class SignalCombiner:
         )
         mahalanobis = sample_metrics.get("mahalanobis_novelty_score", 0.0)
         lof = sample_metrics.get("lof_novelty_score", 0.0)
+        energy_ood = 1.0 if sample_metrics.get("energy_is_novel", False) else 0.0
+        mixture_gaussian = (
+            1.0 if sample_metrics.get("mixture_gaussian_is_novel", False) else 0.0
+        )
+        react_energy = (
+            1.0 if sample_metrics.get("react_energy_is_novel", False) else 0.0
+        )
 
         # For strategies with continuous scores, use the score directly
         uncertainty = sample_metrics.get("uncertainty_score", 0.0)
@@ -231,6 +246,12 @@ class SignalCombiner:
             weighted_score += self.weights.mahalanobis * mahalanobis
         if "lof" in active_strategies:
             weighted_score += self.weights.lof * lof
+        if "energy_ood" in active_strategies:
+            weighted_score += self.weights.energy_ood * energy_ood
+        if "mixture_gaussian" in active_strategies:
+            weighted_score += self.weights.mixture_gaussian * mixture_gaussian
+        if "react_energy" in active_strategies:
+            weighted_score += self.weights.react_energy * react_energy
 
         return float(np.clip(weighted_score, 0.0, 1.0))
 
@@ -423,11 +444,11 @@ class SignalCombiner:
         """
         try:
             from sklearn.linear_model import LogisticRegression
-        except ImportError:
+        except ImportError as err:
             raise ImportError(
                 "scikit-learn is required for meta-learner training. "
                 "Install with: pip install scikit-learn"
-            )
+            ) from err
 
         self._meta_model = LogisticRegression(
             C=1.0,

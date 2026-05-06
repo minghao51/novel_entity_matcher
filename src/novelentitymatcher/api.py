@@ -61,13 +61,17 @@ from novelentitymatcher.novelty.config.base import DetectionConfig
 from novelentitymatcher.novelty.config.strategies import (
     ClusteringConfig,
     ConfidenceConfig,
+    EnergyConfig,
     KNNConfig,
     LOFConfig,
     MahalanobisConfig,
+    MixtureGaussianConfig,
     OneClassConfig,
     PatternConfig,
     PrototypicalConfig,
+    ReActConfig,
     SelfKnowledgeConfig,
+    SetFitCentroidConfig,
     SetFitConfig,
     UncertaintyConfig,
 )
@@ -110,15 +114,21 @@ from novelentitymatcher.novelty.storage.review import (
 from novelentitymatcher.novelty.strategies.base import NoveltyStrategy
 from novelentitymatcher.novelty.strategies.clustering import ClusteringStrategy
 from novelentitymatcher.novelty.strategies.confidence import ConfidenceStrategy
+from novelentitymatcher.novelty.strategies.energy import EnergyOODStrategy
 from novelentitymatcher.novelty.strategies.knn_distance import KNNDistanceStrategy
 from novelentitymatcher.novelty.strategies.lof import LOFStrategy
 from novelentitymatcher.novelty.strategies.mahalanobis import (
     MahalanobisDistanceStrategy,
 )
+from novelentitymatcher.novelty.strategies.mixture_gaussian import (
+    MixtureGaussianStrategy,
+)
 from novelentitymatcher.novelty.strategies.oneclass import OneClassStrategy
 from novelentitymatcher.novelty.strategies.pattern import PatternStrategy
 from novelentitymatcher.novelty.strategies.prototypical import PrototypicalStrategy
+from novelentitymatcher.novelty.strategies.react_hybrid import ReActEnergyStrategy
 from novelentitymatcher.novelty.strategies.self_knowledge import SelfKnowledgeStrategy
+from novelentitymatcher.novelty.strategies.setfit_centroid import SetFitCentroidStrategy
 from novelentitymatcher.novelty.strategies.uncertainty import UncertaintyStrategy
 from novelentitymatcher.pipeline.match_result import (
     MatchRecord,
@@ -148,6 +158,8 @@ __all__ = [
     "DiscoveryCluster",
     "DiscoveryPipeline",
     "EmbeddingMatcher",
+    "EnergyConfig",
+    "EnergyOODStrategy",
     "EvaluationReport",
     "FuzzyBlocking",
     "GradualNoveltySplitter",
@@ -169,6 +181,8 @@ __all__ = [
     "Matcher",
     "MatchingError",
     "MetadataBuilder",
+    "MixtureGaussianConfig",
+    "MixtureGaussianStrategy",
     "ModeError",
     "NoOpBlocking",
     "NovelClassAnalysis",
@@ -194,6 +208,8 @@ __all__ = [
     "ProposalReviewRecord",
     "PrototypicalConfig",
     "PrototypicalStrategy",
+    "ReActConfig",
+    "ReActEnergyStrategy",
     "RetrievalAugmentedProposer",
     "SOPTICSBackend",
     "SampleMetrics",
@@ -201,6 +217,8 @@ __all__ = [
     "SelfKnowledgeConfig",
     "SelfKnowledgeStrategy",
     "SemanticMatcherError",
+    "SetFitCentroidConfig",
+    "SetFitCentroidStrategy",
     "SetFitClassifier",
     "SetFitConfig",
     "SignalCombiner",

@@ -97,3 +97,36 @@ class TestMixtureGaussianStrategy:
         )
         assert flags == set()
         assert metrics == {}
+
+    def test_log_likelihood_accounts_for_covariance_scale(self):
+        embs = np.array(
+            [
+                [0.0, 0.0],
+                [0.01, -0.01],
+                [0.0, 5.0],
+                [3.0, 8.0],
+            ],
+            dtype=np.float32,
+        )
+        labels = ["tight", "tight", "wide", "wide"]
+        s = MixtureGaussianStrategy()
+        s.initialize(embs, labels, MixtureGaussianConfig(regularization=1e-4))
+
+        probe = np.array([[0.02, 0.0]], dtype=np.float32)
+        _flags, metrics = s.detect(
+            texts=["probe-tight"],
+            embeddings=probe,
+            predicted_classes=["tight"],
+            confidences=np.array([0.9]),
+        )
+        tight_ll = metrics[0]["log_likelihood"]
+
+        _flags, metrics = s.detect(
+            texts=["probe-wide"],
+            embeddings=probe,
+            predicted_classes=["wide"],
+            confidences=np.array([0.9]),
+        )
+        wide_ll = metrics[0]["log_likelihood"]
+
+        assert tight_ll > wide_ll

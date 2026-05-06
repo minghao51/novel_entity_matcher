@@ -13,12 +13,15 @@ from pydantic import BaseModel, ConfigDict, Field
 from .strategies import (
     ClusteringConfig,
     ConfidenceConfig,
+    EnergyConfig,
     KNNConfig,
     LOFConfig,
     MahalanobisConfig,
+    MixtureGaussianConfig,
     OneClassConfig,
     PatternConfig,
     PrototypicalConfig,
+    ReActConfig,
     SelfKnowledgeConfig,
     SetFitCentroidConfig,
     SetFitConfig,
@@ -106,6 +109,15 @@ class DetectionConfig(BaseModel):
     lof: LOFConfig | None = None
     """Configuration for Local Outlier Factor strategy."""
 
+    energy_ood: EnergyConfig | None = None
+    """Configuration for energy-based OOD strategy."""
+
+    mixture_gaussian: MixtureGaussianConfig | None = None
+    """Configuration for mixture Gaussian OOD strategy."""
+
+    react_energy: ReActConfig | None = None
+    """Configuration for ReAct + energy OOD strategy."""
+
     # Signal combination weights
     weights: WeightConfig | None = None
     """Weights for signal combination."""
@@ -151,6 +163,9 @@ class DetectionConfig(BaseModel):
             "setfit_centroid": self.setfit_centroid or SetFitCentroidConfig(),
             "mahalanobis": self.mahalanobis or MahalanobisConfig(),
             "lof": self.lof or LOFConfig(),
+            "energy_ood": self.energy_ood or EnergyConfig(),
+            "mixture_gaussian": self.mixture_gaussian or MixtureGaussianConfig(),
+            "react_energy": self.react_energy or ReActConfig(),
         }
 
         return config_map.get(strategy_id)

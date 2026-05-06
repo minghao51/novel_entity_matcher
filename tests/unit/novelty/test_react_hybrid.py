@@ -61,6 +61,7 @@ class TestReActEnergyStrategy:
             confidences=np.array([0.5]),
         )
         assert "react_trim_percentile" in metrics[0]
+        assert "react_energy_is_novel" in metrics[0]
         assert isinstance(flags, set)
 
     def test_config_schema(self, strategy):

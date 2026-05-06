@@ -134,6 +134,8 @@ class PipelineConfig(BaseModel):
         enabled: list[str] = []
         if self.match_enabled:
             enabled.append("match")
+        if self.drift_check_enabled:
+            enabled.append("drift_check")
         if self.ood_enabled:
             enabled.append("ood")
         if self.clustering_enabled:

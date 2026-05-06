@@ -13,7 +13,9 @@ from .adapters import (
     OODDetectionStage,
     ProposalStage,
 )
+from .contracts import PipelineStage
 from .orchestrator import PipelineOrchestrator
+from .stages.drift_hook import DriftCheckStage
 
 
 @dataclass
@@ -53,6 +55,10 @@ class PipelineStageConfig:
     proposal_schema_discovery: bool = False
     proposal_schema_max_attributes: int = 10
     proposal_hierarchical: bool = True
+    drift_check_enabled: bool = False
+    drift_baseline_path: str | None = None
+    drift_method: str = "mmd_linear"
+    drift_threshold: float = 0.05
 
 
 class PipelineBuilder:
@@ -117,6 +123,10 @@ class PipelineBuilder:
                 "proposal_schema_max_attributes", 10
             ),
             proposal_hierarchical=kwargs.get("proposal_hierarchical", True),
+            drift_check_enabled=kwargs.get("drift_check_enabled", False),
+            drift_baseline_path=kwargs.get("drift_baseline_path"),
+            drift_method=kwargs.get("drift_method", "mmd_linear"),
+            drift_threshold=kwargs.get("drift_threshold", 0.05),
         )
 
     def build(
@@ -157,48 +167,62 @@ class PipelineBuilder:
                 )
                 clusterer = None
 
-        stages = [
+        stages: list[PipelineStage] = [
             MatcherMetadataStage(
                 collect_sync=cfg.collect_sync,
                 collect_async=cfg.collect_async,
-            ),
-            OODDetectionStage(
-                detector=cfg.detector,
-                enabled=cfg.use_novelty_detector,
-                ood_strategies=cfg.ood_strategies,
-                ood_calibration_mode=cfg.ood_calibration_mode,
-                ood_calibration_alpha=cfg.ood_calibration_alpha,
-                ood_mahalanobis_mode=cfg.ood_mahalanobis_mode,
-            ),
-            CommunityDetectionStage(
-                clusterer=clusterer,
-                enabled=cfg.clustering_enabled,
-                similarity_threshold=cfg.similarity_threshold,
-                min_cluster_size=max(2, cfg.min_cluster_size),
-                clustering_metric=cfg.clustering_metric,
-            ),
-            ClusterEvidenceStage(
-                enabled=cfg.evidence_enabled,
-                max_keywords=cfg.max_keywords,
-                max_examples=cfg.max_examples,
-                token_budget=cfg.token_budget,
-                evidence_method=cfg.evidence_method,
-                use_tfidf=cfg.use_tfidf,
-            ),
-            ProposalStage(
-                proposer=cfg.llm_proposer,
-                existing_classes_resolver=cfg.existing_classes_resolver
-                or (lambda: existing_classes or []),
-                enabled=run_llm_proposal,
-                context_text=context or cfg.context_text,
-                max_retries=cfg.max_retries,
-                force_cluster_level=cfg.prefer_cluster_level,
-                proposal_mode=cfg.proposal_mode,
-                proposal_schema_discovery=cfg.proposal_schema_discovery,
-                proposal_schema_max_attributes=cfg.proposal_schema_max_attributes,
-                proposal_hierarchical=cfg.proposal_hierarchical,
-            ),
+            )
         ]
+        if cfg.drift_check_enabled:
+            stages.append(
+                DriftCheckStage(
+                    baseline_path=cfg.drift_baseline_path,
+                    method=cfg.drift_method,
+                    threshold=cfg.drift_threshold,
+                    enabled=cfg.drift_check_enabled,
+                )
+            )
+
+        stages.extend(
+            [
+                OODDetectionStage(
+                    detector=cfg.detector,
+                    enabled=cfg.use_novelty_detector,
+                    ood_strategies=cfg.ood_strategies,
+                    ood_calibration_mode=cfg.ood_calibration_mode,
+                    ood_calibration_alpha=cfg.ood_calibration_alpha,
+                    ood_mahalanobis_mode=cfg.ood_mahalanobis_mode,
+                ),
+                CommunityDetectionStage(
+                    clusterer=clusterer,
+                    enabled=cfg.clustering_enabled,
+                    similarity_threshold=cfg.similarity_threshold,
+                    min_cluster_size=max(2, cfg.min_cluster_size),
+                    clustering_metric=cfg.clustering_metric,
+                ),
+                ClusterEvidenceStage(
+                    enabled=cfg.evidence_enabled,
+                    max_keywords=cfg.max_keywords,
+                    max_examples=cfg.max_examples,
+                    token_budget=cfg.token_budget,
+                    evidence_method=cfg.evidence_method,
+                    use_tfidf=cfg.use_tfidf,
+                ),
+                ProposalStage(
+                    proposer=cfg.llm_proposer,
+                    existing_classes_resolver=cfg.existing_classes_resolver
+                    or (lambda: existing_classes or []),
+                    enabled=run_llm_proposal,
+                    context_text=context or cfg.context_text,
+                    max_retries=cfg.max_retries,
+                    force_cluster_level=cfg.prefer_cluster_level,
+                    proposal_mode=cfg.proposal_mode,
+                    proposal_schema_discovery=cfg.proposal_schema_discovery,
+                    proposal_schema_max_attributes=cfg.proposal_schema_max_attributes,
+                    proposal_hierarchical=cfg.proposal_hierarchical,
+                ),
+            ]
+        )
 
         return PipelineOrchestrator(stages=stages)
 
@@ -258,5 +282,9 @@ class PipelineBuilder:
                     config, "proposal_schema_max_attributes", 10
                 ),
                 proposal_hierarchical=getattr(config, "proposal_hierarchical", True),
+                drift_check_enabled=getattr(config, "drift_check_enabled", False),
+                drift_baseline_path=getattr(config, "drift_baseline_path", None),
+                drift_method=getattr(config, "drift_method", "mmd_linear"),
+                drift_threshold=getattr(config, "drift_threshold", 0.05),
             )
         )

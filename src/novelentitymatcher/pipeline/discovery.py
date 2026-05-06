@@ -15,8 +15,11 @@ from ..novelty.config.base import DetectionConfig
 from ..novelty.config.strategies import (
     ClusteringConfig,
     ConfidenceConfig,
+    EnergyConfig,
     KNNConfig,
     MahalanobisConfig,
+    MixtureGaussianConfig,
+    ReActConfig,
 )
 from ..novelty.core.detector import NoveltyDetector
 from ..novelty.discovery_base import DiscoveryBase
@@ -205,6 +208,33 @@ class DiscoveryPipeline(DiscoveryBase):
                 calibration_mode=self._config.ood_calibration_mode,
                 calibration_alpha=self._config.ood_calibration_alpha,
                 calibration_method=self._config.ood_calibration_method,
+            ),
+            energy_ood=(
+                kwargs.get("energy_ood")
+                if isinstance(kwargs.get("energy_ood"), EnergyConfig)
+                else (
+                    EnergyConfig(**kwargs["energy_ood"])
+                    if isinstance(kwargs.get("energy_ood"), dict)
+                    else None
+                )
+            ),
+            mixture_gaussian=(
+                kwargs.get("mixture_gaussian")
+                if isinstance(kwargs.get("mixture_gaussian"), MixtureGaussianConfig)
+                else (
+                    MixtureGaussianConfig(**kwargs["mixture_gaussian"])
+                    if isinstance(kwargs.get("mixture_gaussian"), dict)
+                    else None
+                )
+            ),
+            react_energy=(
+                kwargs.get("react_energy")
+                if isinstance(kwargs.get("react_energy"), ReActConfig)
+                else (
+                    ReActConfig(**kwargs["react_energy"])
+                    if isinstance(kwargs.get("react_energy"), dict)
+                    else None
+                )
             ),
         )
 

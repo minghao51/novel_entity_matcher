@@ -120,3 +120,26 @@ class TestInMemoryVectorStore:
         """The dim property should reflect the constructor argument."""
         store = InMemoryVectorStore(dim=128, backend="exact")
         assert store.dim == 128
+
+    def test_upsert_revives_deleted_id(self, store):
+        """Upserting a deleted ID should make it queryable again."""
+        store.delete(["a"])
+        store.upsert(
+            ids=["a"],
+            vectors=np.array([[1.0, 0.0, 0.0]], dtype=np.float32),
+            metadata=[{"type": "x", "priority": 9}],
+        )
+        results = store.query(np.array([1.0, 0.0, 0.0], dtype=np.float32), top_k=1)
+        assert results[0]["id"] == "a"
+        assert store.count() == 4
+
+    def test_upsert_same_id_latest_wins(self):
+        """Repeated upserts should return only the latest vector for an ID."""
+        store = InMemoryVectorStore(dim=2, backend="exact")
+        store.upsert(ids=["a"], vectors=np.array([[1.0, 0.0]], dtype=np.float32))
+        store.upsert(ids=["a"], vectors=np.array([[0.0, 1.0]], dtype=np.float32))
+
+        results = store.query(np.array([0.0, 1.0], dtype=np.float32), top_k=5)
+        ids = [row["id"] for row in results]
+        assert ids == ["a"]
+        assert store.count() == 1

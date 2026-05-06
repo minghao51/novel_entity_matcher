@@ -55,6 +55,15 @@ class WeightConfig(BaseModel):
     lof: float = Field(default=0.15, ge=0.0, le=1.0)
     """Weight for Local Outlier Factor strategy."""
 
+    energy_ood: float = Field(default=0.2, ge=0.0, le=1.0)
+    """Weight for energy-based OOD strategy."""
+
+    mixture_gaussian: float = Field(default=0.2, ge=0.0, le=1.0)
+    """Weight for mixture Gaussian OOD strategy."""
+
+    react_energy: float = Field(default=0.2, ge=0.0, le=1.0)
+    """Weight for ReAct+energy OOD strategy."""
+
     # Adaptive weight control
     adaptive: bool = Field(default=False)
     """Enable adaptive weight computation based on dataset characteristics."""
@@ -92,6 +101,9 @@ class WeightConfig(BaseModel):
             self.setfit_centroid,
             self.mahalanobis,
             self.lof,
+            self.energy_ood,
+            self.mixture_gaussian,
+            self.react_energy,
         ]
 
         total = sum(strategy_weights)
@@ -113,6 +125,9 @@ class WeightConfig(BaseModel):
             setfit_centroid=self.setfit_centroid * factor,
             mahalanobis=self.mahalanobis * factor,
             lof=self.lof * factor,
+            energy_ood=self.energy_ood * factor,
+            mixture_gaussian=self.mixture_gaussian * factor,
+            react_energy=self.react_energy * factor,
             novelty_threshold=self.novelty_threshold,
             knn_gate_threshold=self.knn_gate_threshold,
             strong_uncertainty_threshold=self.strong_uncertainty_threshold,

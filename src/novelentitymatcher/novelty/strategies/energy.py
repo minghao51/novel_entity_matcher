@@ -87,9 +87,11 @@ class EnergyOODStrategy(NoveltyStrategy):
 
     def _compute_energy(self, logits: np.ndarray) -> np.ndarray:
         """Compute energy scores from logits."""
-        return -self._temperature * np.log(
-            np.sum(np.exp(logits / self._temperature), axis=1)
-        )
+        scaled = logits / self._temperature
+        max_per_row = np.max(scaled, axis=1, keepdims=True)
+        stable_sum = np.sum(np.exp(scaled - max_per_row), axis=1)
+        logsumexp = np.log(stable_sum) + max_per_row.squeeze(axis=1)
+        return -self._temperature * logsumexp
 
     def detect(
         self,
@@ -121,6 +123,7 @@ class EnergyOODStrategy(NoveltyStrategy):
                 "energy_score": energy,
                 "energy_threshold": self._threshold,
                 "predicted_class": predicted_classes[idx],
+                "energy_is_novel": energy > self._threshold,
             }
             if energy > self._threshold:
                 flags.add(idx)

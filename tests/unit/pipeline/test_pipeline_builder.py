@@ -8,6 +8,7 @@ from novelentitymatcher.pipeline.adapters import (
 )
 from novelentitymatcher.pipeline.config import PipelineConfig
 from novelentitymatcher.pipeline.pipeline_builder import PipelineBuilder
+from novelentitymatcher.pipeline.stages.drift_hook import DriftCheckStage
 
 
 def test_pipeline_builder_propagates_pipeline_config_stage_options():
@@ -112,3 +113,43 @@ def test_pipeline_builder_rejects_disabled_match_stage():
 
     with pytest.raises(ValueError, match="match_enabled=False is not supported"):
         builder.build()
+
+
+def test_pipeline_builder_inserts_drift_stage_when_enabled():
+    config = PipelineConfig(
+        drift_check_enabled=True,
+        drift_baseline_path="/tmp/baseline",
+        drift_method="cosine_centroid",
+        drift_threshold=0.2,
+    )
+    builder = PipelineBuilder.from_pipeline_config(
+        config,
+        collect_sync=lambda inputs: (None, {}),
+        collect_async=lambda inputs: (None, {}),
+        detector=object(),
+        clusterer=object(),
+        llm_proposer=object(),
+        existing_classes_resolver=lambda: ["known"],
+    )
+    orchestrator = builder.build()
+    drift_stage = next(
+        stage for stage in orchestrator.stages if isinstance(stage, DriftCheckStage)
+    )
+    assert drift_stage.baseline_path == "/tmp/baseline"
+    assert drift_stage.method == "cosine_centroid"
+    assert drift_stage.threshold == 0.2
+
+
+def test_pipeline_builder_skips_drift_stage_when_disabled():
+    config = PipelineConfig(drift_check_enabled=False)
+    builder = PipelineBuilder.from_pipeline_config(
+        config,
+        collect_sync=lambda inputs: (None, {}),
+        collect_async=lambda inputs: (None, {}),
+        detector=object(),
+        clusterer=object(),
+        llm_proposer=object(),
+        existing_classes_resolver=lambda: ["known"],
+    )
+    orchestrator = builder.build()
+    assert all(not isinstance(stage, DriftCheckStage) for stage in orchestrator.stages)

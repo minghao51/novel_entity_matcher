@@ -37,6 +37,7 @@ class InMemoryVectorStore:
         self._index = ANNIndex(dim=dim, backend=backend, **kwargs)
         self._metadata: dict[str, dict[str, Any]] = {}
         self._deleted_ids: set[str] = set()
+        self._latest_positions: dict[str, int] = {}
 
     def upsert(
         self,
@@ -45,6 +46,11 @@ class InMemoryVectorStore:
         metadata: list[dict[str, Any]] | None = None,
     ) -> None:
         self._index.add_vectors(vectors, labels=ids)
+        for id_ in ids:
+            self._deleted_ids.discard(id_)
+        start_idx = len(self._index.labels) - len(ids)
+        for offset, id_ in enumerate(ids):
+            self._latest_positions[id_] = start_idx + offset
         if metadata:
             for id_, meta in zip(ids, metadata, strict=False):
                 self._metadata[id_] = meta
@@ -55,14 +61,18 @@ class InMemoryVectorStore:
         top_k: int = 10,
         filter: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        # Over-fetch to account for deleted entries.
-        fetch_k = top_k + len(self._deleted_ids)
+        # Over-fetch to account for deleted and stale superseded entries.
+        stale_entries = max(0, len(self._index.labels) - len(self._latest_positions))
+        fetch_k = top_k + len(self._deleted_ids) + stale_entries
         similarities, indices = self._index.knn_query(vector, k=max(fetch_k, top_k))
         results: list[dict[str, Any]] = []
         for sim, idx in zip(similarities[0], indices[0], strict=False):
             if idx < 0 or idx >= len(self._index.labels):
                 continue
             label = self._index.labels[idx]
+            latest_idx = self._latest_positions.get(label)
+            if latest_idx is not None and idx != latest_idx:
+                continue
             if label in self._deleted_ids:
                 continue
             if filter is not None:
@@ -86,7 +96,7 @@ class InMemoryVectorStore:
             self._deleted_ids.add(id_)
 
     def count(self) -> int:
-        return self._index.n_elements - len(self._deleted_ids)
+        return sum(1 for id_ in self._latest_positions if id_ not in self._deleted_ids)
 
     @property
     def dim(self) -> int:

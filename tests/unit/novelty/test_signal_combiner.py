@@ -306,6 +306,56 @@ class TestSignalCombinerWeighted:
         assert 0 in novel_indices
         assert novelty_scores[0] == pytest.approx(0.78)
 
+    def test_weighted_combination_includes_phase67_strategies(self):
+        detector = NoveltyDetector(
+            config=DetectionConfig(
+                strategies=["energy_ood", "mixture_gaussian", "react_energy"],
+                combine_method="weighted",
+                weights=WeightConfig(
+                    confidence=0.0,
+                    uncertainty=0.0,
+                    knn=0.0,
+                    cluster=0.0,
+                    self_knowledge=0.0,
+                    pattern=0.0,
+                    oneclass=0.0,
+                    prototypical=0.0,
+                    setfit=0.0,
+                    setfit_centroid=0.0,
+                    mahalanobis=0.0,
+                    lof=0.0,
+                    energy_ood=0.2,
+                    mixture_gaussian=0.3,
+                    react_energy=0.5,
+                    novelty_threshold=0.6,
+                    knn_gate_threshold=1.0,
+                    strong_knn_threshold=1.0,
+                    strong_uncertainty_threshold=1.0,
+                ),
+                allowed_maturities=["production", "experimental"],
+            )
+        )
+
+        strategy_outputs = {
+            "energy_ood": ({0}, {0: {"energy_is_novel": True}}),
+            "mixture_gaussian": ({0}, {0: {"mixture_gaussian_is_novel": True}}),
+            "react_energy": ({0}, {0: {"react_energy_is_novel": True}}),
+        }
+        all_metrics = {
+            0: {
+                "energy_is_novel": True,
+                "mixture_gaussian_is_novel": True,
+                "react_energy_is_novel": True,
+            }
+        }
+
+        novel_indices, novelty_scores = detector._combiner.combine(
+            strategy_outputs, all_metrics
+        )
+
+        assert 0 in novel_indices
+        assert novelty_scores[0] == pytest.approx(1.0)
+
 
 class TestSignalCombinerEdgeCases:
     """Tests for edge cases in signal combining."""

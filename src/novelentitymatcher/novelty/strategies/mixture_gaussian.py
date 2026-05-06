@@ -90,16 +90,21 @@ class MixtureGaussianStrategy(NoveltyStrategy):
             all_means = np.array([m["mean"] for m in self._class_models.values()])
             mean = all_means.mean(axis=0)
             diff = x - mean
+            cov = np.eye(self._dim) * self._config.regularization
             cov_inv = np.eye(self._dim) / self._config.regularization
             prior = 1.0 / max(len(self._class_models), 1)
         else:
             mean = model["mean"]
+            cov = model["cov"]
             cov_inv = model["cov_inv"]
             prior = model["prior"]
 
         diff = x - mean
         mahal = float(diff @ cov_inv @ diff)
-        ll = -0.5 * mahal
+        sign, logdet = np.linalg.slogdet(cov)
+        if sign <= 0:
+            logdet = float(np.log(max(self._config.regularization, 1e-12)) * self._dim)
+        ll = -0.5 * (mahal + logdet + self._dim * np.log(2.0 * np.pi))
         if self._config.use_priors:
             ll += np.log(max(prior, 1e-12))
         return ll
@@ -123,6 +128,7 @@ class MixtureGaussianStrategy(NoveltyStrategy):
                 "log_likelihood": ll,
                 "log_likelihood_threshold": self._threshold,
                 "predicted_class": pred_class,
+                "mixture_gaussian_is_novel": ll < self._threshold,
             }
             if ll < self._threshold:
                 flags.add(idx)
