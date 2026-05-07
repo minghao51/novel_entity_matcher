@@ -163,12 +163,16 @@ class CommunityDetectionStage(PipelineStage):
         similarity_threshold: float = 0.75,
         min_cluster_size: int = 2,
         clustering_metric: str = "cosine",
+        clustering_resolution: float = 1.0,
+        clustering_graph_k: int = 15,
     ):
         self.clusterer = clusterer
         self.enabled = enabled
         self.similarity_threshold = similarity_threshold
         self.min_cluster_size = min_cluster_size
         self.clustering_metric = clustering_metric
+        self.clustering_resolution = clustering_resolution
+        self.clustering_graph_k = clustering_graph_k
 
     def run(self, context: StageContext) -> StageResult:
         report = context.artifacts["novel_sample_report"]
@@ -217,6 +221,9 @@ class CommunityDetectionStage(PipelineStage):
                 "num_clusters": len(clusters),
                 "backend": backend,
                 "cluster_sizes": [cluster.sample_count for cluster in clusters],
+                "clustering_metric": self.clustering_metric,
+                "clustering_resolution": self.clustering_resolution,
+                "clustering_graph_k": self.clustering_graph_k,
             },
         )
 
@@ -242,6 +249,8 @@ class CommunityDetectionStage(PipelineStage):
             labels, _, info = self.clusterer.fit_predict(
                 embeddings,
                 metric=self.clustering_metric,
+                resolution=self.clustering_resolution,
+                k=self.clustering_graph_k,
             )
             backend_name = str(
                 info.get("backend", getattr(self.clusterer, "backend", "unknown"))

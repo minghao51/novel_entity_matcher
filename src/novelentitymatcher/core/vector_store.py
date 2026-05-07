@@ -101,3 +101,105 @@ class InMemoryVectorStore:
     @property
     def dim(self) -> int:
         return self._index.dim
+
+
+class ChromaVectorStore:
+    """Vector store backed by ChromaDB (optional dependency).
+
+    Requires ``chromadb``. Import errors are raised lazily on first use.
+    """
+
+    def __init__(
+        self,
+        collection_name: str = "novel_entity_matcher",
+        persist_directory: str | None = None,
+        **kwargs: Any,
+    ):
+        self._collection_name = collection_name
+        self._persist_directory = persist_directory
+        self._client: Any = None
+        self._collection: Any = None
+        self._dim: int | None = None
+        self._kwargs = kwargs
+
+    def _ensure_initialized(self) -> None:
+        if self._collection is not None:
+            return
+        try:
+            import chromadb
+        except ImportError as exc:
+            raise ImportError(
+                "chromadb is required. Install with: pip install chromadb"
+            ) from exc
+
+        self._client = (
+            chromadb.PersistentClient(
+                path=self._persist_directory,
+            )
+            if self._persist_directory
+            else chromadb.EphemeralClient()
+        )
+
+        self._collection = self._client.get_or_create_collection(
+            name=self._collection_name,
+            metadata={"hnsw:space": "cosine"},
+        )
+
+    def upsert(
+        self,
+        ids: list[str],
+        vectors: np.ndarray,
+        metadata: list[dict[str, Any]] | None = None,
+    ) -> None:
+        self._ensure_initialized()
+        metadatas: list[dict[str, Any] | None] = metadata or [None] * len(ids)  # type: ignore[list-item,assignment]
+        self._collection.upsert(
+            ids=ids,
+            embeddings=vectors.tolist(),
+            metadatas=metadatas,
+        )
+        if self._dim is None and vectors.shape[1] > 0:
+            self._dim = vectors.shape[1]
+
+    def query(
+        self,
+        vector: np.ndarray,
+        top_k: int = 10,
+        filter: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        self._ensure_initialized()
+        results = self._collection.query(
+            query_embeddings=vector.reshape(1, -1).tolist(),
+            n_results=top_k,
+            where=filter,
+        )
+        out: list[dict[str, Any]] = []
+        if not results["ids"]:
+            return out
+        for _, (id_, dist, meta) in enumerate(
+            zip(
+                results["ids"][0],
+                results["distances"][0],
+                results["metadatas"][0],
+                strict=False,
+            )
+        ):
+            if id_ is None:
+                continue
+            entry: dict[str, Any] = {"id": id_, "score": float(1.0 - dist)}
+            if meta is not None:
+                entry["metadata"] = meta
+            out.append(entry)
+        return out
+
+    def delete(self, ids: list[str]) -> None:
+        self._ensure_initialized()
+        self._collection.delete(ids=ids)
+
+    def count(self) -> int:
+        self._ensure_initialized()
+        return self._collection.count()
+
+    @property
+    def dim(self) -> int | None:
+        return self._dim

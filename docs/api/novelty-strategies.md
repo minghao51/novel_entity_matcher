@@ -25,3 +25,9 @@
 ::: novelentitymatcher.novelty.strategies.self_knowledge
 
 ::: novelentitymatcher.novelty.strategies.conformal
+
+::: novelentitymatcher.novelty.strategies.energy
+
+::: novelentitymatcher.novelty.strategies.mixture_gaussian
+
+::: novelentitymatcher.novelty.strategies.react_hybrid

@@ -805,15 +805,16 @@ class NoveltyBenchmark:
                 print(f"  setfit margin={margin} failed: {e}")
         return results
 
-    def benchmark_mahalanobis_conformal(
+    def _benchmark_conformal_strategy(
         self,
         split: SplitData,
-        calibration_methods: list[str] | None = None,
+        strategy_name: str,
+        config_cls: type,
+        strategy_cls: type,
         alpha_values: list[float] | None = None,
+        method_values: list[str] | None = None,
+        score_fallback_key: str = "",
     ) -> list[StrategyResult]:
-        from ..novelty.config.strategies import MahalanobisConfig
-        from ..novelty.strategies.mahalanobis import MahalanobisDistanceStrategy
-
         train_emb = self.encode_texts(split.train_texts)
         val_emb = self.encode_texts(split.val_texts)
         test_emb = self.encode_texts(split.test_texts)
@@ -821,18 +822,21 @@ class NoveltyBenchmark:
         test_true = prepare_binary_labels(split.test_labels, "__OOD__")
 
         results = []
-        methods = calibration_methods or ["split", "mondrian"]
         alphas = alpha_values or [0.05, 0.1, 0.15, 0.2]
+        methods: list[str | None] = method_values or [None]  # type: ignore[assignment]
 
         for method in methods:
             for alpha in alphas:
                 try:
-                    config = MahalanobisConfig(
-                        calibration_mode="conformal",
-                        calibration_method=method,  # type: ignore[arg-type]
-                        calibration_alpha=alpha,
-                    )
-                    strategy = MahalanobisDistanceStrategy()
+                    config_kwargs: dict[str, Any] = {
+                        "calibration_mode": "conformal",
+                        "calibration_alpha": alpha,
+                    }
+                    if method is not None:
+                        config_kwargs["calibration_method"] = method
+                    config = config_cls(**config_kwargs)
+
+                    strategy = strategy_cls()
 
                     start = time.perf_counter()
                     strategy.initialize(train_emb, split.train_labels, config)
@@ -854,8 +858,7 @@ class NoveltyBenchmark:
                     val_scores = np.array(
                         [
                             val_metrics[i].get(
-                                "p_value",
-                                val_metrics[i].get("mahalanobis_novelty_score", 0.0),
+                                "p_value", val_metrics[i].get(score_fallback_key, 0.0)
                             )
                             for i in range(len(split.val_texts))
                         ]
@@ -863,28 +866,96 @@ class NoveltyBenchmark:
                     test_scores = np.array(
                         [
                             test_metrics[i].get(
-                                "p_value",
-                                test_metrics[i].get("mahalanobis_novelty_score", 0.0),
+                                "p_value", test_metrics[i].get(score_fallback_key, 0.0)
                             )
                             for i in range(len(split.test_texts))
                         ]
                     )
                     val_m = compute_ood_metrics(val_true, val_scores)
                     test_m = compute_ood_metrics(test_true, test_scores)
+
+                    params: dict[str, Any] = {"alpha": alpha}
+                    if method is not None:
+                        params["method"] = method
                     results.append(
                         self._make_result(
-                            "mahalanobis_conformal",
-                            {"method": method, "alpha": alpha},
-                            val_m,
-                            test_m,
-                            train_time=train_time,
+                            strategy_name, params, val_m, test_m, train_time=train_time
                         )
                     )
                 except (ValueError, RuntimeError) as e:
-                    print(
-                        f"  mahalanobis_conformal method={method} alpha={alpha} failed: {e}"
-                    )
+                    ctx = f"alpha={alpha}"
+                    if method is not None:
+                        ctx = f"method={method} {ctx}"
+                    print(f"  {strategy_name} {ctx} failed: {e}")
         return results
+
+    def benchmark_energy(
+        self,
+        split: SplitData,
+        alpha_values: list[float] | None = None,
+    ) -> list[StrategyResult]:
+        from ..novelty.config.strategies import EnergyConfig
+        from ..novelty.strategies.energy import EnergyOODStrategy
+
+        return self._benchmark_conformal_strategy(
+            split,
+            "energy_ood",
+            EnergyConfig,
+            EnergyOODStrategy,
+            alpha_values=alpha_values,
+            score_fallback_key="energy_score",
+        )
+
+    def benchmark_mixture_gaussian(
+        self,
+        split: SplitData,
+        alpha_values: list[float] | None = None,
+    ) -> list[StrategyResult]:
+        from ..novelty.config.strategies import MixtureGaussianConfig
+        from ..novelty.strategies.mixture_gaussian import MixtureGaussianStrategy
+
+        return self._benchmark_conformal_strategy(
+            split,
+            "mixture_gaussian",
+            MixtureGaussianConfig,
+            MixtureGaussianStrategy,
+            alpha_values=alpha_values,
+        )
+
+    def benchmark_react_hybrid(
+        self,
+        split: SplitData,
+        alpha_values: list[float] | None = None,
+    ) -> list[StrategyResult]:
+        from ..novelty.config.strategies import ReActConfig
+        from ..novelty.strategies.react_hybrid import ReActEnergyStrategy
+
+        return self._benchmark_conformal_strategy(
+            split,
+            "react_energy",
+            ReActConfig,
+            ReActEnergyStrategy,
+            alpha_values=alpha_values,
+        )
+
+    def benchmark_mahalanobis_conformal(
+        self,
+        split: SplitData,
+        calibration_methods: list[str] | None = None,
+        alpha_values: list[float] | None = None,
+    ) -> list[StrategyResult]:
+        from ..novelty.config.strategies import MahalanobisConfig
+        from ..novelty.strategies.mahalanobis import MahalanobisDistanceStrategy
+
+        return self._benchmark_conformal_strategy(
+            split,
+            "mahalanobis_conformal",
+            MahalanobisConfig,
+            MahalanobisDistanceStrategy,
+            alpha_values=alpha_values,
+            method_values=calibration_methods,
+            score_fallback_key="mahalanobis_novelty_score",
+        )
 
     def benchmark_ensemble(self, split: SplitData) -> list[StrategyResult]:
         train_emb = self.encode_texts(split.train_texts)
@@ -1166,6 +1237,51 @@ class NoveltyBenchmark:
                     best = max(results, key=lambda x: x.val_auroc)
                     print(
                         f"  Best: method={best.params.get('method')}, alpha={best.params.get('alpha')}, "
+                        f"Val AUROC={best.val_auroc:.3f}, Test AUROC={best.test_auroc:.3f}"
+                    )
+            except (ValueError, RuntimeError) as e:
+                print(f"  Failed: {e}")
+
+            print("\n--- Energy OOD (Conformal) ---")
+            try:
+                results = self.benchmark_energy(split)
+                for r in results:
+                    r.dataset = ds_name
+                    all_results.append(r)
+                if results:
+                    best = max(results, key=lambda x: x.val_auroc)
+                    print(
+                        f"  Best: alpha={best.params.get('alpha')}, "
+                        f"Val AUROC={best.val_auroc:.3f}, Test AUROC={best.test_auroc:.3f}"
+                    )
+            except (ValueError, RuntimeError) as e:
+                print(f"  Failed: {e}")
+
+            print("\n--- Mixture Gaussian (Conformal) ---")
+            try:
+                results = self.benchmark_mixture_gaussian(split)
+                for r in results:
+                    r.dataset = ds_name
+                    all_results.append(r)
+                if results:
+                    best = max(results, key=lambda x: x.val_auroc)
+                    print(
+                        f"  Best: alpha={best.params.get('alpha')}, "
+                        f"Val AUROC={best.val_auroc:.3f}, Test AUROC={best.test_auroc:.3f}"
+                    )
+            except (ValueError, RuntimeError) as e:
+                print(f"  Failed: {e}")
+
+            print("\n--- ReAct+Energy (Conformal) ---")
+            try:
+                results = self.benchmark_react_hybrid(split)
+                for r in results:
+                    r.dataset = ds_name
+                    all_results.append(r)
+                if results:
+                    best = max(results, key=lambda x: x.val_auroc)
+                    print(
+                        f"  Best: alpha={best.params.get('alpha')}, "
                         f"Val AUROC={best.val_auroc:.3f}, Test AUROC={best.test_auroc:.3f}"
                     )
             except (ValueError, RuntimeError) as e:

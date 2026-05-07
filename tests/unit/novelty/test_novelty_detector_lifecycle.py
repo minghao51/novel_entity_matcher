@@ -6,6 +6,7 @@ import pytest
 from novelentitymatcher.novelty import DetectionConfig
 from novelentitymatcher.novelty.config.strategies import ConfidenceConfig, KNNConfig
 from novelentitymatcher.novelty.core.detector import NoveltyDetector
+from novelentitymatcher.novelty.core.score_calibrator import OODScoreCalibrator
 from novelentitymatcher.novelty.core.strategies import StrategyRegistry
 from novelentitymatcher.novelty.strategies.base import NoveltyStrategy
 
@@ -254,3 +255,49 @@ class TestNoveltyDetectorSignatureComputation:
         sig2 = detector._compute_reference_signature(emb, labels)
 
         assert sig1 == sig2
+
+
+def test_calibrator_reference_fit_uses_blank_reference_texts():
+    unique_probe_id = "test_probe_calibrator_ref_texts"
+    observed_text_batches: list[list[str]] = []
+
+    class ProbeStrategy(NoveltyStrategy):
+        strategy_id = unique_probe_id
+
+        def initialize(self, reference_embeddings, reference_labels, config):
+            return None
+
+        def detect(self, texts, embeddings, predicted_classes, confidences, **kwargs):
+            observed_text_batches.append(list(texts))
+            return set(), {
+                i: {"probe_numeric_score": float(i + 1)} for i in range(len(texts))
+            }
+
+        @property
+        def config_schema(self):
+            return object
+
+        def get_weight(self) -> float:
+            return 1.0
+
+    if StrategyRegistry.is_registered(unique_probe_id):
+        StrategyRegistry.unregister(unique_probe_id)
+    StrategyRegistry.register(ProbeStrategy)
+    try:
+        detector = NoveltyDetector(
+            config=DetectionConfig(strategies=[unique_probe_id]),
+            calibrator=OODScoreCalibrator(),
+        )
+        detector.detect_novel_samples(
+            texts=["query-text"],
+            confidences=np.array([0.9]),
+            embeddings=np.array([[1.0, 0.0]], dtype=np.float32),
+            predicted_classes=["known"],
+            reference_embeddings=np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32),
+            reference_labels=["label-a", "label-b"],
+        )
+    finally:
+        StrategyRegistry.unregister(unique_probe_id)
+
+    assert observed_text_batches[0] == ["", ""]
+    assert observed_text_batches[1] == ["query-text"]

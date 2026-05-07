@@ -24,7 +24,14 @@ _VALID_OOD_STRATEGIES = {
     "react_energy",
 }
 
-_VALID_CLUSTERING_BACKENDS = {"auto", "hdbscan", "soptics", "umap_hdbscan"}
+_VALID_CLUSTERING_BACKENDS = {
+    "auto",
+    "hdbscan",
+    "soptics",
+    "umap_hdbscan",
+    "leiden",
+    "louvain",
+}
 
 
 class PipelineConfig(BaseModel):
@@ -65,6 +72,14 @@ class PipelineConfig(BaseModel):
     clustering_metric: Literal["cosine", "euclidean"] = Field(default="cosine")
     clustering_min_samples: int | None = Field(default=None, ge=1)
     clustering_cluster_selection_epsilon: float = Field(default=0.0, ge=0.0)
+    clustering_resolution: float = Field(default=1.0, gt=0.0)
+    clustering_graph_k: int = Field(default=15, ge=2)
+
+    # --- Stability filter ---
+    stability_filter_enabled: bool = Field(default=False)
+    stability_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    stability_n_bootstrap: int = Field(default=10, ge=2)
+    stability_sample_fraction: float = Field(default=0.8, gt=0.0, le=1.0)
 
     # --- Evidence extraction ---
     evidence_enabled: bool = Field(default=True)
@@ -140,6 +155,8 @@ class PipelineConfig(BaseModel):
             enabled.append("ood")
         if self.clustering_enabled:
             enabled.append("cluster")
+        if self.stability_filter_enabled:
+            enabled.append("stability_filter")
         if self.evidence_enabled:
             enabled.append("evidence")
         if self.proposal_enabled:

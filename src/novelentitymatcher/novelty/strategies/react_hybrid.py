@@ -49,6 +49,7 @@ class ReActEnergyStrategy(NoveltyStrategy):
     def __init__(self):
         self._config: ReActConfig = None
         self._inner: EnergyOODStrategy | None = None
+        self._calibrator: Any = None
 
     def initialize(
         self,
@@ -56,20 +57,63 @@ class ReActEnergyStrategy(NoveltyStrategy):
         reference_labels: list[str],
         config: ReActConfig,
     ) -> None:
-        """Initialize ReAct wrapper and underlying energy strategy."""
+        """Initialize ReAct wrapper and underlying energy strategy.
+
+        When ``calibration_mode="conformal"``, trains a calibrator on
+        trimmed-embedding energies.
+        """
         self._config = config or ReActConfig()
-        # Initialize inner strategy with trimmed reference embeddings
+        self._calibrator = None
         trimmed = trim_activations(reference_embeddings, self._config.trim_percentile)
         self._inner = EnergyOODStrategy()
         from ..config.strategies import EnergyConfig
 
         inner_config = EnergyConfig()
         self._inner.initialize(trimmed, reference_labels, inner_config)
+
+        if self._config.calibration_mode == "conformal":
+            self._initialize_conformal(trimmed, reference_labels)
+
         logger.info(
             "ReActEnergyStrategy initialized: trim_percentile=%.2f, inner=%s",
             self._config.trim_percentile,
             self._inner.strategy_id,
         )
+
+    def _initialize_conformal(
+        self,
+        trimmed_embeddings: np.ndarray,
+        reference_labels: list[str],
+    ) -> None:
+        """Train conformal calibrator on trimmed-embedding energies."""
+        from .conformal import ConformalCalibrator
+
+        n = len(trimmed_embeddings)
+        frac = self._config.calibration_set_fraction
+        n_cal = max(1, int(n * frac))
+        if n_cal >= n:
+            logger.warning(
+                "ReAct conformal calibration disabled: split too large (n=%d, n_cal=%d)",
+                n,
+                n_cal,
+            )
+            return
+
+        rng = np.random.RandomState(42)
+        indices = rng.permutation(n)
+        cal_indices = indices[:n_cal]
+
+        cal_embeddings = trimmed_embeddings[cal_indices]
+        cal_labels = [reference_labels[i] for i in cal_indices]
+
+        logits = self._inner._compute_logits(cal_embeddings)
+        energies = self._inner._compute_energy(logits)
+
+        self._calibrator = ConformalCalibrator(
+            alpha=self._config.calibration_alpha,
+            method=self._config.calibration_method,
+        )
+        self._calibrator.calibrate(energies, np.array(cal_labels))
 
     def detect(
         self,
@@ -79,12 +123,49 @@ class ReActEnergyStrategy(NoveltyStrategy):
         confidences: np.ndarray,
         **kwargs,
     ) -> tuple[set[int], dict[int, dict[str, Any]]]:
-        """Detect novel samples with ReAct trimming before energy scoring."""
+        """Detect novel samples with ReAct trimming before energy scoring.
+
+        When ``calibration_mode="conformal"``, uses own calibrator trained
+        on trimmed-embedding energies.
+        """
         trimmed = trim_activations(embeddings, self._config.trim_percentile)
+
+        if (
+            self._config.calibration_mode == "conformal"
+            and self._calibrator is not None
+            and self._calibrator.is_calibrated
+        ):
+            logits = self._inner._compute_logits(trimmed)
+            energies = self._inner._compute_energy(logits)
+
+            if self._config.calibration_method == "mondrian":
+                p_values = self._calibrator.predict_pvalues_for_class(
+                    energies, predicted_classes
+                )
+            else:
+                p_values = self._calibrator.predict_pvalues(energies)
+
+            flags = set()
+            metrics = {}
+            for idx in range(len(embeddings)):
+                energy = float(energies[idx])
+                metrics[idx] = {
+                    "energy_score": energy,
+                    "energy_threshold": self._inner._threshold,
+                    "predicted_class": predicted_classes[idx],
+                    "p_value": float(p_values[idx]),
+                    "calibration_mode": "conformal",
+                    "react_trim_percentile": self._config.trim_percentile,
+                    "react_energy_is_novel": p_values[idx]
+                    < self._config.calibration_alpha,
+                }
+                if p_values[idx] < self._config.calibration_alpha:
+                    flags.add(idx)
+            return flags, metrics
+
         flags, metrics = self._inner.detect(
             texts, trimmed, predicted_classes, confidences, **kwargs
         )
-        # Annotate metrics with ReAct info
         for idx in metrics:
             metrics[idx]["react_trim_percentile"] = self._config.trim_percentile
             metrics[idx]["react_energy_is_novel"] = idx in flags

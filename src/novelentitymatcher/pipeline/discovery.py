@@ -297,6 +297,11 @@ class DiscoveryPipeline(DiscoveryBase):
     # Public API: fit
     # ------------------------------------------------------------------
 
+    def add_entities(self, new_entities: list[dict[str, Any]]) -> None:
+        self.matcher.add_entities(new_entities)
+        self.entities = self.matcher.entities
+        self.detector.reset()
+
     def fit(self, *args: Any, **kwargs: Any) -> DiscoveryPipeline:
         self.matcher.fit(*args, **kwargs)
         return self
@@ -452,10 +457,12 @@ class DiscoveryPipeline(DiscoveryBase):
         proposed_name = getattr(proposal, "name", None)
         if proposed_name is None:
             return
+        new_entity = {"id": proposed_name, "name": proposed_name}
         if hasattr(self.matcher, "add_entity"):
-            self.matcher.add_entity({"id": proposed_name, "name": proposed_name})
+            self.matcher.add_entity(new_entity)
         elif hasattr(self.matcher, "entities"):
-            self.matcher.entities.append({"id": proposed_name, "name": proposed_name})
+            self.matcher.entities.append(new_entity)
+        self.entities.append(new_entity)
 
     def list_review_records(
         self, discovery_id: str | None = None

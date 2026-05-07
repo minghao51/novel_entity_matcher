@@ -57,6 +57,8 @@ def test_pipeline_builder_propagates_runtime_knobs():
         clustering_metric="euclidean",
         clustering_min_samples=7,
         clustering_cluster_selection_epsilon=0.2,
+        clustering_resolution=1.4,
+        clustering_graph_k=19,
         proposal_mode="sample",
         proposal_schema_discovery=True,
         proposal_schema_max_attributes=6,
@@ -90,7 +92,11 @@ def test_pipeline_builder_propagates_runtime_knobs():
 
     assert cluster_stage.clusterer.min_samples == 7
     assert cluster_stage.clusterer.cluster_selection_epsilon == 0.2
+    assert cluster_stage.clusterer.backend_kwargs["resolution"] == 1.4
+    assert cluster_stage.clusterer.backend_kwargs["k"] == 19
     assert cluster_stage.clustering_metric == "euclidean"
+    assert cluster_stage.clustering_resolution == 1.4
+    assert cluster_stage.clustering_graph_k == 19
     assert proposal_stage.proposal_mode == "sample"
     assert proposal_stage.proposal_schema_discovery is True
     assert proposal_stage.proposal_schema_max_attributes == 6

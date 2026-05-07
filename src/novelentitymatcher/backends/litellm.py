@@ -1,5 +1,6 @@
 # backends/litellm.py
 import os
+from typing import Any
 
 from .base import EmbeddingBackend, RerankerBackend
 
@@ -9,8 +10,8 @@ try:
     LITELLM_AVAILABLE = True
 except ImportError:
     LITELLM_AVAILABLE = False
-    embedding = None
-    rerank = None
+    embedding: Any = None  # type: ignore[no-redef]
+    rerank: Any = None  # type: ignore[no-redef]
 
 
 class LiteLLMEmbedding(EmbeddingBackend):

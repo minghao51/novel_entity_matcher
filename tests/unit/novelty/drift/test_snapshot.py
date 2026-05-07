@@ -58,6 +58,19 @@ class TestDistributionSnapshot:
         assert np.allclose(loaded.covariance, snap.covariance)
         assert set(loaded.per_class_stats.keys()) == set(snap.per_class_stats.keys())
 
+    def test_save_load_preserves_per_class_covariance(self, embeddings, labels):
+        snap = DistributionSnapshot.from_embeddings(embeddings, labels)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "snapshot"
+            snap.save(path)
+            loaded = DistributionSnapshot.load(path)
+
+        for label in snap.per_class_stats:
+            assert np.allclose(
+                loaded.per_class_stats[label]["cov"],
+                snap.per_class_stats[label]["cov"],
+            )
+
     def test_1d_embedding(self):
         embs = np.array([[1.0], [2.0], [3.0], [4.0]], dtype=np.float32)
         labels = ["a", "a", "b", "b"]

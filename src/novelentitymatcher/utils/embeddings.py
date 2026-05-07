@@ -41,11 +41,39 @@ class ModelCache:
         """
         self._cache: dict[str, Any] = {}
         self._access_times: dict[str, float] = {}
-        self._max_memory_gb = max_memory_gb
+        self._memory_bytes: dict[str, int] = {}
+        self._max_memory_bytes = int(max_memory_gb * 1024**3)
         self._ttl_seconds = ttl_seconds
         self._lock = threading.RLock()
         self._hits = 0
         self._misses = 0
+
+    @staticmethod
+    def _estimate_model_bytes(model: Any) -> int:
+        """Estimate model memory footprint in bytes from config attributes."""
+        try:
+            config = getattr(model, "config", None)
+            if config is None:
+                return 0
+            vocab_size = int(getattr(config, "vocab_size", 30_000))
+            hidden_size = int(getattr(config, "hidden_size", 768))
+            intermediate = int(getattr(config, "intermediate_size", 3072))
+            num_layers = int(getattr(config, "num_hidden_layers", 12))
+            bytes_per_param = 4
+            est_params = vocab_size * hidden_size + num_layers * (
+                4 * hidden_size**2 + 8 * hidden_size * intermediate + 4 * hidden_size
+            )
+            return int(est_params * bytes_per_param * 2)
+        except Exception:
+            return 0
+
+    def _evict_if_needed(self) -> None:
+        """Evict least-recently-used entries until within memory budget."""
+        while self._cache and sum(self._memory_bytes.values()) > self._max_memory_bytes:
+            oldest_key = min(self._access_times, key=lambda k: self._access_times[k])
+            del self._cache[oldest_key]
+            del self._access_times[oldest_key]
+            del self._memory_bytes[oldest_key]
 
     def get_or_load(self, model_name: str, factory: Callable[[], Any]) -> Any:
         """
@@ -61,14 +89,13 @@ class ModelCache:
         with self._lock:
             current_time = time.time()
 
-            # Check if model is in cache and not expired
             if model_name in self._cache:
                 if self._ttl_seconds is not None:
                     age = current_time - self._access_times.get(model_name, 0)
                     if age > self._ttl_seconds:
-                        # Expired - remove from cache
                         del self._cache[model_name]
                         del self._access_times[model_name]
+                        del self._memory_bytes[model_name]
                     else:
                         self._hits += 1
                         self._access_times[model_name] = current_time
@@ -80,12 +107,11 @@ class ModelCache:
 
             self._misses += 1
 
-            # Load the model
             model = factory()
-
-            # Add to cache
             self._cache[model_name] = model
             self._access_times[model_name] = current_time
+            self._memory_bytes[model_name] = self._estimate_model_bytes(model)
+            self._evict_if_needed()
 
             return model
 

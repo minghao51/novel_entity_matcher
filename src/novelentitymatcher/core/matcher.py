@@ -571,6 +571,13 @@ class Matcher:
             return [result["id"] if result else None for result in results]
         return results["id"] if results else None
 
+    def add_entities(self, new_entities: list[dict[str, Any]]) -> None:
+        emb = getattr(self._components, "_embedding_matcher", None)
+        if emb is not None and emb.embeddings is not None:
+            emb.add_entities(new_entities)
+        elif hasattr(self, "entities") and self.entities is not None:
+            self.entities.extend(new_entities)
+
     def set_threshold(self, threshold: float) -> "Matcher":
         self._apply_threshold(threshold)
         return self

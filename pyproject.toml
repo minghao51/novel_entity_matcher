@@ -59,11 +59,15 @@ docs = [
 
 opinion = [
     "aiobreaker>=1.1.0",
+    "chromadb>=0.5.0",
+    "dspy>=3.2.0",
     "hdbscan>=0.8.33",
     "hnswlib>=0.8.0",
     "faiss-cpu>=1.7.4",
     "ipywidgets>=8.0.0",
+    "leidenalg>=0.10.0",
     "litellm>=1.83.7",
+    "python-igraph>=0.11.0",
     "seaborn>=0.13.2",
     "tenacity>=9.0.0",
     "tqdm>=4.66.0",
@@ -132,9 +136,22 @@ quote-style = "double"
 "tests/**" = ["DTZ"]
 "notebooks/**" = ["ALL"]
 
+[tool.coverage.run]
+source = ["src"]
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = ["--strict-markers", "-ra", "--durations=10", "--import-mode=importlib"]
+addopts = ["--strict-markers", "-ra", "--durations=10", "--import-mode=importlib", "--maxfail=10"]
 markers = [
     "unit: fast isolated tests with no external dependencies",
     "integration: tests that depend on external services or network access",
@@ -199,6 +216,9 @@ module = [
     "matplotlib.*",
     "seaborn.*",
     "aiobreaker.*",
+    "dspy.*",
+    "igraph.*",
+    "leidenalg.*",
     "pydantic_settings.*",
     "tenacity.*",
     "novelentitymatcher.backends.*",

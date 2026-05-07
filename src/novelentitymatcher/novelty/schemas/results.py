@@ -4,8 +4,13 @@ Result dataclasses for novelty detection.
 Contains data structures for detection results, metrics, and reports.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .models import NovelSampleReport
 
 
 @dataclass
@@ -60,97 +65,19 @@ class SampleMetrics:
 
 
 @dataclass
-class NovelSampleReport:
-    """
-    Comprehensive report from novelty detection.
-
-    Contains all results from running novelty detection on a batch
-    of samples.
-    """
-
-    novel_indices: list[int]
-    """Indices of samples flagged as novel."""
-
-    novel_scores: dict[int, float]
-    """Novelty scores for all flagged samples."""
-
-    num_novel: int
-    """Number of samples flagged as novel."""
-
-    num_total: int
-    """Total number of samples processed."""
-
-    novel_ratio: float
-    """Ratio of novel samples (num_novel / num_total)."""
-
-    sample_metadata: list[dict[str, Any]]
-    """Per-sample metadata including text, class, confidence, metrics."""
-
-    strategy_flags: dict[str, dict[str, Any]]
-    """Strategy-level statistics (num_flagged, flagged_indices)."""
-
-    config_used: dict[str, Any]
-    """Configuration used for detection."""
-
-    def get_novel_samples(self) -> list[dict[str, Any]]:
-        """
-        Get metadata for only the novel samples.
-
-        Returns:
-            List of metadata dicts for novel samples
-        """
-        return [m for m in self.sample_metadata if m["is_novel"]]
-
-    def get_strategy_novel_count(self, strategy_id: str) -> int:
-        """
-        Get number of samples flagged by a specific strategy.
-
-        Args:
-            strategy_id: Strategy identifier
-
-        Returns:
-            Number of samples flagged by the strategy
-        """
-        return self.strategy_flags.get(strategy_id, {}).get("num_flagged", 0)
-
-    def get_sample_at_index(self, index: int) -> dict[str, Any] | None:
-        """
-        Get metadata for a specific sample by index.
-
-        Args:
-            index: Sample index
-
-        Returns:
-            Metadata dict if index is valid, None otherwise
-        """
-        if 0 <= index < len(self.sample_metadata):
-            return self.sample_metadata[index]
-        return None
-
-
-@dataclass
 class DetectionReport:
     """
     Report from a complete detection run.
 
-    Contains the NovelSampleReport plus additional metadata about
+    Contains the novel sample report plus additional metadata about
     the detection run (timing, strategy performance, etc.).
     """
 
     novelty_report: NovelSampleReport
-    """The core novelty detection report."""
-
     strategies_used: list[str]
-    """List of strategies that were used."""
-
     runtime_seconds: float
-    """Time taken for detection in seconds."""
-
     timestamp: str
-    """ISO timestamp of when detection was run."""
-
     additional_info: dict[str, Any] = field(default_factory=dict)
-    """Any additional information to include in the report."""
 
 
 @dataclass

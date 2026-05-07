@@ -1,8 +1,9 @@
-"""Infrastructure benchmarks: ANN backends and reranker models.
+"""Infrastructure benchmarks: ANN backends, reranker models, and ChromaDB.
 
 Benchmarks:
 - ANN backends (hnswlib vs faiss vs exact): build time, query latency, recall@k
 - Reranker models (bge-m3 vs bge-large vs ms-marco): accuracy, latency
+- ChromaDB vector store: upsert/query throughput and latency
 
 Usage:
     novelentitymatcher-bench bench-ann --sizes 1000 10000 100000
@@ -200,6 +201,110 @@ def benchmark_reranker(
         print(f"\nResults saved to {output}")
 
     return results
+
+
+def benchmark_chromadb(
+    sizes: list[int] | None = None,
+    dim: int = 384,
+    n_queries: int = 100,
+    output: str | None = None,
+) -> dict[str, Any]:
+    import importlib
+    import tempfile
+
+    from ..core.vector_store import ChromaVectorStore
+
+    sizes = sizes or [100, 500, 1000]
+    results: dict[str, Any] = {}
+    rng = np.random.RandomState(42)
+
+    if importlib.util.find_spec("chromadb") is None:
+        print("chromadb not installed, skipping ChromaDB benchmark")
+        return {"error": "chromadb not installed"}
+
+    for size in sizes:
+        print(f"\n--- ChromaDB Benchmark: {size} vectors, dim={dim} ---")
+        vectors = rng.randn(size, dim).astype(np.float32)
+        vectors = vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
+        labels = [f"item_{i}" for i in range(size)]
+        queries = rng.randn(n_queries, dim).astype(np.float32)
+        queries = queries / np.linalg.norm(queries, axis=1, keepdims=True)
+
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                store = ChromaVectorStore(
+                    collection_name="bench", persist_directory=tmpdir
+                )
+
+                upsert_start = time.perf_counter()
+                store.upsert(labels, vectors)
+                upsert_time = time.perf_counter() - upsert_start
+
+                query_start = time.perf_counter()
+                for q in queries:
+                    store.query(q.reshape(1, -1), top_k=10)
+                query_time = time.perf_counter() - query_start
+                qps = n_queries / query_time
+                latency_ms = (query_time / n_queries) * 1000
+
+                count = store.count()
+
+                result = {
+                    "backend": "chromadb",
+                    "size": size,
+                    "dim": dim,
+                    "k": 10,
+                    "n_queries": n_queries,
+                    "upsert_time_s": round(upsert_time, 4),
+                    "query_time_s": round(query_time, 4),
+                    "qps": round(qps, 1),
+                    "latency_ms": round(latency_ms, 3),
+                    "count": count,
+                }
+                results[str(size)] = result
+                print(
+                    f"  Upsert: {upsert_time:.3f}s, Query: {query_time:.4f}s, "
+                    f"QPS: {qps:.0f}, Latency: {latency_ms:.2f}ms, Count: {count}"
+                )
+        except (ValueError, RuntimeError, ImportError) as e:
+            print(f"  Failed: {e}")
+            results[str(size)] = {"backend": "chromadb", "size": size, "error": str(e)}
+
+    print(f"\n{'=' * 80}")
+    print("CHROMADB BENCHMARK SUMMARY")
+    print(f"{'=' * 80}")
+    print(
+        f"{'Size':<10} {'Upsert(s)':<12} {'QPS':<10} {'Latency(ms)':<14} {'Count':<10}"
+    )
+    print("-" * 56)
+    for _size_key, r in results.items():
+        if "error" not in r:
+            print(
+                f"{r['size']:<10} {r['upsert_time_s']:<12.3f} {r['qps']:<10.0f} {r['latency_ms']:<14.2f} {r['count']:<10}"
+            )
+
+    if output:
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        Path(output).write_text(json.dumps(results, indent=2))
+        print(f"\nResults saved to {output}")
+
+    return results
+
+
+def main_chromadb(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="ChromaDB vector store benchmark")
+    parser.add_argument("--sizes", nargs="+", type=int, default=[100, 500, 1000])
+    parser.add_argument("--dim", type=int, default=384)
+    parser.add_argument("--queries", type=int, default=100)
+    parser.add_argument("--output", default=None)
+    args = parser.parse_args(argv)
+    benchmark_chromadb(
+        sizes=args.sizes,
+        dim=args.dim,
+        n_queries=args.queries,
+        output=args.output,
+    )
+    return 0
 
 
 def main_ann(argv: list[str] | None = None) -> int:

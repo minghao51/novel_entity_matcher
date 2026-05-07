@@ -30,21 +30,21 @@ except ImportError:  # pragma: no cover - optional dependency
     _logging.getLogger(__name__).warning(
         "tenacity not installed — retry protection disabled for LLM calls"
     )
-    RetryCallState = Any
+    RetryCallState = Any  # type: ignore[assignment,misc]
 
-    def retry(*_args: Any, **_kwargs: Any) -> Any:
+    def retry(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[no-redef]
         def _decorator(func: Any) -> Any:
             return func
 
         return _decorator
 
-    def wait_exponential_jitter(*_args: Any, **_kwargs: Any) -> Any:
+    def wait_exponential_jitter(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[no-redef]
         return None
 
-    def retry_if_exception_type(*_args: Any, **_kwargs: Any) -> Any:
+    def retry_if_exception_type(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[no-redef]
         return None
 
-    def before_sleep_log(*_args: Any, **_kwargs: Any) -> Any:
+    def before_sleep_log(*_args: Any, **_kwargs: Any) -> Any:  # type: ignore[misc]
         return None
 
 
@@ -199,6 +199,7 @@ class LLMClassProposer:
     Propose new class names and descriptions using LLMs.
 
     Uses litellm for multi-provider support with automatic fallback.
+    Optionally uses DSPy module for prompt optimization.
     """
 
     def __init__(
@@ -210,6 +211,7 @@ class LLMClassProposer:
         temperature: float = 0.3,
         max_tokens: int = 4096,
         max_clusters_per_summary: int = 20,
+        dspy_module: Any | None = None,
     ):
         """
         Initialize LLM class proposer.
@@ -222,6 +224,8 @@ class LLMClassProposer:
             temperature: Sampling temperature
             max_tokens: Maximum tokens in response
             max_clusters_per_summary: Maximum clusters to include per LLM summary call (for hierarchical mode)
+            dspy_module: Optional DSPyProposalModule for prompt optimization. When set,
+                propose_from_clusters will use the DSPy module instead of manual prompts.
         """
         self.primary_model = primary_model or os.getenv(
             "LLM_CLASS_PROPOSER_MODEL",
@@ -235,6 +239,7 @@ class LLMClassProposer:
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.max_clusters_per_summary = max_clusters_per_summary
+        self.dspy_module = dspy_module
 
         # Load LLM configuration with environment variable support when available.
         try:
@@ -352,6 +357,14 @@ class LLMClassProposer:
         """
         if not discovery_clusters:
             raise ValueError("discovery_clusters cannot be empty")
+
+        if self.dspy_module is not None:
+            return self._propose_via_dspy(
+                discovery_clusters=discovery_clusters,
+                existing_classes=existing_classes,
+                context=context,
+                max_retries=max_retries,
+            )
 
         if hierarchical and len(discovery_clusters) > self.max_clusters_per_summary:
             return self._propose_hierarchical(
@@ -643,6 +656,59 @@ Return valid JSON with this schema:
 }}
 
 Prefer one proposal per coherent group. Use source_cluster_ids for traceability.{schema_guidance}"""
+
+    def _propose_via_dspy(
+        self,
+        discovery_clusters: list[DiscoveryCluster],
+        existing_classes: list[str],
+        context: str | None = None,
+        max_retries: int = 2,
+    ) -> NovelClassAnalysis:
+        """Generate proposals using DSPy module instead of manual prompts."""
+        clusters_json = json.dumps(
+            [
+                {
+                    "cluster_id": c.cluster_id,
+                    "sample_count": c.sample_count,
+                    "keywords": c.keywords or [],
+                    "example_texts": c.example_texts[:4],
+                }
+                for c in discovery_clusters
+            ]
+        )
+        existing = ", ".join(existing_classes) if existing_classes else "none"
+        domain_context = context or ""
+
+        last_error: Exception | None = None
+        for attempt in range(max_retries + 1):
+            try:
+                if self.dspy_module is None:
+                    raise RuntimeError("DSPy module not loaded")
+                raw = self.dspy_module.predict(
+                    clusters_json=clusters_json,
+                    existing_classes=existing,
+                    domain_context=domain_context,
+                )
+                return self._parse_response(
+                    raw,
+                    novel_samples=[],
+                    model_used=f"dspy-{self.primary_model or 'unknown'}",
+                )
+            except (json.JSONDecodeError, ValueError, TypeError, RuntimeError) as e:
+                last_error = e
+                logger.warning("DSPy proposal attempt %d failed: %s", attempt + 1, e)
+                continue
+
+        logger.error("DSPy proposal failed after %d attempts", max_retries + 1)
+        return NovelClassAnalysis(
+            proposed_classes=[],
+            rejected_as_noise=[],
+            analysis_summary="Fallback: DSPy module failed to generate proposals.",
+            cluster_count=len(discovery_clusters),
+            model_used="dspy-fallback",
+            validation_errors=[str(last_error)] if last_error else [],
+            proposal_metadata={"attempts": max_retries + 1},
+        )
 
     def _group_by_cluster(
         self, samples: list[NovelSampleMetadata]
@@ -975,12 +1041,12 @@ Please fix the errors above and return ONLY valid JSON matching the schema."""
                 ServiceUnavailableError as LiteLLMServiceUnavailableError,
             )
         except ImportError:
-            AuthenticationError = type("AuthenticationError", (Exception,), {})
-            RateLimitError = type("RateLimitError", (Exception,), {})
-            ServiceUnavailableError = type("ServiceUnavailableError", (Exception,), {})
-            LiteLLMAuthError = AuthenticationError
-            LiteLLMRateLimitError = RateLimitError
-            LiteLLMServiceUnavailableError = ServiceUnavailableError
+            AuthenticationError = type("AuthenticationError", (Exception,), {})  # type: ignore[misc,assignment]
+            RateLimitError = type("RateLimitError", (Exception,), {})  # type: ignore[misc,assignment]
+            ServiceUnavailableError = type("ServiceUnavailableError", (Exception,), {})  # type: ignore[misc,assignment]
+            LiteLLMAuthError = AuthenticationError  # type: ignore[misc]
+            LiteLLMRateLimitError = RateLimitError  # type: ignore[misc]
+            LiteLLMServiceUnavailableError = ServiceUnavailableError  # type: ignore[misc]
 
         LLM_RETRYABLE_ERRORS = (
             RateLimitError,

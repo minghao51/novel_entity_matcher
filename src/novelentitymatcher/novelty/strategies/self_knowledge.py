@@ -55,6 +55,9 @@ class SelfKnowledgeStrategy(NoveltyStrategy):
         flags: set[int] = set()
         metrics: dict[int, dict[str, Any]] = {}
 
+        if len(embeddings) == 0:
+            return flags, metrics
+
         if self._detector is None or not self._detector._is_fitted:
             return flags, metrics
 

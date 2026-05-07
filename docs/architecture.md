@@ -171,10 +171,12 @@ Result (entity match, novelty report, and optional proposals)
 The internal stage sequence is:
 
 1. `MatcherMetadataStage`
-2. `OODDetectionStage`
-3. `CommunityDetectionStage`
-4. `ClusterEvidenceStage`
-5. `ProposalStage`
+2. `DriftDetectionStage`
+3. `OODDetectionStage`
+4. `CommunityDetectionStage`
+5. `StabilityFilterStage`
+6. `ClusterEvidenceStage`
+7. `ProposalStage`
 
 Key stage-level behaviors:
 

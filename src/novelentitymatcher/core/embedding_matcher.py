@@ -232,6 +232,28 @@ class EmbeddingMatcher:
 
         return unwrap_single(results, single_input)
 
+    def add_entities(self, new_entities: list[dict[str, Any]]) -> None:
+        if self.embeddings is None or self.model is None:
+            raise RuntimeError("Index not built. Call build_index() first.")
+        if not new_entities:
+            return
+        validate_entities(new_entities)
+
+        new_texts, new_ids = flatten_entity_texts(new_entities)
+        new_texts = normalize_texts(new_texts, self.normalizer, self.normalize)
+        new_embeddings = self._encode_with_cache(new_texts)
+
+        if (
+            self.embedding_dim is not None
+            and new_embeddings.shape[1] > self.embedding_dim
+        ):
+            new_embeddings = new_embeddings[:, : self.embedding_dim]
+
+        self.entities.extend(new_entities)
+        self.entity_texts.extend(new_texts)
+        self.entity_ids.extend(new_ids)
+        self.embeddings = np.vstack([self.embeddings, new_embeddings])
+
     async def build_index_async(self, batch_size: int | None = None):
         await self._ensure_async_executor().run_in_thread(self.build_index, batch_size)
 

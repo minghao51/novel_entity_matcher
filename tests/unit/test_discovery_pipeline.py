@@ -408,3 +408,60 @@ def test_discovery_pipeline_end_to_end_respects_schema_and_runtime_config():
     assert (
         report.diagnostics["stage_metadata"]["proposal"]["proposal_mode"] == "cluster"
     )
+
+
+def test_matcher_add_entities_zero_shot():
+    matcher = Matcher(
+        entities=[{"id": "a", "name": "alpha"}],
+        model="minilm",
+        threshold=0.5,
+    )
+    matcher.fit()
+    matcher.add_entities([{"id": "b", "name": "beta"}])
+    assert len(matcher.entities) == 2
+    assert any(e["id"] == "b" for e in matcher.entities)
+    result = matcher.match("beta", top_k=3)
+    if isinstance(result, dict):
+        results = [result]
+    else:
+        results = result
+    assert any(r["id"] == "b" for r in results)
+
+
+def test_matcher_add_entities_trained():
+    matcher = _build_trained_matcher()
+    matcher.add_entities([{"id": "chemistry", "name": "Chemistry"}])
+    assert len(matcher.entities) == 3
+    assert any(e["id"] == "chemistry" for e in matcher.entities)
+
+
+def test_discovery_pipeline_add_entities_zero_shot():
+    pipeline = DiscoveryPipeline(
+        entities=[{"id": "a", "name": "alpha"}],
+        model="minilm",
+        auto_save=False,
+    )
+    pipeline.add_entities([{"id": "b", "name": "beta"}])
+    assert len(pipeline.matcher.entities) == 2
+    assert any(e["id"] == "b" for e in pipeline.matcher.entities)
+    assert pipeline.entities is pipeline.matcher.entities
+
+
+def test_discovery_pipeline_add_entities_zero_shot_repeated():
+    pipeline = DiscoveryPipeline(
+        entities=[{"id": "a", "name": "alpha"}],
+        model="minilm",
+        auto_save=False,
+    )
+    pipeline.add_entities([{"id": "b", "name": "beta"}])
+    pipeline.add_entities([{"id": "c", "name": "gamma"}])
+    assert len(pipeline.matcher.entities) == 3
+    assert [e["id"] for e in pipeline.matcher.entities] == ["a", "b", "c"]
+
+
+def test_discovery_pipeline_add_entities_with_trained_matcher():
+    matcher = _build_trained_matcher()
+    pipeline = DiscoveryPipeline(matcher=matcher, auto_save=False)
+    pipeline.add_entities([{"id": "chemistry", "name": "Chemistry"}])
+    assert len(pipeline.matcher.entities) == 3
+    assert any(e["id"] == "chemistry" for e in pipeline.matcher.entities)

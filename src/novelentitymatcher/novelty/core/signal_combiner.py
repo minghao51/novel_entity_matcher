@@ -203,10 +203,22 @@ class SignalCombiner:
         )
         mahalanobis = sample_metrics.get("mahalanobis_novelty_score", 0.0)
         lof = sample_metrics.get("lof_novelty_score", 0.0)
-        energy_ood = 1.0 if sample_metrics.get("energy_is_novel", False) else 0.0
-        mixture_gaussian = (
-            1.0 if sample_metrics.get("mixture_gaussian_is_novel", False) else 0.0
-        )
+        energy_ood_score = sample_metrics.get("energy_score", None)
+        if energy_ood_score is not None:
+            energy_ood = float(
+                energy_ood_score > sample_metrics.get("energy_threshold", float("inf"))
+            )
+        else:
+            energy_ood = 1.0 if sample_metrics.get("energy_is_novel", False) else 0.0
+        log_ll = sample_metrics.get("log_likelihood", None)
+        if log_ll is not None:
+            mixture_gaussian = float(
+                log_ll < sample_metrics.get("log_likelihood_threshold", float("-inf"))
+            )
+        else:
+            mixture_gaussian = (
+                1.0 if sample_metrics.get("mixture_gaussian_is_novel", False) else 0.0
+            )
         react_energy = (
             1.0 if sample_metrics.get("react_energy_is_novel", False) else 0.0
         )
@@ -403,23 +415,20 @@ class SignalCombiner:
     def _extract_features(
         self, idx: int, metrics: dict[int, dict[str, Any]]
     ) -> list[float]:
-        """Extract a fixed-length feature vector from per-sample metrics."""
-        sample = metrics.get(idx, {})
-        features = []
+        """Extract a fixed-length feature vector from per-sample metrics.
 
-        # Continuous scores
-        features.append(1.0 if sample.get("confidence_is_novel", False) else 0.0)
-        features.append(sample.get("uncertainty_score", 0.0))
-        features.append(sample.get("knn_novelty_score", 0.0))
-        features.append(sample.get("cluster_support_score", 0.0))
-        features.append(1.0 if sample.get("self_knowledge_is_novel", False) else 0.0)
-        features.append(1.0 if sample.get("pattern_is_novel", False) else 0.0)
-        features.append(1.0 if sample.get("oneclass_is_novel", False) else 0.0)
-        features.append(1.0 if sample.get("prototypical_is_novel", False) else 0.0)
-        features.append(1.0 if sample.get("setfit_is_novel", False) else 0.0)
-        features.append(sample.get("setfit_centroid_novelty_score", 0.0))
-        features.append(sample.get("mahalanobis_novelty_score", 0.0))
-        features.append(sample.get("lof_novelty_score", 0.0))
+        Returns one float per key in ``_SCORE_KEYS + _FLAG_KEYS`` (29 features).
+        Score keys yield the raw float; flag keys yield 0.0 or 1.0.
+        """
+        sample = metrics.get(idx, {})
+        features: list[float] = []
+
+        for key in _SCORE_KEYS:
+            val = sample.get(key)
+            features.append(float(val) if isinstance(val, (int, float)) else 0.0)
+
+        for key in _FLAG_KEYS:
+            features.append(1.0 if sample.get(key, False) else 0.0)
 
         return features
 

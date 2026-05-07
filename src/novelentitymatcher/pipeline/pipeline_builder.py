@@ -1,4 +1,4 @@
-"""Pipeline builder that consolidates 5-stage discovery pipeline construction."""
+"""Pipeline builder that consolidates 7-stage discovery pipeline construction."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from .adapters import (
 from .contracts import PipelineStage
 from .orchestrator import PipelineOrchestrator
 from .stages.drift_hook import DriftCheckStage
+from .stages.stability_filter import StabilityFilterStage
 
 
 @dataclass
@@ -59,10 +60,16 @@ class PipelineStageConfig:
     drift_baseline_path: str | None = None
     drift_method: str = "mmd_linear"
     drift_threshold: float = 0.05
+    clustering_resolution: float = 1.0
+    clustering_graph_k: int = 15
+    stability_filter_enabled: bool = False
+    stability_threshold: float = 0.5
+    stability_n_bootstrap: int = 10
+    stability_sample_fraction: float = 0.8
 
 
 class PipelineBuilder:
-    """Builds a 5-stage discovery pipeline orchestrator.
+    """Builds a 7-stage discovery pipeline orchestrator.
 
     Consolidates pipeline construction logic that was previously duplicated
     between DiscoveryPipeline and NovelEntityMatcher.
@@ -127,6 +134,12 @@ class PipelineBuilder:
             drift_baseline_path=kwargs.get("drift_baseline_path"),
             drift_method=kwargs.get("drift_method", "mmd_linear"),
             drift_threshold=kwargs.get("drift_threshold", 0.05),
+            clustering_resolution=kwargs.get("clustering_resolution", 1.0),
+            clustering_graph_k=kwargs.get("clustering_graph_k", 15),
+            stability_filter_enabled=kwargs.get("stability_filter_enabled", False),
+            stability_threshold=kwargs.get("stability_threshold", 0.5),
+            stability_n_bootstrap=kwargs.get("stability_n_bootstrap", 10),
+            stability_sample_fraction=kwargs.get("stability_sample_fraction", 0.8),
         )
 
     def build(
@@ -136,7 +149,7 @@ class PipelineBuilder:
         context: str | None = None,
         run_llm_proposal: bool | None = None,
     ) -> PipelineOrchestrator:
-        """Build the 5-stage pipeline orchestrator."""
+        """Build the configured stage discovery pipeline orchestrator."""
         cfg = self._cfg
         if not cfg.match_enabled:
             raise ValueError(
@@ -158,6 +171,8 @@ class PipelineBuilder:
                     min_samples=cfg.clustering_min_samples or cfg.min_cluster_size,
                     cluster_selection_epsilon=cfg.clustering_cluster_selection_epsilon,
                     umap_metric=cfg.clustering_metric,
+                    resolution=cfg.clustering_resolution,
+                    k=cfg.clustering_graph_k,
                 )
             except ImportError:
                 from ..utils.logging_config import get_logger
@@ -199,6 +214,14 @@ class PipelineBuilder:
                     similarity_threshold=cfg.similarity_threshold,
                     min_cluster_size=max(2, cfg.min_cluster_size),
                     clustering_metric=cfg.clustering_metric,
+                    clustering_resolution=cfg.clustering_resolution,
+                    clustering_graph_k=cfg.clustering_graph_k,
+                ),
+                StabilityFilterStage(
+                    enabled=cfg.stability_filter_enabled,
+                    stability_threshold=cfg.stability_threshold,
+                    n_bootstrap=cfg.stability_n_bootstrap,
+                    sample_fraction=cfg.stability_sample_fraction,
                 ),
                 ClusterEvidenceStage(
                     enabled=cfg.evidence_enabled,
@@ -286,5 +309,15 @@ class PipelineBuilder:
                 drift_baseline_path=getattr(config, "drift_baseline_path", None),
                 drift_method=getattr(config, "drift_method", "mmd_linear"),
                 drift_threshold=getattr(config, "drift_threshold", 0.05),
+                clustering_resolution=getattr(config, "clustering_resolution", 1.0),
+                clustering_graph_k=getattr(config, "clustering_graph_k", 15),
+                stability_filter_enabled=getattr(
+                    config, "stability_filter_enabled", False
+                ),
+                stability_threshold=getattr(config, "stability_threshold", 0.5),
+                stability_n_bootstrap=getattr(config, "stability_n_bootstrap", 10),
+                stability_sample_fraction=getattr(
+                    config, "stability_sample_fraction", 0.8
+                ),
             )
         )

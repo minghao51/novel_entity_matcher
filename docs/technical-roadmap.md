@@ -1,7 +1,7 @@
 # Technical Roadmap: Novel Entity Matcher
 
-**Last Updated:** 2026-05-05
-**Status:** Active technical plan
+**Last Updated:** 2026-05-07
+**Status:** Active technical plan — Phases 1–5 complete; Phase 6 (Deferred) remains future work
 **Version Path:** 0.1.0 package today → 1.0.0 architecture target
 **Supersedes:** `technical-roadmap.md` (2026-03-24), `20260505-technical_roadmap.md` (draft)
 
@@ -41,12 +41,18 @@ The README positions the library as a text-to-entity matcher with optional novel
 core/
   unified Matcher, zero-shot / SetFit / BERT / hybrid routes
   async execution, blocking, reranking, hierarchy, monitoring, normalization
+  VectorStore protocol (InMemory + ChromaDB), LRU embedding cache
 novelty/
-  modular detector core + strategy registry
+  modular detector core + strategy registry + OOD score calibrator
   strategies: confidence, KNN distance, clustering, one-class, pattern,
-  prototypical, self-knowledge, Mahalanobis, LOF
-  clustering (HDBSCAN / sOPTICS / UMAP+HDBSCAN), proposal (LLM),
-  schema enforcement, storage (ANN + review), config, evidence extraction
+  prototypical, self-knowledge, Mahalanobis, LOF, Energy OOD,
+  Mixture Gaussian, ReAct+Energy
+  clustering (HDBSCAN / sOPTICS / UMAP+HDBSCAN / Leiden / Louvain),
+  incremental clustering, bootstrap stability scorer,
+  drift detection (snapshot + scorer + pipeline hook),
+  proposal (LLM) with conflict resolver, schema enforcement,
+  active learning (uncertainty sampler + annotation collector),
+  storage (ANN + review), config, evidence extraction
 backends/
   static embeddings, sentence-transformer, reranker, LiteLLM integration
 benchmarks/
@@ -54,7 +60,7 @@ benchmarks/
 ingestion/
   dataset-specific modules + CLI
 pipeline/
-  5-stage orchestrator: match → OOD → cluster → evidence → propose
+  7-stage orchestrator: match → drift_check → OOD → cluster → stability_filter → evidence → propose
   PipelineBuilder, PipelineOrchestrator, PipelineConfig
   DiscoveryPipeline as pipeline-first public API
 ```
@@ -63,10 +69,19 @@ pipeline/
 
 - Unified matcher API with sync and async flows
 - Training-aware model resolution and static-embedding defaults
-- Multi-strategy novelty subsystem with pluggable strategies, evaluation, schemas, persistence
-- ANN (HNSWlib / FAISS / exact), scalable clustering, LLM proposal with circuit breaker
-- 5-stage pipeline orchestrator with named stages and stable stage I/O
+- Multi-strategy novelty subsystem with pluggable strategies (15 registered), evaluation, schemas, persistence
+- OOD score calibration fitted on reference embeddings for normalized [0,1] scores
+- Energy-based and Mixture Gaussian OOD with ReAct hybrid trimming
+- Concept drift detection: distribution snapshots, MMD/KL/cosine scorers, pipeline hook
+- ANN (HNSWlib / FAISS / exact) + pluggable VectorStore protocol (InMemory + ChromaDB)
+- LRU embedding cache with batch API
+- Scalable clustering with interchangeable backends (HDBSCAN, sOPTICS, UMAP+HDBSCAN, Leiden, Louvain)
+- Incremental clustering with centroid assignment and merge detection
+- Bootstrap Jaccard stability scorer with stability-gated pipeline filter
+- 7-stage pipeline orchestrator with named stages and stable stage I/O
 - HITL review lifecycle: pending → approved/rejected → promoted
+- Proposal conflict resolver with pairwise overlap detection
+- Active learning loop: uncertainty sampler + annotation collector
 - Schema-aware proposal with attribute discovery
 - Broad test coverage across public API surface
 
@@ -86,23 +101,23 @@ pipeline/
 | Area | Current State | Target State | Gap | Status |
 |---|---|---|---|---|
 | Matching API | `Matcher` is the main public interface | Matching becomes one subsystem within a broader pipeline | Medium | **Done** — `DiscoveryPipeline` wraps `Matcher` |
-| Novelty detection | Multi-strategy detector exists | Conformalized OOD with p-value calibration | Medium | Partial — Mahalanobis has calibration, rest need Q1 |
+| Novelty detection | Multi-strategy detector exists | Conformalized OOD with p-value calibration | Medium | **Mostly Done** — Q1 calibrator shipped, Energy/MoG/ReAct added; conformal for all strategies pending |
 | Discovery orchestration | `NovelEntityMatcher` chains stages | Explicit pipeline orchestrator with named stages | High | **Done** — 5-stage `PipelineOrchestrator` |
-| Clustering | Scalable clustering exists | Clustering as standard pipeline stage with interchangeable backends | Medium | **Done** — `ClusteringBackendRegistry`, but needs Leiden/Louvain |
+| Clustering | Scalable clustering exists | Clustering as standard pipeline stage with interchangeable backends | Medium | **Done** — Leiden + Louvain backends registered, incremental clustering, stability scorer |
 | Evidence extraction | `ClusterEvidenceExtractor` (TF-IDF/centroid/combined) | Cluster summarization and keyword centroids | Medium | **Done** — see `novelty/extraction/evidence.py` |
 | LLM proposals | LLM proposer with hierarchical summarization | Cluster-level judge/proposer with attribute discovery | Medium | **Done** — `propose_from_clusters_with_schema` |
 | Schema enforcement | Pydantic models with retry | Retry-aware schema enforcement | Medium | **Done** — `_run_structured_cluster_proposal` with retry |
-| HITL workflow | Review lifecycle with persistence | Active Learning Loop with instant index updates | High | Partial — review exists, active learning pending (E2) |
+| HITL workflow | Review lifecycle with persistence | Active Learning Loop with instant index updates | High | **Done** — review + conflict resolver + uncertainty sampler + annotation collector |
 | Configuration | Config registries exist | Stage-oriented pipeline configuration | Medium | **Done** — `PipelineConfig` + `PipelineBuilder` |
 | Documentation | Multiple roadmap narratives, some stale | One active technical roadmap | Completed | **This document** |
-| OOD score normalization | Raw scores combined by `SignalCombiner` | Calibrated [0,1] scores per strategy | High | **Pending** — Q1 |
-| Energy-based OOD | Not implemented | Energy score + ReAct strategy | High | **Pending** — B2 |
-| Concept drift | Not implemented | Distribution snapshots + drift scorer + pipeline hook | High | **Pending** — B1 |
-| Incremental entities | Full rebuild required | `add_entities` without retraining | High | **Pending** — D2 |
-| Vector DB integration | In-memory ANN only | Pluggable VectorStore protocol + ChromaDB | Medium | **Pending** — D1 |
-| Proposal conflict resolution | No overlap detection | Pairwise overlap detector + resolver | Medium | **Pending** — E1 |
-| Cluster stability | Cohesion/separation only | Bootstrap Jaccard stability + filter stage | Medium | **Pending** — C2 |
-| Graph community detection | Not implemented | Leiden / Louvain on k-NN similarity graph | Medium | **Pending** — C3 |
+| OOD score normalization | Raw scores combined by `SignalCombiner` | Calibrated [0,1] scores per strategy | High | **Done** — `OODScoreCalibrator` integrated into `NoveltyDetector` |
+| Energy-based OOD | Not implemented | Energy score + ReAct strategy | High | **Done** — B2.1 + B2.2 |
+| Concept drift | Not implemented | Distribution snapshots + drift scorer + pipeline hook | High | **Done** — B1.1 + B1.2 + B1.3 |
+| Incremental entities | Full rebuild required | `add_entities` without retraining | High | **Done** — D2.1 (embedding index) + D2.2 (classifier add_class/retrain_head) + D2.3 (pipeline-level) |
+| Vector DB integration | In-memory ANN only | Pluggable VectorStore protocol + ChromaDB | Medium | **Done** — D1.1 + D1.2 + D1.3 |
+| Proposal conflict resolution | No overlap detection | Pairwise overlap detector + resolver | Medium | **Done** — E1.1 |
+| Cluster stability | Cohesion/separation only | Bootstrap Jaccard stability + filter stage | Medium | **Done** — C2.1 + C2.2 |
+| Graph community detection | Not implemented | Leiden / Louvain on k-NN similarity graph | Medium | **Done** — C3.1 + C3.2 + C3.3 |
 
 ---
 
@@ -125,11 +140,38 @@ Items from the previous roadmap (2026-03-24) that are now **done**:
 | Immediate: Refactor Matcher | Decompose matcher.py | `MatcherRuntimeState`, `MatcherComponentFactory`, engine classes |
 | Medium: Model Caching | Global model registry | `get_cached_sentence_transformer`, `get_cached_setfit_model` |
 | Medium: Attribute Discovery | Enhanced LLM proposer | `propose_from_clusters_with_schema` + `DiscoveredAttribute` |
+| Phase 1: Q1 | OOD Score Calibration | `OODScoreCalibrator` fitted on reference embeddings |
+| Phase 1: Q2 | Embedding Cache | `LRUEmbeddingCache` with batch API, wired into `EmbeddingMatcher` |
+| Phase 1: Q3 | HDBSCAN Condensed Tree | `get_condensed_tree()` + `extract_clusters_at_stability()` |
+| Phase 1: D1.1 | Vector Store Protocol | `VectorStore` protocol in `core/vector_store.py` |
+| Phase 1: D1.3 | In-Memory Backend | `InMemoryVectorStore` wrapping `ANNIndex` |
+| Phase 2: B2.1 | Energy OOD | `EnergyOODStrategy` with stable logsumexp |
+| Phase 2: B3.1 | Mixture Gaussian | `MixtureGaussianStrategy` with full covariance |
+| Phase 2: B1.1 | Distribution Snapshot | `DistributionSnapshot` with NPZ+JSON persistence |
+| Phase 2: B2.2 | ReAct Hybrid | `ReActEnergyStrategy` with activation trimming |
+| Phase 2: B1.2 | Drift Scorer | `DriftScorer` (MMD, KL, cosine centroid) |
+| Phase 2: B1.3 | Drift Pipeline Hook | `DriftCheckStage` wired into `PipelineBuilder` |
+| Phase 3: C3.1 | Similarity Graph Builder | `SimilarityGraphBuilder` with k-NN symmetrization |
+| Phase 3: C3.2 | Leiden Backend | `LeidenBackend` via python-igraph + leidenalg |
+| Phase 3: C2.1 | Bootstrap Stability | `ClusterStabilityScorer` with Jaccard stability |
+| Phase 3: C1.1 | Incremental Clustering | `IncrementalClusterer` with centroid assignment |
+| Phase 3: C2.2 | Stability Filter Stage | `StabilityFilterStage` in pipeline |
+| Phase 3: C1.2 | Merge Detection | `detect_merges()` function |
+| Phase 3: C3.3 | Louvain Backend | `LouvainBackend` via networkx |
+| Phase 4: D1.2 | ChromaDB Backend | `ChromaVectorStore` with lazy init |
+| Phase 4: D2.1 | Incremental Embeddings | `add_entities` on `EmbeddingMatcher` |
+| Phase 4: D2.2 | Incremental Classifier | `add_class` + `retrain_head` on `SetFitClassifier` |
+| Phase 4: D2.3 | Pipeline-Level add_entities | `DiscoveryPipeline.add_entities` |
+| Phase 5: E1.1 | Proposal Conflict Resolver | `ProposalConflictResolver` with pairwise overlap |
+| Phase 5: E2.1 | Uncertainty Sampler | `UncertaintySampler` (entropy, margin, least_confident) |
+| Phase 5: E2.2 | Annotation Collector | `AnnotationCollector` with novel class creation + retrain |
 
 ---
 
 ## Quick Wins
 
+> **DONE** — All quick wins shipped. Section retained as implementation reference.
+>
 > High-impact, low-effort items shippable in 1–2 days each.
 
 ### Q1. OOD Score Calibration
@@ -268,6 +310,8 @@ def extract_clusters_at_stability(
 ---
 
 ## B: Novelty & OOD Depth
+
+> **DONE** — All B1/B2/B3 stories shipped. Section retained as implementation reference.
 
 ### Epic B1: Temporal / Concept Drift Detection
 
@@ -493,6 +537,8 @@ class MixtureGaussianStrategy(BaseStrategy):
 
 ## C: Clustering & Discovery
 
+> **DONE** — All C1/C2/C3 stories shipped. Section retained as implementation reference.
+
 ### Epic C1: Online / Incremental Clustering
 
 **Problem:** Full refit required for every new batch. No incremental assignment.
@@ -603,6 +649,8 @@ Same interface, `graph.community_multilevel()`. Registered as `"louvain"`.
 
 ## D: Pipeline & Infrastructure
 
+> **DONE** — All D1/D2 stories shipped. Section retained as implementation reference.
+
 ### Epic D1: Vector DB Integration
 
 **Problem:** ANN index is in-memory only. No persistence, scaling, or hybrid metadata+vector search.
@@ -694,6 +742,8 @@ def add_entities(self, new_entities):
 ---
 
 ## E: LLM & HITL
+
+> **DONE** — All E1/E2 stories shipped. Section retained as implementation reference.
 
 ### Epic E1: Conflict Resolution Between Proposals
 
@@ -805,6 +855,8 @@ class AnnotationCollector:
 
 ## Dependency Graph
 
+> **All dependencies resolved.** Retained as historical reference for build order.
+
 ```
 Quick Wins (independent):
   Q1 (OOD Calibration) ← no deps
@@ -858,7 +910,9 @@ E2 (Active Learning):
 
 ## Suggested Sequencing
 
-### Phase 1 — Foundation (Week 1–2)
+> **Phases 1–5 complete.** Only Phase 6 (Deferred) remains as future work. Retained as historical reference.
+
+### Phase 1 — Foundation (Week 1–2) ✅
 
 | Item | Days | Reason |
 |---|---|---|
@@ -868,7 +922,7 @@ E2 (Active Learning):
 | D1.1: Vector Store Protocol | 1 | Unlocks D1.2, D2.1 |
 | D1.3: In-Memory Backend | 1 | Wraps existing ANN |
 
-### Phase 2 — OOD Depth (Week 3–4)
+### Phase 2 — OOD Depth (Week 3–4) ✅
 
 | Item | Days | Reason |
 |---|---|---|
@@ -879,7 +933,7 @@ E2 (Active Learning):
 | B1.2: Drift Scorer | 2 | Depends on B1.1 |
 | B1.3: Drift Pipeline Hook | 1 | Depends on B1.2 |
 
-### Phase 3 — Clustering & Discovery (Week 5–6)
+### Phase 3 — Clustering & Discovery (Week 5–6) ✅
 
 | Item | Days | Reason |
 |---|---|---|
@@ -891,7 +945,7 @@ E2 (Active Learning):
 | C1.2: Merge Detection | 1 | Depends on C1.1 |
 | C3.3: Louvain Backend | 1 | Alternative to Leiden |
 
-### Phase 4 — Infrastructure (Week 7–8)
+### Phase 4 — Infrastructure (Week 7–8) ✅
 
 | Item | Days | Reason |
 |---|---|---|
@@ -900,7 +954,7 @@ E2 (Active Learning):
 | D2.2: Incremental Classifier | 3 | Depends on D2.1 |
 | D2.3: Pipeline-Level add_entities | 1 | Depends on D2.1, D2.2 |
 
-### Phase 5 — LLM & HITL (Week 9–10)
+### Phase 5 — LLM & HITL (Week 9–10) ✅
 
 | Item | Days | Reason |
 |---|---|---|

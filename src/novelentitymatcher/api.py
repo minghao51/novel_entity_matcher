@@ -50,6 +50,11 @@ from novelentitymatcher.core.bert_classifier import BERTClassifier
 from novelentitymatcher.core.embedding_matcher import EmbeddingMatcher
 from novelentitymatcher.core.hierarchy import HierarchicalScoring, HierarchyIndex
 from novelentitymatcher.core.vector_store import InMemoryVectorStore, VectorStore
+from novelentitymatcher.novelty.active_learning.annotation import (
+    AnnotationCollector,
+    AnnotationResult,
+)
+from novelentitymatcher.novelty.active_learning.sampler import UncertaintySampler
 from novelentitymatcher.novelty.clustering.backends import (
     HDBSCANBackend,
     SOPTICSBackend,
@@ -139,6 +144,8 @@ from novelentitymatcher.utils.embedding_cache import LRUEmbeddingCache
 __all__ = [
     "ANNBackend",
     "ANNIndex",
+    "AnnotationCollector",
+    "AnnotationResult",
     "BERTClassifier",
     "BGERetriever",
     "BM25Blocking",
@@ -231,6 +238,7 @@ __all__ = [
     "TrainingError",
     "UMAPHDBSCANBackend",
     "UncertaintyConfig",
+    "UncertaintySampler",
     "UncertaintyStrategy",
     "ValidationError",
     "VectorStore",

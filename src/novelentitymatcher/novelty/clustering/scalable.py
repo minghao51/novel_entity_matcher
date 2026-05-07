@@ -43,6 +43,7 @@ class ScalableClusterer:
         umap_dim: int = 10,
         umap_metric: str = "cosine",
         prediction_data: bool = True,
+        **backend_kwargs: Any,
     ):
         """
         Initialize scalable clusterer.
@@ -65,6 +66,7 @@ class ScalableClusterer:
         self.umap_dim = umap_dim
         self.umap_metric = umap_metric
         self.prediction_data = prediction_data
+        self.backend_kwargs = dict(backend_kwargs)
 
         self._backend_instance: Any | None = None
         self._labels: np.ndarray | None = None
@@ -87,6 +89,7 @@ class ScalableClusterer:
             "cluster_selection_epsilon": self.cluster_selection_epsilon,
             "prediction_data": self.prediction_data,
         }
+        kwargs.update(self.backend_kwargs)
         if backend_name == self.BACKEND_UMAP_HDBSCAN:
             kwargs.update(
                 {
@@ -101,6 +104,7 @@ class ScalableClusterer:
         self,
         embeddings: np.ndarray,
         metric: str = "cosine",
+        **kwargs: Any,
     ) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
         """
         Fit clusterer and predict labels.
@@ -127,7 +131,10 @@ class ScalableClusterer:
         self._backend_instance = self._create_backend(backend_name)
 
         labels, probabilities, backend_info = self._backend_instance.fit_predict(
-            X, min_cluster_size=self.min_cluster_size, metric=metric
+            X,
+            min_cluster_size=self.min_cluster_size,
+            metric=metric,
+            **kwargs,
         )
 
         self._labels = labels

@@ -246,7 +246,7 @@ print(f"Model: {stats['model_name']}")
 
 ## Discovery Pipeline Configuration
 
-`DiscoveryPipeline` uses [`PipelineConfig`](../src/novelentitymatcher/pipeline/config.py) to control the internal five-stage discovery flow: match, OOD detection, clustering, evidence extraction, and proposal generation.
+`DiscoveryPipeline` uses [`PipelineConfig`](../src/novelentitymatcher/pipeline/config.py) to control the internal seven-stage discovery flow: match, drift detection, OOD detection, clustering, stability filtering, evidence extraction, and proposal generation.
 
 ```python
 from novelentitymatcher import DiscoveryPipeline, PipelineConfig
@@ -260,6 +260,12 @@ config = PipelineConfig(
     clustering_metric="cosine",
     clustering_min_samples=5,
     clustering_cluster_selection_epsilon=0.0,
+    clustering_resolution=1.0,
+    clustering_graph_k=15,
+    stability_filter_enabled=True,
+    stability_threshold=0.6,
+    stability_n_bootstrap=20,
+    stability_sample_fraction=0.8,
     evidence_method="combined",
     proposal_mode="cluster",
     proposal_schema_discovery=True,
@@ -276,6 +282,9 @@ These `PipelineConfig` fields now affect execution rather than only diagnostics:
 - `ood_strategies`: selects the novelty strategies used to build the internal `DetectionConfig`
 - `ood_calibration_mode`, `ood_calibration_alpha`, `ood_mahalanobis_mode`: configure Mahalanobis calibration behavior when that strategy is active
 - `clustering_backend`, `clustering_metric`, `clustering_min_samples`, `clustering_cluster_selection_epsilon`: configure the owned `ScalableClusterer` and cluster stage
+- `clustering_resolution`: Leiden/Louvain resolution parameter for community detection (higher = more clusters)
+- `clustering_graph_k`: number of nearest neighbors for the k-NN graph used by Leiden/Louvain backends
+- `stability_filter_enabled`, `stability_threshold`, `stability_n_bootstrap`, `stability_sample_fraction`: control the bootstrap Jaccard stability filter stage — unstable clusters below the threshold are discarded
 - `evidence_method`: chooses keyword extraction mode for cluster evidence (`"tfidf"`, `"centroid"`, or `"combined"`)
 - `proposal_mode`: chooses how proposals are generated
 - `proposal_schema_discovery`, `proposal_schema_max_attributes`, `proposal_hierarchical`: control schema-enriched proposal generation and large-cluster summarization behavior

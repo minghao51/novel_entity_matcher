@@ -8,7 +8,13 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-__all__ = ["HDBSCANParams", "SOPTICSParams", "UMAPHDBSCANParams"]
+__all__ = [
+    "HDBSCANParams",
+    "LeidenParams",
+    "LouvainParams",
+    "SOPTICSParams",
+    "UMAPHDBSCANParams",
+]
 
 
 class HDBSCANParams(BaseModel):
@@ -37,3 +43,21 @@ class UMAPHDBSCANParams(BaseModel):
     n_neighbors: int = Field(default=15, ge=2)
     umap_dim: int = Field(default=10, ge=2)
     umap_metric: str = Field(default="cosine")
+
+
+class LeidenParams(BaseModel):
+    """Parameters for the Leiden community detection backend."""
+
+    min_cluster_size: int = Field(default=5, ge=2)
+    resolution: float = Field(default=1.0, gt=0.0)
+    k: int = Field(default=15, ge=2)
+    metric: str = Field(default="cosine")
+
+
+class LouvainParams(BaseModel):
+    """Parameters for the Louvain community detection backend."""
+
+    min_cluster_size: int = Field(default=5, ge=2)
+    resolution: float = Field(default=1.0, gt=0.0)
+    k: int = Field(default=15, ge=2)
+    metric: str = Field(default="cosine")

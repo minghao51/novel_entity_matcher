@@ -69,11 +69,17 @@ class DistributionSnapshot:
         path = Path(path)
         npz_path = path.with_suffix(".npz")
 
-        np.savez_compressed(
-            npz_path,
-            mean=self.mean,
-            covariance=self.covariance,
-        )
+        save_dict: dict[str, np.ndarray] = {
+            "mean": self.mean,
+            "covariance": self.covariance,
+        }
+        for label, stats in self.per_class_stats.items():
+            safe_label = label.replace("/", "__")
+            save_dict[f"pc_mean_{safe_label}"] = stats["mean"]
+            if "cov" in stats and stats["cov"] is not None:
+                save_dict[f"pc_cov_{safe_label}"] = stats["cov"]
+
+        np.savez_compressed(npz_path, **save_dict)  # type: ignore[arg-type]
 
         metadata = {
             "timestamp": self.timestamp.isoformat(),
@@ -105,13 +111,16 @@ class DistributionSnapshot:
 
         per_class = {}
         for label, stats in metadata["per_class_stats"].items():
+            safe_label = label.replace("/", "__")
             mean = np.array(stats["mean"])
-            # Covariance is not stored per-class in NPZ; recompute on load
-            # if needed, or store separately. For now we keep mean/count only
-            # and reconstruct empty cov to avoid bloating files.
+            cov_key = f"pc_cov_{safe_label}"
+            if cov_key in npz:
+                cov = np.array(npz[cov_key])
+            else:
+                cov = np.eye(len(mean)) * 1e-6
             per_class[label] = {
                 "mean": mean,
-                "cov": np.eye(len(mean)) * 1e-6,
+                "cov": cov,
                 "count": stats["count"],
             }
 

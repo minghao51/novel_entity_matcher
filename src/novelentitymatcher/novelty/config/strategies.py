@@ -214,6 +214,18 @@ class EnergyConfig(BaseModel):
     threshold_std_multiplier: float = Field(default=2.0, gt=0.0)
     """Number of standard deviations below mean reference energy to set threshold."""
 
+    calibration_mode: Literal["none", "conformal"] = Field(default="none")
+    """Calibration mode: 'none' for raw threshold, 'conformal' for p-value calibration."""
+
+    calibration_alpha: float = Field(default=0.1, gt=0.0, le=1.0)
+    """Significance level for conformal prediction."""
+
+    calibration_method: Literal["split", "mondrian"] = Field(default="split")
+    """Conformal calibration method: 'split' or 'mondrian' (class-conditional)."""
+
+    calibration_set_fraction: float = Field(default=0.2, gt=0.0, le=0.5)
+    """Fraction of reference data held out for conformal calibration."""
+
 
 class MixtureGaussianConfig(BaseModel):
     """Configuration for mixture of Gaussians OOD strategy."""
@@ -227,6 +239,18 @@ class MixtureGaussianConfig(BaseModel):
     threshold_std_multiplier: float = Field(default=2.0, gt=0.0)
     """Std-dev multiplier below mean reference log-likelihood for threshold."""
 
+    calibration_mode: Literal["none", "conformal"] = Field(default="none")
+    """Calibration mode: 'none' for raw threshold, 'conformal' for p-value calibration."""
+
+    calibration_alpha: float = Field(default=0.1, gt=0.0, le=1.0)
+    """Significance level for conformal prediction."""
+
+    calibration_method: Literal["split", "mondrian"] = Field(default="split")
+    """Conformal calibration method: 'split' or 'mondrian' (class-conditional)."""
+
+    calibration_set_fraction: float = Field(default=0.2, gt=0.0, le=0.5)
+    """Fraction of reference data held out for conformal calibration."""
+
 
 class ReActConfig(BaseModel):
     """Configuration for ReAct-style feature trimming."""
@@ -236,3 +260,15 @@ class ReActConfig(BaseModel):
 
     base_strategy_id: str = Field(default="energy_ood")
     """Strategy ID to wrap with ReAct trimming."""
+
+    calibration_mode: Literal["none", "conformal"] = Field(default="none")
+    """Calibration mode: 'none' for raw threshold, 'conformal' for p-value calibration."""
+
+    calibration_alpha: float = Field(default=0.1, gt=0.0, le=1.0)
+    """Significance level for conformal prediction."""
+
+    calibration_method: Literal["split", "mondrian"] = Field(default="split")
+    """Conformal calibration method: 'split' or 'mondrian' (class-conditional)."""
+
+    calibration_set_fraction: float = Field(default=0.2, gt=0.0, le=0.5)
+    """Fraction of reference data held out for conformal calibration."""

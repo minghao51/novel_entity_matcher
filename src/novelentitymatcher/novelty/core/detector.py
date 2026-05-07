@@ -30,6 +30,14 @@ _STRATEGY_SCORE_KEYS: dict[str, list[str]] = {
     "setfit_centroid": ["setfit_centroid_score"],
     "mahalanobis": ["mahalanobis_novelty_score"],
     "lof": ["lof_novelty_score"],
+    "energy_ood": ["energy_score"],
+    "mixture_gaussian": ["log_likelihood"],
+    "react_energy": ["energy_score"],
+}
+
+_CALIBRATION_STRATEGY_DENYLIST: set[str] = {
+    "pattern",
+    "self_knowledge",
 }
 
 
@@ -127,11 +135,54 @@ class NoveltyDetector:
             reference_embeddings,
             reference_labels,
         )
-        # Reset calibrator when reference corpus changes so it will be re-fitted
-        # on the next detection batch.
+
         if self._calibrator is not None:
-            self._calibrator.reset()
-            self._calibrator_reference_signature = None
+            self._fit_calibrator_on_reference(reference_embeddings, reference_labels)
+
+    def _fit_calibrator_on_reference(
+        self,
+        reference_embeddings: np.ndarray,
+        reference_labels: list[str],
+    ) -> None:
+        if self._calibrator is None:
+            return
+        self._calibrator.reset()
+        reference_confidences = np.ones(len(reference_labels))
+        score_keys_by_strategy: dict[str, list[str]] = {
+            k: list(v) for k, v in _STRATEGY_SCORE_KEYS.items()
+        }
+        strategy_scores: dict[str, list[float]] = {}
+
+        for strategy_id, strategy in self._strategies.items():
+            if strategy_id in _CALIBRATION_STRATEGY_DENYLIST:
+                continue
+            _, metrics = strategy.detect(
+                texts=[""] * len(reference_labels),
+                embeddings=reference_embeddings,
+                predicted_classes=reference_labels,
+                confidences=reference_confidences,
+            )
+            discovered: set[str] = set()
+            for metric_dict in metrics.values():
+                for key, val in metric_dict.items():
+                    if isinstance(val, (int, float)) and not isinstance(val, bool):
+                        discovered.add(key)
+            existing = set(score_keys_by_strategy.get(strategy_id, []))
+            score_keys_by_strategy[strategy_id] = sorted(existing | discovered)
+
+            scores: list[float] = []
+            for metric_dict in metrics.values():
+                for key in score_keys_by_strategy[strategy_id]:
+                    val = metric_dict.get(key)
+                    if val is not None:
+                        scores.append(float(val))
+            if scores:
+                strategy_scores[strategy_id] = scores
+
+        if strategy_scores:
+            self._calibrator.fit({k: np.array(v) for k, v in strategy_scores.items()})
+        self._calibrator_reference_signature = self._reference_signature
+        self._calibrator_score_keys = score_keys_by_strategy
 
     def detect_novel_samples(
         self,
@@ -204,52 +255,20 @@ class NoveltyDetector:
         # The calibrator is fitted once per reference corpus (on the first
         # detection batch) and reused for subsequent batches so that scores
         # are comparable across calls.
-        if self._calibrator is not None:
-            # Build score keys: hardcoded mapping + dynamically discovered
-            # numeric keys from each strategy's raw metrics.
-            score_keys_by_strategy: dict[str, list[str]] = {
-                k: list(v) for k, v in _STRATEGY_SCORE_KEYS.items()
-            }
-            for strategy_id, (_flags, metrics) in strategy_outputs.items():
-                discovered: set[str] = set()
-                for metric_dict in metrics.values():
-                    for key, val in metric_dict.items():
-                        if isinstance(val, (int, float)) and not isinstance(val, bool):
-                            discovered.add(key)
-                existing = set(score_keys_by_strategy.get(strategy_id, []))
-                score_keys_by_strategy[strategy_id] = sorted(existing | discovered)
-
-            strategy_scores: dict[str, list[float]] = {}
+        if self._calibrator is not None and self._calibrator.is_fitted:
+            score_keys_by_strategy = getattr(self, "_calibrator_score_keys", {})
             for strategy_id, score_keys in score_keys_by_strategy.items():
                 if strategy_id not in strategy_outputs:
                     continue
-                scores = []
                 for idx_metrics in all_metrics.values():
                     for key in score_keys:
                         val = idx_metrics.get(key)
                         if val is not None:
-                            scores.append(float(val))
-                if scores:
-                    strategy_scores[strategy_id] = scores
-
-            if strategy_scores:
-                score_arrays = {k: np.array(v) for k, v in strategy_scores.items()}
-                # Fit once per reference corpus; reuse stats afterward.
-                if self._calibrator_reference_signature != reference_signature:
-                    self._calibrator.fit(score_arrays)
-                    self._calibrator_reference_signature = reference_signature
-                for strategy_id, score_keys in score_keys_by_strategy.items():
-                    if strategy_id not in strategy_outputs:
-                        continue
-                    for idx_metrics in all_metrics.values():
-                        for key in score_keys:
-                            val = idx_metrics.get(key)
-                            if val is not None:
-                                idx_metrics[key] = float(
-                                    self._calibrator.transform(
-                                        strategy_id, np.array([val])
-                                    )[0]
-                                )
+                            idx_metrics[key] = float(
+                                self._calibrator.transform(
+                                    strategy_id, np.array([val])
+                                )[0]
+                            )
 
         # Combine signals
         novel_indices, novelty_scores = self._combiner.combine(
@@ -277,6 +296,7 @@ class NoveltyDetector:
         self._is_initialized = False
         self._reference_signature = None
         self._calibrator_reference_signature = None
+        self._calibrator_score_keys = {}
         if self._calibrator is not None:
             self._calibrator.reset()
 

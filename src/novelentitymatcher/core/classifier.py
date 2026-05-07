@@ -65,6 +65,8 @@ class SetFitClassifier:
         self.is_trained = False
         self.logger = get_logger(__name__)
         self._use_sentence_transformer_fallback = False
+        self._training_examples: list[dict] = []
+        self._pending_new_class_examples: dict[str, list[str]] = {}
 
     def train(
         self,
@@ -86,6 +88,7 @@ class SetFitClassifier:
         epochs = num_epochs or self.num_epochs
         batch = batch_size or self.batch_size
 
+        self._training_examples = list(training_data)
         texts = [item["text"] for item in training_data]
         labels_arr = np.array([item["label"] for item in training_data])
 
@@ -151,6 +154,55 @@ class SetFitClassifier:
                 self._train_logistic_head(embeddings, labels_arr, training_data)
 
         self.is_trained = True
+
+    def add_class(self, class_name: str, examples: list[str]) -> None:
+        if not self.is_trained or self.model is None:
+            raise TrainingError(
+                "Model not trained. Call train() first.",
+                details={"model_name": self.model_name},
+            )
+        if class_name in self.labels:
+            self.logger.warning("Class '%s' already exists, skipping.", class_name)
+            return
+
+        embeddings = np.asarray(self.model.encode(examples, show_progress_bar=False))
+        if self._use_sentence_transformer_fallback:
+            self.class_centroids[class_name] = embeddings.mean(axis=0)
+            self.labels.append(class_name)
+        else:
+            self._pending_new_class_examples[class_name] = list(examples)
+            self.labels.append(class_name)
+            centroid = embeddings.mean(axis=0)
+            self.class_centroids[class_name] = centroid
+
+    def retrain_head(self) -> None:
+        if not self.is_trained or self.model is None:
+            raise TrainingError(
+                "Model not trained. Call train() first.",
+                details={"model_name": self.model_name},
+            )
+        if not self._pending_new_class_examples:
+            self.logger.warning("No pending classes to retrain.")
+            return
+
+        all_examples = list(self._training_examples)
+        for class_name, class_examples in self._pending_new_class_examples.items():
+            for ex_text in class_examples:
+                all_examples.append({"text": ex_text, "label": class_name})
+
+        texts = [item["text"] for item in all_examples]
+        labels_arr = np.array([item["label"] for item in all_examples])
+
+        if self._use_sentence_transformer_fallback:
+            embeddings = np.asarray(self.model.encode(texts, show_progress_bar=False))
+            self._train_fallback_head(embeddings, labels_arr, all_examples)
+        elif hasattr(self.model, "model_body"):
+            body = self.model.model_body
+            embeddings = np.asarray(body.encode(texts, show_progress_bar=False))
+            self._train_logistic_head(embeddings, labels_arr, all_examples)
+
+        self._pending_new_class_examples.clear()
+        self._training_examples = all_examples
 
     def _train_fallback_head(
         self,
