@@ -50,7 +50,7 @@ class UncertaintyStrategy(NoveltyStrategy):
         embeddings: np.ndarray,
         predicted_classes: list[str],
         confidences: np.ndarray,
-        **kwargs,
+        **kwargs: Any,
     ) -> tuple[set[int], dict[int, dict[str, Any]]]:
         """
         Detect novel samples using uncertainty metrics.

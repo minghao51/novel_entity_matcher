@@ -37,7 +37,9 @@ class AsyncExecutor:
             )
         return self._executor
 
-    async def run_in_thread(self, func: Callable, *args, **kwargs) -> Any:
+    async def run_in_thread(
+        self, func: Callable[..., Any], *args: Any, **kwargs: Any
+    ) -> Any:
         """
         Run a sync function in a thread pool.
 

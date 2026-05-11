@@ -29,7 +29,7 @@ class CrossEncoderReranker:
     def __init__(
         self,
         model: str = "bge-m3",
-        backend=None,
+        backend: Any | None = None,
         device: str | None = None,
         batch_size: int = 32,
     ):

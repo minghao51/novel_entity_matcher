@@ -192,7 +192,7 @@ class NoveltyDetector:
         predicted_classes: list[str],
         reference_embeddings: np.ndarray | None = None,
         reference_labels: list[str] | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> NovelSampleReport:
         """
         Detect novel samples using configured strategies.
