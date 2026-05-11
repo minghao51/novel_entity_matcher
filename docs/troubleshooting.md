@@ -116,7 +116,7 @@ If you're getting **too few matches** (low recall):
 - **Balanced** (0.7, default): General purpose
 - **High recall** (0.5-0.6): Fuzzy search, data cleaning
 
-Use the maintained `Matcher` examples under [`examples/`](../examples/) when tuning thresholds or comparing modes.
+Use the maintained `Matcher` examples in [`examples.md`](./examples.md) when tuning thresholds or comparing modes.
 
 ## Model Selection Issues
 

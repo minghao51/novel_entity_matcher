@@ -246,7 +246,7 @@ print(f"Model: {stats['model_name']}")
 
 ## Discovery Pipeline Configuration
 
-`DiscoveryPipeline` uses [`PipelineConfig`](../src/novelentitymatcher/pipeline/config.py) to control the internal seven-stage discovery flow: match, drift detection, OOD detection, clustering, stability filtering, evidence extraction, and proposal generation.
+`DiscoveryPipeline` uses [`PipelineConfig`](https://github.com/minghao51/novel_entity_matcher/blob/main/src/novelentitymatcher/pipeline/config.py) to control the internal seven-stage discovery flow: match, drift detection, OOD detection, clustering, stability filtering, evidence extraction, and proposal generation.
 
 ```python
 from novelentitymatcher import DiscoveryPipeline, PipelineConfig

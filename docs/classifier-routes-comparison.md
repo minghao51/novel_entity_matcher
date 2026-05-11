@@ -29,37 +29,37 @@ The goal is not to rank them globally. Each route optimizes for a different mix 
 
 ### Embedding Model Throughput Comparison
 
-![Embedding Performance](images/embeddings_performance.png)
+![Embedding Performance](images/benchmarks/embeddings_performance.png)
 
 Static embeddings (potion-8m, potion-32m, mrl-en) dramatically outperform dynamic embeddings for throughput while maintaining competitive accuracy.
 
 ### Latency Comparison
 
-![Embedding Latency](images/embeddings_latency.png)
+![Embedding Latency](images/benchmarks/embeddings_latency.png)
 
 Average and P95 latency across all embedding models and datasets. Static embeddings show sub-millisecond latency compared to 5-15ms for dynamic models.
 
 ### Accuracy Comparison Across All Routes
 
-![Accuracy Comparison](images/accuracy_comparison.png)
+![Accuracy Comparison](images/benchmarks/accuracy_comparison.png)
 
 Comparison of top-1 accuracy across all routes and models. Training routes (head-only, full, bert) show significant accuracy improvements over zero-shot on complex datasets.
 
 ### Training Time vs Accuracy Tradeoff
 
-![Training vs Accuracy](images/training_vs_accuracy.png)
+![Training vs Accuracy](images/benchmarks/training_vs_accuracy.png)
 
 Scatter plot showing the relationship between training time and accuracy for SetFit (head-only, full) and BERT routes.
 
 ### Static vs Dynamic Embeddings
 
-![Static vs Dynamic](images/static_vs_dynamic.png)
+![Static vs Dynamic](images/benchmarks/static_vs_dynamic.png)
 
 Side-by-side comparison of static embeddings (potion-8m, potion-32m, mrl-en) vs dynamic embeddings (minilm, bge-base, mpnet) across throughput and accuracy.
 
 ### Model Selection Decision Tree
 
-![Model Selection Guide](images/model_selection_guide.png)
+![Model Selection Guide](images/benchmarks/model_selection_guide.png)
 
 Interactive decision tree for selecting the appropriate route based on dataset size, available labels, and performance requirements.
 

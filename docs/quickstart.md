@@ -293,7 +293,7 @@ print(matcher.diagnose("UnknownPlace"))
 
 ## Run Examples
 
-Project examples live in [`examples/`](../examples/).
+Project examples live in [`examples.md`](./examples.md).
 
 From the repository root:
 

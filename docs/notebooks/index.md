@@ -1,15 +1,15 @@
 # Notebooks
 
-Interactive marimo notebooks for entity matching, novelty detection, and benchmarking.
+Interactive marimo notebooks for entity matching, novelty detection, discovery pipelines, and benchmarking.
 
-**Source of truth:** [`notebooks/*.py`](https://github.com/minghao51/novel_entity_matcher/tree/main/notebooks) — Quarto `.qmd` versions are auto-rendered from the marimo sources in CI.
+**Source of truth:** [`notebooks/*.py`](https://github.com/minghao51/novel_entity_matcher/tree/main/notebooks) — Quarto `.qmd` versions are auto-rendered for static HTML embeds.
 
 | Notebook | Description |
 |----------|-------------|
-| [Zero-Shot Country Matching Explorer](01_country_matching_explorer.md) | Type a country name with typos, aliases, or alternate languages and see how the Matcher resolves it to a canonical entity — no training required. |
-| [Novel Entity Detection Dashboard](02_novel_entity_dashboard.md) | Feed in text queries and see which ones are flagged as novel — not matching any known entity. Uses confidence + KNN distance strategies. |
-| [Training Impact Analyzer](03_training_impact_analyzer.md) | Compare zero-shot vs trained matching side-by-side. See how accuracy changes for known and tricky inputs. |
-| [Methodology & Benchmarks Overview](04_methodology_benchmarks_overview.md) | Comprehensive overview of all classification modes, novelty detection strategies, parameter sweeps, and performance benchmarks. |
+| [Entity Matching Explorer](01_entity_matching_explorer.md) | Learn how the Matcher resolves messy text — typos, aliases, foreign names — to canonical entity IDs using embedding similarity and optional few-shot training. |
+| [Novelty Detection Lab](02_novelty_detection_lab.md) | Explore how novelty detection flags inputs that don't belong to any known entity class. Compare strategies side-by-side and tune thresholds. |
+| [Discovery Pipeline](03_discovery_pipeline.md) | Walk through the full 5-stage discovery pipeline: match, detect novel inputs, cluster them, extract evidence, and propose new class names. |
+| [Benchmarks & Production Guide](04_benchmarks_production_guide.md) | Interactive reference for selecting classification modes, novelty strategies, embedding models, and production configurations. |
 
 ## Run locally
 
@@ -26,3 +26,9 @@ uv run quarto render notebooks/
 uv run python scripts/generate_notebook_docs.py
 uv run mkdocs serve
 ```
+
+## Generated Artifacts Policy
+
+- Commit regenerated `docs/notebooks/*.md` stubs whenever notebook titles/descriptions change.
+- Commit regenerated `docs/notebooks/html/*.html` after `quarto render notebooks/` for publishable docs updates.
+- Commit `notebooks/_freeze/**` only when you intentionally refresh cached execution outputs.

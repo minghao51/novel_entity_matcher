@@ -64,4 +64,4 @@ Strategies are combined using one of five methods:
 
 ---
 
-**Related**: [Classification Methods](../classification/) | [Methodology Overview](../overview.md)
+**Related**: [Classification Methods](../classification/index.md) | [Methodology Overview](../overview.md)

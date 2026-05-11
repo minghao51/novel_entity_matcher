@@ -2,7 +2,7 @@
 
 This document provides the mathematical formulations, architectural DAGs, and methodological details for the two-phase pipeline used in Novel Entity Matcher.
 
-**Related**: [Novelty Detection Benchmark](../novelty-detection-benchmark.md) | [Novel Class Detection](../novel-class-detection.md) | [Matcher Modes](../matcher-modes.md)
+**Related**: [Novelty Detection Benchmark](../experiments/novelty-detection-benchmark.md) | [Novel Class Detection](../novel-class-detection.md) | [Matcher Modes](../matcher-modes.md)
 
 ---
 

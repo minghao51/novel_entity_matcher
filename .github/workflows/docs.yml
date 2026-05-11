@@ -51,8 +51,38 @@ jobs:
       - name: Generate MkDocs stub pages
         run: uv run python scripts/generate_notebook_docs.py
 
+      - name: Verify notebook docs stubs are up to date
+        run: git diff --exit-code -- docs/notebooks/
+
       - name: Build site
-        run: uv run mkdocs build
+        run: uv run mkdocs build 2>&1 | tee mkdocs-build.log
+
+      - name: Enforce docs warning ratchet
+        run: |
+          current_count=$(grep -c "^WARNING -  " mkdocs-build.log || true)
+          baseline_count=$(cat .github/mkdocs-warning-baseline.txt)
+          echo "Current warnings: ${current_count}"
+          echo "Baseline warnings: ${baseline_count}"
+          if [ "${current_count}" -gt "${baseline_count}" ]; then
+            echo "MkDocs warning count increased above baseline."
+            exit 1
+          fi
+
+      - name: Enforce warning-free notebook docs
+        run: |
+          if grep -E "WARNING -  Doc file 'notebooks/" mkdocs-build.log; then
+            echo "Notebook docs emitted MkDocs warnings. Fix links or references in docs/notebooks/*."
+            exit 1
+          fi
+
+      - name: Enforce full-site strict mode when warning baseline is zero
+        run: |
+          baseline_count=$(cat .github/mkdocs-warning-baseline.txt)
+          if [ "${baseline_count}" -eq 0 ]; then
+            uv run mkdocs build --strict
+          else
+            echo "Baseline is non-zero (${baseline_count}); strict mode enforcement deferred."
+          fi
 
       - name: Upload artifact
         if: github.event_name != 'pull_request'

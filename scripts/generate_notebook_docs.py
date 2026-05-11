@@ -31,18 +31,43 @@ def slug_from_filename(filename: str) -> str:
     return os.path.splitext(filename)[0]
 
 
+def _normalize_base_path(base_path: str) -> str:
+    cleaned = base_path.strip()
+    if not cleaned:
+        return ""
+    if not cleaned.startswith("/"):
+        cleaned = f"/{cleaned}"
+    return cleaned.rstrip("/")
+
+
+def _site_base_path() -> str:
+    # Keep docs portable by default; allow overrides for hosted prefixes.
+    return _normalize_base_path(os.getenv("NOTEBOOK_DOCS_SITE_BASE_PATH", ""))
+
+
 def generate_stub(meta: dict, slug: str) -> str:
     title = meta.get("title", slug.replace("_", " ").title())
     description = meta.get("description", "")
+    html_slug = slug.replace("_", "-")
+    base_path = _site_base_path()
+    iframe_src = f"{base_path}/notebooks/html/{slug}.html" if base_path else f"html/{slug}.html"
 
-    return f"""# {title}
+    return f"""---
+hide:
+  - navigation
+  - toc
+---
+
+# {title}
 
 {description}
 
-<div style="margin: 0 -0.8rem">
-  <iframe src="html/{slug}.html"
-    style="width:100%; height:600px; border:1px solid var(--md-default-fg-color--lightest); border-radius:4px;"
-    loading="lazy"></iframe>
+<div class="iframe-container" id="iframe-wrapper-{html_slug}">
+  <div class="iframe-controls">
+    <button onclick="toggleNotebookFullscreen(this)" class="md-button">Expand</button>
+    <a href="{iframe_src}" target="_blank" class="md-button">Open in New Tab</a>
+  </div>
+  <iframe src="{iframe_src}" allowfullscreen loading="lazy"></iframe>
 </div>
 
 ## Run Locally
@@ -58,10 +83,10 @@ def generate_index(entries: list[tuple[str, str, str]]) -> str:
     lines = [
         "# Notebooks",
         "",
-        "Interactive marimo notebooks for entity matching, novelty detection, and benchmarking.",
+        "Interactive marimo notebooks for entity matching, novelty detection, discovery pipelines, and benchmarking.",
         "",
         "**Source of truth:** [`notebooks/*.py`](https://github.com/minghao51/novel_entity_matcher/tree/main/notebooks)"
-        " — Quarto `.qmd` versions are auto-rendered from the marimo sources in CI.",
+        " — Quarto `.qmd` versions are auto-rendered for static HTML embeds.",
         "",
         "| Notebook | Description |",
         "|----------|-------------|",
@@ -87,8 +112,14 @@ def generate_index(entries: list[tuple[str, str, str]]) -> str:
         "uv run python scripts/generate_notebook_docs.py",
         "uv run mkdocs serve",
         "```",
+        "",
+        "## Generated Artifacts Policy",
+        "",
+        "- Commit regenerated `docs/notebooks/*.md` stubs whenever notebook titles/descriptions change.",
+        "- Commit regenerated `docs/notebooks/html/*.html` after `quarto render notebooks/` for publishable docs updates.",
+        "- Commit `notebooks/_freeze/**` only when you intentionally refresh cached execution outputs.",
     ]
-    return "\n".join(lines)
+    return "\n".join(lines) + "\n"
 
 
 def main():

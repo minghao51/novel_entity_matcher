@@ -145,7 +145,7 @@ Lower is better (single query latency):
 | bge-base | ~25ms | 2.5x slower |
 | mpnet | ~30ms | 3x slower |
 
-*Results from `benchmark.md` - varies by hardware.*
+*Results from [`experiments/benchmarking.md`](./experiments/benchmarking.md) - varies by hardware.*
 
 ### Memory Usage
 
@@ -341,5 +341,5 @@ matcher.fit(training_data, mode="full", num_epochs=4)
 
 - See [`static-embeddings.md`](./static-embeddings.md) for static model details
 - See [`matcher-modes.md`](./matcher-modes.md) for mode selection
-- See [`benchmark.md`](./benchmark.md) for performance benchmarks
+- See [`experiments/benchmarking.md`](./experiments/benchmarking.md) for performance benchmarks
 - See [`configuration.md`](./configuration.md) for custom model registration

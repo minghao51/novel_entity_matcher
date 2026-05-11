@@ -73,4 +73,4 @@ The system supports three embedding model backends, selected based on mode and m
 
 ---
 
-**Related**: [Novelty Detection Methods](../novelty-detection/) | [Methodology Overview](../overview.md)
+**Related**: [Novelty Detection Methods](../novelty-detection/index.md) | [Methodology Overview](../overview.md)

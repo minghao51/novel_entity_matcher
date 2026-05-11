@@ -247,7 +247,7 @@ Results are emitted as benchmark CSV artifacts in the project root (for example:
 
 ## Related Documentation
 
-- [Novel Class Detection](./novel-class-detection.md) - Overview of novelty detection in the package
-- [Architecture](./architecture.md) - System architecture
-- [Matcher Modes](./matcher-modes.md) - Classification modes (zero-shot, head-only, full)
-- [Quickstart](./quickstart.md) - Getting started guide
+- [Novel Class Detection](../novel-class-detection.md) - Overview of novelty detection in the package
+- [Architecture](../architecture.md) - System architecture
+- [Matcher Modes](../matcher-modes.md) - Classification modes (zero-shot, head-only, full)
+- [Quickstart](../quickstart.md) - Getting started guide

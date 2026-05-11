@@ -42,3 +42,7 @@ uv run ruff check .
 - Prefer non-breaking changes to public imports in `novelentitymatcher`.
 - Keep docs and examples aligned with actual file locations when moving experiments.
 - Avoid committing generated artifacts (`dist/`, `docs/build/`, checkpoints, `__pycache__`).
+- If a PR changes `.qmd` notebooks, run:
+  - `uv run quarto render notebooks/`
+  - `uv run python scripts/generate_notebook_docs.py`
+  - verify no docs drift with `git diff -- docs/notebooks/`.

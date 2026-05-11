@@ -95,7 +95,7 @@ Benchmark results (queries per second):
 | mrl-en | Static | ~1800 QPS | 17x faster |
 | minilm | Dynamic | ~100 QPS | baseline |
 
-*Results from `benchmark.md` - actual performance varies by hardware.*
+*Results from [`experiments/benchmarking.md`](./experiments/benchmarking.md) - actual performance varies by hardware.*
 
 ## Dimension Reduction with MRL
 
@@ -222,5 +222,5 @@ matcher.fit(training_data, mode="full")
 
 - See [`models.md`](./models.md) for complete model registry
 - See [`matcher-modes.md`](./matcher-modes.md) for mode selection
-- See [`benchmark.md`](./benchmark.md) for performance comparisons
+- See [`experiments/benchmarking.md`](./experiments/benchmarking.md) for performance comparisons
 - See [`configuration.md`](./configuration.md) for custom model registration

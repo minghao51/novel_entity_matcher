@@ -81,10 +81,10 @@ nav:
       - Results: experiments/benchmark-results.md
   - Notebooks:
       - Overview: notebooks/index.md
-      - Country Explorer: notebooks/01_country_matching_explorer.md
-      - Novelty Dashboard: notebooks/02_novel_entity_dashboard.md
-      - Training Impact: notebooks/03_training_impact_analyzer.md
-      - Methodology: notebooks/04_methodology_benchmarks_overview.md
+      - Entity Matching Explorer: notebooks/01_entity_matching_explorer.md
+      - Novelty Detection Lab: notebooks/02_novelty_detection_lab.md
+      - Discovery Pipeline: notebooks/03_discovery_pipeline.md
+      - Benchmarks & Production Guide: notebooks/04_benchmarks_production_guide.md
   - Project:
       - Testing Guide: testing.md
       - Contributing: CONTRIBUTING.md
@@ -137,6 +137,12 @@ markdown_extensions:
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.details
+
+extra_css:
+  - stylesheets/notebooks.css
+
+extra_javascript:
+  - javascripts/notebooks.js
 
 extra:
   version:
