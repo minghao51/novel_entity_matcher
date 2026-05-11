@@ -1,0 +1,183 @@
+---
+title: "Novelty Detection Lab"
+description: "Explore how novelty detection flags inputs that don't belong to any known entity class. Compare strategies side-by-side and tune thresholds."
+date: today
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    code-fold: true
+    code-tools: true
+---
+
+This notebook demonstrates novelty detection strategies. A matcher trained on 5 science
+categories is tested against known queries and out-of-domain queries. Different strategies
+are compared for their ability to separate known from novel.
+
+## Setup
+
+```{python}
+#| label: setup
+#| cache: true
+import pandas as pd
+import matplotlib.pyplot as plt
+from novelentitymatcher import Matcher, NovelEntityMatcher
+from novelentitymatcher.novelty import DetectionConfig
+from novelentitymatcher.novelty.config.strategies import (
+    ConfidenceConfig, KNNConfig, LOFConfig, MahalanobisConfig,
+)
+
+entities = [
+    {"id": "physics", "name": "Physics"},
+    {"id": "cs", "name": "Computer Science"},
+    {"id": "biology", "name": "Biology"},
+    {"id": "chemistry", "name": "Chemistry"},
+    {"id": "math", "name": "Mathematics"},
+]
+
+training_texts = [
+    "quantum mechanics", "wave function", "particle physics", "thermodynamics",
+    "machine learning", "neural networks", "algorithm design", "data structures",
+    "gene expression", "protein synthesis", "cell division", "DNA replication",
+    "organic synthesis", "molecular bonding", "periodic table", "reaction kinetics",
+    "linear algebra", "calculus", "topology", "number theory",
+]
+
+training_labels = [
+    "physics", "physics", "physics", "physics",
+    "cs", "cs", "cs", "cs",
+    "biology", "biology", "biology", "biology",
+    "chemistry", "chemistry", "chemistry", "chemistry",
+    "math", "math", "math", "math",
+]
+
+matcher = Matcher(entities=entities, model="minilm", threshold=0.6)
+matcher.fit(texts=training_texts, labels=training_labels)
+```
+
+## Detection with KNN Distance
+
+```{python}
+#| label: knn-detection
+#| cache: true
+queries = [
+    "quantum superposition", "deep learning models", "CRISPR gene editing",
+    "computational chemistry", "differential equations",
+    "discount coupon policy", "weather forecast today",
+    "gibberish zxqv placeholder", "sports scores nfl", "recipe chocolate cake",
+]
+
+nm = NovelEntityMatcher(
+    matcher=matcher,
+    detection_config=DetectionConfig(
+        strategies=["confidence", "knn_distance"],
+        confidence=ConfidenceConfig(threshold=0.45),
+        knn_distance=KNNConfig(k=20, distance_threshold=0.45),
+        combine_method="weighted",
+    ),
+)
+
+rows = []
+for q in queries:
+    r = nm.match(q)
+    rows.append({
+        "query": q,
+        "is_novel": r.is_novel,
+        "matched": r.predicted_id if not r.is_novel else "—",
+        "confidence": f"{r.score:.2%}",
+        "novel_score": f"{r.novel_score:.3f}" if r.novel_score else "—",
+    })
+
+pd.DataFrame(rows)
+```
+
+```{python}
+#| label: score-chart
+#| cache: true
+scores = []
+for q in queries:
+    r = matcher.match(q)
+    entry = r if isinstance(r, dict) else r
+    score = entry.get("score", 0) if isinstance(entry, dict) else 0
+    scores.append(score)
+
+fig, ax = plt.subplots(figsize=(8, 4))
+colors = ["#e74c3c" if s < 0.5 else "#2ecc71" for s in scores]
+ax.barh(range(len(queries)), scores, color=colors)
+ax.set_yticks(range(len(queries)))
+ax.set_yticklabels(queries, fontsize=9)
+ax.set_xlabel("Match Confidence")
+ax.set_title("Confidence Scores (red = likely novel)")
+ax.axvline(x=0.5, color="gray", linestyle="--", alpha=0.7, label="threshold")
+ax.legend()
+ax.set_xlim(0, 1)
+plt.tight_layout()
+plt.show()
+```
+
+## Strategy Comparison
+
+```{python}
+#| label: strategy-compare
+#| cache: true
+known_queries = queries[:5]
+novel_queries = queries[5:]
+all_queries = known_queries + novel_queries
+true_labels = [0] * len(known_queries) + [1] * len(novel_queries)
+
+strategy_configs = {
+    "confidence": DetectionConfig(
+        strategies=["confidence"],
+        confidence=ConfidenceConfig(threshold=0.5),
+    ),
+    "knn_distance": DetectionConfig(
+        strategies=["confidence", "knn_distance"],
+        confidence=ConfidenceConfig(threshold=0.5),
+        knn_distance=KNNConfig(k=20, distance_threshold=0.5),
+        combine_method="weighted",
+    ),
+    "mahalanobis": DetectionConfig(
+        strategies=["confidence", "mahalanobis"],
+        confidence=ConfidenceConfig(threshold=0.5),
+        mahalanobis=MahalanobisConfig(),
+        combine_method="weighted",
+    ),
+    "lof": DetectionConfig(
+        strategies=["confidence", "lof"],
+        confidence=ConfidenceConfig(threshold=0.5),
+        lof=LOFConfig(),
+        combine_method="weighted",
+    ),
+}
+
+results = {}
+for name, cfg in strategy_configs.items():
+    nm = NovelEntityMatcher(matcher=matcher, detection_config=cfg)
+    scores = []
+    for q in all_queries:
+        r = nm.match(q)
+        scores.append(r.novel_score if r.novel_score else (1.0 - r.score))
+
+    known_mean = sum(s for s, t in zip(scores, true_labels) if t == 0) / len(known_queries)
+    novel_mean = sum(s for s, t in zip(scores, true_labels) if t == 1) / len(novel_queries)
+    results[name] = {"known_mean": known_mean, "novel_mean": novel_mean}
+
+fig, ax = plt.subplots(figsize=(8, 4))
+names = list(results.keys())
+known_vals = [results[n]["known_mean"] for n in names]
+novel_vals = [results[n]["novel_mean"] for n in names]
+x = range(len(names))
+w = 0.35
+ax.bar([p - w / 2 for p in x], known_vals, w, label="Known queries", color="#2ecc71")
+ax.bar([p + w / 2 for p in x], novel_vals, w, label="Novel queries", color="#e74c3c")
+ax.set_xticks(list(x))
+ax.set_xticklabels(names, fontsize=10)
+ax.set_ylabel("Mean Novel Score")
+ax.set_title("Strategy Comparison: Known vs Novel Score Separation")
+ax.legend()
+ax.grid(axis="y", alpha=0.3)
+plt.tight_layout()
+plt.show()
+```
+
+**Better separation** (higher novel score, lower known score) means a better strategy. KNN distance and Mahalanobis generally offer the best tradeoff for production use.

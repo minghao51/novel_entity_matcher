@@ -1,0 +1,141 @@
+---
+title: "Entity Matching Explorer"
+description: "Learn how the Matcher resolves messy text — typos, aliases, foreign names — to canonical entity IDs using embedding similarity and optional few-shot training."
+date: today
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    code-fold: true
+    code-tools: true
+---
+
+This notebook demonstrates entity matching from zero-shot through trained modes.
+Part 1 shows zero-shot matching with cosine similarity. Part 2 measures how training
+data quantity affects accuracy.
+
+## Part 1: Zero-Shot Matching
+
+```{python}
+#| label: setup
+#| cache: true
+import pandas as pd
+import matplotlib.pyplot as plt
+from novelentitymatcher import Matcher
+
+entities = [
+    {"id": "DE", "name": "Germany", "aliases": ["Deutschland", "Bundesrepublik"]},
+    {"id": "FR", "name": "France", "aliases": ["Frankreich", "La France"]},
+    {"id": "US", "name": "United States", "aliases": ["USA", "America"]},
+    {"id": "JP", "name": "Japan", "aliases": ["Nihon", "Nippon"]},
+    {"id": "CN", "name": "China", "aliases": ["Zhongguo"]},
+    {"id": "BR", "name": "Brazil", "aliases": ["Brasil"]},
+    {"id": "IN", "name": "India", "aliases": ["Bharat"]},
+    {"id": "GB", "name": "United Kingdom", "aliases": ["UK", "Britain", "England"]},
+    {"id": "AU", "name": "Australia", "aliases": ["Oz"]},
+    {"id": "CA", "name": "Canada", "aliases": ["Canuck Land"]},
+]
+
+matcher = Matcher(entities=entities, mode="zero-shot")
+matcher.fit()
+```
+
+```{python}
+#| label: match-examples
+#| cache: true
+queries = [
+    "Deutchland", "America", "Frankreich", "Nihon", "UK",
+    "Brasil", "Bharat", "Canuck Land", "Zhongguo", "Oz",
+]
+
+results = []
+for q in queries:
+    r = matcher.match(q, top_k=3)
+    batch = r if isinstance(r, list) else [r]
+    for entry in batch:
+        entry["query"] = q
+    results.extend(batch)
+
+df = pd.DataFrame(results)
+df[["query", "id", "name", "score"]].head(15)
+```
+
+```{python}
+#| label: similarity-chart
+#| cache: true
+fig, ax = plt.subplots(figsize=(7, 4))
+for q in ["Deutchland", "America", "Frankreich"]:
+    r = matcher.match(q, top_k=10)
+    batch = r if isinstance(r, list) else [r]
+    labels = [e.get("id", "?") for e in batch]
+    scores = [e.get("score", 0) for e in batch]
+    ax.plot(labels, scores, "o-", label=q, alpha=0.7)
+
+ax.set_xlabel("Entity")
+ax.set_ylabel("Cosine Similarity")
+ax.set_title("Similarity Profiles for Three Queries")
+ax.legend()
+ax.grid(alpha=0.3)
+plt.tight_layout()
+plt.show()
+```
+
+## Part 2: Training Impact
+
+```{python}
+#| label: training-sweep
+#| cache: true
+training_pairs = [
+    ("Deutschland", "DE"), ("Allemagne", "DE"),
+    ("Frankreich", "FR"), ("France", "FR"),
+    ("United States of America", "US"), ("Vereinigte Staaten", "US"),
+    ("Nihon", "JP"), ("Japan", "JP"),
+    ("Zhongguo", "CN"), ("Chine", "CN"),
+    ("Brasilien", "BR"), ("Brasil", "BR"),
+    ("Bharat", "IN"), ("India", "IN"),
+    ("Großbritannien", "GB"), ("United Kingdom", "GB"),
+    ("Australien", "AU"), ("Australia", "AU"),
+    ("Kanada", "CA"), ("Canada", "CA"),
+]
+
+test_queries = [
+    ("Deutchland", "DE"), ("America", "US"), ("Frankreich", "FR"),
+    ("Nihon", "JP"), ("UK", "GB"), ("Brasil", "BR"),
+    ("Bharat", "IN"), ("Canuck Land", "CA"), ("Zhongguo", "CN"), ("Oz", "AU"),
+]
+
+sweep = {}
+for n in range(0, len(training_pairs) + 1, 2):
+    texts = [t for t, _ in training_pairs[:n]]
+    labels = [l for _, l in training_pairs[:n]]
+    mode = "zero-shot" if n == 0 else None
+    m = Matcher(entities=entities, mode=mode)
+    if n > 0:
+        m.fit(texts=texts, labels=labels)
+    else:
+        m.fit()
+    correct = sum(
+        1 for q, expected in test_queries
+        if (r := m.match(q)) and isinstance(r, dict) and r.get("id") == expected
+    )
+    sweep[n] = correct / len(test_queries)
+
+fig, ax = plt.subplots(figsize=(8, 4))
+xs = list(sweep.keys())
+ys = list(sweep.values())
+ax.plot(xs, ys, "o-", color="#3498db", linewidth=2, markersize=6)
+ax.fill_between(xs, ys, alpha=0.1, color="#3498db")
+ax.set_xlabel("Training Samples")
+ax.set_ylabel("Accuracy")
+ax.set_title("Accuracy vs Training Size")
+ax.set_ylim(0, 1.05)
+ax.axhline(y=sweep[0], color="#e74c3c", linestyle="--", alpha=0.5,
+           label=f"Zero-shot baseline ({sweep[0]:.0%})")
+ax.grid(alpha=0.3)
+ax.legend()
+ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.0%}"))
+plt.tight_layout()
+plt.show()
+```
+
+**Key insight:** Even 4–6 training samples per entity can significantly boost accuracy over zero-shot, thanks to SetFit's few-shot learning.

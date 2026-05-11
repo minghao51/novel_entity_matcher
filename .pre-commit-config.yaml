@@ -3,12 +3,18 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^(notebooks/_freeze/|docs/notebooks/html/)
       - id: end-of-file-fixer
+        exclude: ^(notebooks/_freeze/|docs/notebooks/html/)
       - id: check-yaml
       - id: check-merge-conflict
       - id: debug-statements
       - id: check-added-large-files
         args: ["--maxkb=1000"]
+      - id: check-added-large-files
+        name: check-generated-artifact-size
+        args: ["--maxkb=5000"]
+        files: ^(docs/notebooks/html/|notebooks/_freeze/)
 
   - repo: https://github.com/astral-sh/uv-pre-commit
     rev: 0.5.15

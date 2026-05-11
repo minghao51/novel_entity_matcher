@@ -1,0 +1,190 @@
+---
+title: "Discovery Pipeline"
+description: "Walk through the full 5-stage discovery pipeline: match, detect novel inputs, cluster them, extract evidence, and propose new class names."
+date: today
+format:
+  html:
+    self-contained: true
+    embed-resources: true
+    code-fold: true
+    code-tools: true
+---
+
+This notebook demonstrates the most powerful feature of Novel Entity Matcher — the
+**discovery pipeline**. It doesn't just reject unknown inputs, it discovers what they are
+by clustering novel samples and proposing new class names.
+
+## Setup: Product Categories
+
+```{python}
+#| label: setup
+#| cache: true
+import pandas as pd
+import matplotlib.pyplot as plt
+from novelentitymatcher import Matcher, NovelEntityMatcher
+from novelentitymatcher.novelty import DetectionConfig
+from novelentitymatcher.novelty.config.strategies import ConfidenceConfig, KNNConfig
+
+entities = [
+    {"id": "electronics", "name": "Electronics"},
+    {"id": "clothing", "name": "Clothing"},
+    {"id": "food", "name": "Food & Beverage"},
+    {"id": "books", "name": "Books & Media"},
+    {"id": "sports", "name": "Sports Equipment"},
+]
+
+training_texts = [
+    "smartphone case", "laptop charger", "wireless headphones",
+    "tablet screen protector", "USB-C cable",
+    "winter jacket", "running shoes", "cotton t-shirt",
+    "wool sweater", "leather belt",
+    "organic coffee beans", "dark chocolate bar", "sparkling water",
+    "olive oil", "protein bars",
+    "science fiction novel", "cookbook recipes", "children's picture book",
+    "history biography", "self-help guide",
+    "yoga mat", "tennis racket", "swimming goggles",
+    "dumbbell set", "hiking backpack",
+]
+
+training_labels = [
+    "electronics", "electronics", "electronics", "electronics", "electronics",
+    "clothing", "clothing", "clothing", "clothing", "clothing",
+    "food", "food", "food", "food", "food",
+    "books", "books", "books", "books", "books",
+    "sports", "sports", "sports", "sports", "sports",
+]
+
+matcher = Matcher(entities=entities, model="minilm", threshold=0.6)
+matcher.fit(texts=training_texts, labels=training_labels)
+```
+
+## Stage 1–2: Match + Detect
+
+```{python}
+#| label: queries
+#| cache: true
+queries = [
+    "bluetooth speaker", "denim jeans", "green tea",
+    "mystery thriller", "basketball hoop",
+    "bitcoin hardware wallet", "smart thermostat", "electric scooter",
+    "music streaming subscription", "robot vacuum cleaner",
+    "3D printer filament", "drone camera",
+    "solar panel kit", "meditation app", "board game expansion",
+]
+
+nm = NovelEntityMatcher(
+    matcher=matcher,
+    detection_config=DetectionConfig(
+        strategies=["confidence", "knn_distance"],
+        confidence=ConfidenceConfig(threshold=0.45),
+        knn_distance=KNNConfig(k=20, distance_threshold=0.45),
+        combine_method="weighted",
+    ),
+)
+
+rows = []
+for q in queries:
+    r = nm.match(q)
+    rows.append({
+        "query": q,
+        "is_novel": r.is_novel,
+        "matched": r.predicted_id if not r.is_novel else "—",
+        "confidence": f"{r.score:.2%}",
+        "novel_score": f"{r.novel_score:.3f}" if r.novel_score else "—",
+    })
+
+pd.DataFrame(rows)
+```
+
+The first 5 queries match known categories. The remaining 10 are from **emerging categories**
+the matcher has never seen — cryptocurrency hardware, smart home devices, electric vehicles,
+streaming services, IoT devices, and more.
+
+## Stage 3–5: Full Discovery
+
+```{python}
+#| label: discovery
+#| cache: true
+report = nm.discover_novel_classes(
+    queries, run_llm_proposal=False, return_metadata=True
+)
+
+novel = report.novel_sample_report.novel_samples
+print(f"Novel samples detected: {len(novel)} / {len(queries)}")
+print(f"Clusters found: {len(report.discovery_clusters)}")
+
+novel_rows = []
+for s in novel:
+    novel_rows.append({
+        "text": s.text,
+        "predicted_class": s.predicted_class,
+        "confidence": f"{s.confidence:.2%}",
+        "novelty_score": f"{s.novelty_score:.3f}" if s.novelty_score else "—",
+        "cluster_id": s.cluster_id if s.cluster_id is not None else "unclustered",
+    })
+
+pd.DataFrame(novel_rows)
+```
+
+```{python}
+#| label: cluster-chart
+#| cache: true
+clusters = report.discovery_clusters
+if clusters:
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ids = [f"Cluster {c.cluster_id}" for c in clusters]
+    sizes = [c.sample_count for c in clusters]
+    colors = ["#3498db", "#2ecc71", "#e74c3c", "#f39c12", "#9b59b6", "#1abc9c"]
+    ax.barh(range(len(ids)), sizes, color=colors[:len(ids)])
+    ax.set_yticks(range(len(ids)))
+    ax.set_yticklabels(ids)
+    ax.set_xlabel("Sample Count")
+    ax.set_title("Novel Sample Clusters")
+    for i, s in enumerate(sizes):
+        ax.text(s + 0.1, i, str(s), va="center", fontweight="bold")
+    plt.tight_layout()
+    plt.show()
+else:
+    print("No clusters found (novel samples may be too diverse or too few).")
+```
+
+## Cluster Evidence
+
+```{python}
+#| label: evidence
+#| cache: true
+if clusters:
+    evidence_rows = []
+    for c in clusters:
+        ev = c.evidence
+        keywords = (ev.keywords if ev else c.keywords)[:8]
+        examples = (ev.representative_examples if ev else c.example_texts)[:3]
+        evidence_rows.append({
+            "cluster": f"Cluster {c.cluster_id}",
+            "size": c.sample_count,
+            "keywords": ", ".join(keywords),
+            "examples": "; ".join(examples),
+        })
+    pd.DataFrame(evidence_rows)
+else:
+    print("No clusters to analyze.")
+```
+
+**Key insight:** The discovery pipeline automatically groups novel inputs into coherent clusters and extracts keywords. In production, an LLM would propose class names for each cluster — this is skipped here (no API key required). Use `run_llm_proposal=True` with an LLM provider for full proposals.
+
+## Production Usage
+
+```python
+from novelentitymatcher import DiscoveryPipeline
+
+pipeline = DiscoveryPipeline(
+    entities=entities,
+    model="minilm",
+    novelty_strategy="knn_distance",
+    min_cluster_size=3,
+)
+pipeline.fit(texts=training_texts, labels=training_labels)
+
+# For async: report = await pipeline.discover(queries)
+# For sync: use NovelEntityMatcher.discover_novel_classes() instead
+```
