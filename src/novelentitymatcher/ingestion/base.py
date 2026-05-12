@@ -3,8 +3,9 @@
 import asyncio
 import csv
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Union
+from typing import Any
 
 import requests
 
@@ -12,9 +13,27 @@ from novelentitymatcher.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-PathLike = Union[str, Path]
+PathLike = str | Path
 
 DEFAULT_MAX_BYTES = 50 * 1024 * 1024
+
+
+@dataclass
+class IngestionFailure:
+    """Structured error details for a failed ingestion task."""
+
+    fetcher: str
+    output_filename: str
+    error_type: str
+    message: str
+
+
+@dataclass
+class IngestionRunResult:
+    """Result of concurrent ingestion execution."""
+
+    output_paths: list[Path] = field(default_factory=list)
+    failures: list[IngestionFailure] = field(default_factory=list)
 
 
 def _fetch_url(
@@ -201,12 +220,47 @@ async def run_concurrent(
     Returns:
         List of paths to saved CSV files.
     """
+    result = await run_concurrent_detailed(
+        fetchers,
+        max_concurrent=max_concurrent,
+        batch_size=batch_size,
+        continue_on_error=False,
+    )
+    return result.output_paths
+
+
+async def run_concurrent_detailed(
+    fetchers: list[tuple[BaseFetcher, str]],
+    *,
+    max_concurrent: int = 4,
+    batch_size: int = 1000,
+    continue_on_error: bool = False,
+) -> IngestionRunResult:
+    """Run multiple fetchers concurrently with optional partial-success behavior."""
     semaphore = asyncio.Semaphore(max_concurrent)
     tasks = [
         fetcher.run_async(output_filename, semaphore, batch_size)
         for fetcher, output_filename in fetchers
     ]
-    return await asyncio.gather(*tasks)
+    raw_results = await asyncio.gather(*tasks, return_exceptions=continue_on_error)
+    if not continue_on_error:
+        return IngestionRunResult(output_paths=list(raw_results))  # type: ignore[arg-type]
+
+    output_paths: list[Path] = []
+    failures: list[IngestionFailure] = []
+    for (fetcher, output_filename), item in zip(fetchers, raw_results, strict=True):
+        if isinstance(item, Exception):
+            failures.append(
+                IngestionFailure(
+                    fetcher=fetcher.__class__.__name__,
+                    output_filename=output_filename,
+                    error_type=type(item).__name__,
+                    message=str(item) or repr(item),
+                )
+            )
+            continue
+        output_paths.append(item)  # type: ignore[arg-type]
+    return IngestionRunResult(output_paths=output_paths, failures=failures)
 
 
 def run_all_concurrent(
@@ -225,3 +279,21 @@ def run_all_concurrent(
         List of paths to saved CSV files.
     """
     return asyncio.run(run_concurrent(fetchers, max_concurrent, batch_size))
+
+
+def run_all_concurrent_detailed(
+    fetchers: list[tuple[BaseFetcher, str]],
+    *,
+    max_concurrent: int = 4,
+    batch_size: int = 1000,
+    continue_on_error: bool = False,
+) -> IngestionRunResult:
+    """Synchronous wrapper around ``run_concurrent_detailed``."""
+    return asyncio.run(
+        run_concurrent_detailed(
+            fetchers,
+            max_concurrent=max_concurrent,
+            batch_size=batch_size,
+            continue_on_error=continue_on_error,
+        )
+    )

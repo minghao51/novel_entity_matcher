@@ -6,8 +6,7 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
 from ..config import is_static_embedding_model, resolve_model_alias
-from ..utils.embedding_cache import LRUEmbeddingCache
-from ..utils.embeddings import ModelCache, get_default_cache
+from ..utils.embeddings import LRUEmbeddingCache, ModelCache, get_default_cache
 from ..utils.validation import (
     validate_entities,
     validate_model_name,

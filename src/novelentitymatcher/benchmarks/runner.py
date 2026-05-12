@@ -815,7 +815,7 @@ class BenchmarkRunner:
             confidence_thresholds = [0.2, 0.3, 0.4, 0.5]
 
         if datasets is None:
-            from ..utils.benchmark_dataset import build_processed_ood_sections
+            from ..utils.benchmarks import build_processed_ood_sections
 
             sections = build_processed_ood_sections(ood_ratio=ood_ratio)
             datasets = [s["section"] for s in sections]
@@ -823,7 +823,7 @@ class BenchmarkRunner:
         records = []
         for section_name in datasets:
             try:
-                from ..utils.benchmark_dataset import build_processed_ood_sections
+                from ..utils.benchmarks import build_processed_ood_sections
 
                 sections = build_processed_ood_sections(
                     sections=[section_name],

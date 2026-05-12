@@ -5,12 +5,12 @@ Supports both benchmark and research evaluation modes with
 comprehensive metrics and reporting.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 
 import numpy as np
 
-from ..schemas.reports import EvaluationReport
+from ..schemas.results import EvaluationReport
 from .metrics import (
     compute_auprc,
     compute_auroc,
@@ -173,7 +173,7 @@ class NoveltyEvaluator:
             confusion_matrix=cm,
             num_samples=len(scores),
             num_novel=int(np.sum(labels)),
-            timestamp=datetime.now().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
     def sweep_thresholds(

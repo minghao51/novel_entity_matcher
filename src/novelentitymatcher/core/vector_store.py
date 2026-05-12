@@ -126,7 +126,7 @@ class ChromaVectorStore:
         if self._collection is not None:
             return
         try:
-            import chromadb
+            import chromadb  # type: ignore[import-not-found]
         except ImportError as exc:
             raise ImportError(
                 "chromadb is required. Install with: pip install chromadb"
