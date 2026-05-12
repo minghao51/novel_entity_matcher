@@ -50,7 +50,9 @@ def generate_stub(meta: dict, slug: str) -> str:
     description = meta.get("description", "")
     html_slug = slug.replace("_", "-")
     base_path = _site_base_path()
-    iframe_src = f"{base_path}/notebooks/html/{slug}.html" if base_path else f"html/{slug}.html"
+    iframe_src = (
+        f"{base_path}/notebooks/html/{slug}.html" if base_path else f"html/{slug}.html"
+    )
 
     return f"""---
 hide:

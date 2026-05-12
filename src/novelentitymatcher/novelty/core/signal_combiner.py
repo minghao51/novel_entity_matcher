@@ -17,41 +17,123 @@ from ..config.weights import WeightConfig
 
 logger = logging.getLogger(__name__)
 
-# Strategy metrics extracted for each sample during weighted fusion.
-_SCORE_KEYS = [
-    "confidence_score",
-    "uncertainty_score",
-    "knn_novelty_score",
-    "cluster_support_score",
-    "self_knowledge_score",
-    "pattern_score",
-    "oneclass_score",
-    "prototypical_score",
-    "setfit_score",
-    "setfit_centroid_score",
-    "mahalanobis_novelty_score",
-    "lof_novelty_score",
-    "energy_score",
-    "log_likelihood",
+# Single source of truth for all strategy signals.
+# "kind": "flag" (binary), "score" (continuous), or "special" (threshold-based).
+# strategies with `score_only = False` only emit their flag key, not a score key.
+_STRATEGY_SIGNALS: list[dict[str, str]] = [
+    {
+        "id": "confidence",
+        "score_key": "confidence_score",
+        "flag_key": "confidence_is_novel",
+        "weight": "confidence",
+        "kind": "flag",
+    },
+    {
+        "id": "uncertainty",
+        "score_key": "uncertainty_score",
+        "flag_key": "uncertainty_is_novel",
+        "weight": "uncertainty",
+        "kind": "score",
+    },
+    {
+        "id": "knn_distance",
+        "score_key": "knn_novelty_score",
+        "flag_key": "knn_is_novel",
+        "weight": "knn",
+        "kind": "score",
+    },
+    {
+        "id": "clustering",
+        "score_key": "cluster_support_score",
+        "flag_key": "cluster_is_novel",
+        "weight": "cluster",
+        "kind": "score",
+    },
+    {
+        "id": "self_knowledge",
+        "score_key": "self_knowledge_score",
+        "flag_key": "self_knowledge_is_novel",
+        "weight": "self_knowledge",
+        "kind": "flag",
+    },
+    {
+        "id": "pattern",
+        "score_key": "pattern_score",
+        "flag_key": "pattern_is_novel",
+        "weight": "pattern",
+        "kind": "flag",
+    },
+    {
+        "id": "oneclass",
+        "score_key": "oneclass_score",
+        "flag_key": "oneclass_is_novel",
+        "weight": "oneclass",
+        "kind": "flag",
+    },
+    {
+        "id": "prototypical",
+        "score_key": "prototypical_score",
+        "flag_key": "prototypical_is_novel",
+        "weight": "prototypical",
+        "kind": "flag",
+    },
+    {
+        "id": "setfit",
+        "score_key": "setfit_score",
+        "flag_key": "setfit_is_novel",
+        "weight": "setfit",
+        "kind": "flag",
+    },
+    {
+        "id": "setfit_centroid",
+        "score_key": "setfit_centroid_novelty_score",
+        "flag_key": "setfit_centroid_is_novel",
+        "weight": "setfit_centroid",
+        "kind": "score",
+    },
+    {
+        "id": "mahalanobis",
+        "score_key": "mahalanobis_novelty_score",
+        "flag_key": "mahalanobis_is_novel",
+        "weight": "mahalanobis",
+        "kind": "score",
+    },
+    {
+        "id": "lof",
+        "score_key": "lof_novelty_score",
+        "flag_key": "lof_is_outlier",
+        "weight": "lof",
+        "kind": "score",
+    },
+    {
+        "id": "energy_ood",
+        "score_key": "energy_score",
+        "flag_key": "energy_is_novel",
+        "weight": "energy_ood",
+        "kind": "special",
+    },
+    {
+        "id": "mixture_gaussian",
+        "score_key": "log_likelihood",
+        "flag_key": "mixture_gaussian_is_novel",
+        "weight": "mixture_gaussian",
+        "kind": "special",
+    },
+    {
+        "id": "react_energy",
+        "flag_key": "react_energy_is_novel",
+        "weight": "react_energy",
+        "kind": "flag",
+        "score_only": "false",
+    },
 ]
 
-_FLAG_KEYS = [
-    "confidence_is_novel",
-    "uncertainty_is_novel",
-    "knn_is_novel",
-    "cluster_is_novel",
-    "self_knowledge_is_novel",
-    "pattern_is_novel",
-    "oneclass_is_novel",
-    "prototypical_is_novel",
-    "setfit_is_novel",
-    "setfit_centroid_is_novel",
-    "mahalanobis_is_novel",
-    "lof_is_outlier",
-    "energy_is_novel",
-    "mixture_gaussian_is_novel",
-    "react_energy_is_novel",
+# Derived from the single source of truth above.
+_SIGNAL_BY_ID: dict[str, dict[str, str]] = {s["id"]: s for s in _STRATEGY_SIGNALS}
+_SCORE_KEYS: list[str] = [
+    s["score_key"] for s in _STRATEGY_SIGNALS if s.get("score_key")
 ]
+_FLAG_KEYS: list[str] = [s["flag_key"] for s in _STRATEGY_SIGNALS]
 
 
 class SignalCombiner:
@@ -80,24 +162,10 @@ class SignalCombiner:
 
     def _weight_for_strategy(self, strategy_id: str) -> float:
         """Resolve the configured weight for a strategy id."""
-        weight_map = {
-            "confidence": getattr(self.weights, "confidence", 0.35),
-            "uncertainty": self.weights.uncertainty,
-            "knn_distance": self.weights.knn,
-            "clustering": self.weights.cluster,
-            "self_knowledge": self.weights.self_knowledge,
-            "pattern": self.weights.pattern,
-            "oneclass": self.weights.oneclass,
-            "prototypical": self.weights.prototypical,
-            "setfit": self.weights.setfit,
-            "setfit_centroid": self.weights.setfit_centroid,
-            "mahalanobis": self.weights.mahalanobis,
-            "lof": self.weights.lof,
-            "energy_ood": self.weights.energy_ood,
-            "mixture_gaussian": self.weights.mixture_gaussian,
-            "react_energy": self.weights.react_energy,
-        }
-        return weight_map.get(strategy_id, 0.0)
+        signal = _SIGNAL_BY_ID.get(strategy_id)
+        if signal is None:
+            return 0.0
+        return getattr(self.weights, signal["weight"], 0.0)
 
     def combine(
         self,
@@ -178,92 +246,40 @@ class SignalCombiner:
         metrics: dict[int, dict[str, Any]],
         active_strategies: set[str] | None = None,
     ) -> float:
-        """
-        Compute weighted novelty score for a single sample.
-
-        Extracts scores from each strategy and combines them using
-        the configured weights.
-        """
         if active_strategies is None:
             active_strategies = set()
 
         sample_metrics = metrics.get(idx, {})
-
-        # For strategies with binary decisions, use 1.0 if flagged, 0.0 otherwise
-        confidence = 1.0 if sample_metrics.get("confidence_is_novel", False) else 0.0
-        pattern = 1.0 if sample_metrics.get("pattern_is_novel", False) else 0.0
-        oneclass = 1.0 if sample_metrics.get("oneclass_is_novel", False) else 0.0
-        prototypical = (
-            1.0 if sample_metrics.get("prototypical_is_novel", False) else 0.0
-        )
-        setfit = 1.0 if sample_metrics.get("setfit_is_novel", False) else 0.0
-        setfit_centroid = sample_metrics.get("setfit_centroid_novelty_score", 0.0)
-        self_knowledge = (
-            1.0 if sample_metrics.get("self_knowledge_is_novel", False) else 0.0
-        )
-        mahalanobis = sample_metrics.get("mahalanobis_novelty_score", 0.0)
-        lof = sample_metrics.get("lof_novelty_score", 0.0)
-        energy_ood_score = sample_metrics.get("energy_score", None)
-        if energy_ood_score is not None:
-            energy_ood = float(
-                energy_ood_score > sample_metrics.get("energy_threshold", float("inf"))
-            )
-        else:
-            energy_ood = 1.0 if sample_metrics.get("energy_is_novel", False) else 0.0
-        log_ll = sample_metrics.get("log_likelihood", None)
-        if log_ll is not None:
-            mixture_gaussian = float(
-                log_ll < sample_metrics.get("log_likelihood_threshold", float("-inf"))
-            )
-        else:
-            mixture_gaussian = (
-                1.0 if sample_metrics.get("mixture_gaussian_is_novel", False) else 0.0
-            )
-        react_energy = (
-            1.0 if sample_metrics.get("react_energy_is_novel", False) else 0.0
-        )
-
-        # For strategies with continuous scores, use the score directly
-        uncertainty = sample_metrics.get("uncertainty_score", 0.0)
-        knn_score = sample_metrics.get("knn_novelty_score", 0.0)
-        cluster_score = sample_metrics.get("cluster_support_score", 0.0)
-
-        # Get confidence weight from weights config if it exists
-        confidence_weight = self._weight_for_strategy("confidence")
-
-        # Compute weighted sum (only include active strategies)
         weighted_score = 0.0
 
-        if "confidence" in active_strategies:
-            weighted_score += confidence_weight * confidence
-        if "uncertainty" in active_strategies:
-            weighted_score += self.weights.uncertainty * uncertainty
-        if "knn_distance" in active_strategies:
-            weighted_score += self.weights.knn * knn_score
-        if "clustering" in active_strategies:
-            weighted_score += self.weights.cluster * cluster_score
-        if "self_knowledge" in active_strategies:
-            weighted_score += self.weights.self_knowledge * self_knowledge
-        if "pattern" in active_strategies:
-            weighted_score += self.weights.pattern * pattern
-        if "oneclass" in active_strategies:
-            weighted_score += self.weights.oneclass * oneclass
-        if "prototypical" in active_strategies:
-            weighted_score += self.weights.prototypical * prototypical
-        if "setfit" in active_strategies:
-            weighted_score += self.weights.setfit * setfit
-        if "setfit_centroid" in active_strategies:
-            weighted_score += self.weights.setfit_centroid * setfit_centroid
-        if "mahalanobis" in active_strategies:
-            weighted_score += self.weights.mahalanobis * mahalanobis
-        if "lof" in active_strategies:
-            weighted_score += self.weights.lof * lof
-        if "energy_ood" in active_strategies:
-            weighted_score += self.weights.energy_ood * energy_ood
-        if "mixture_gaussian" in active_strategies:
-            weighted_score += self.weights.mixture_gaussian * mixture_gaussian
-        if "react_energy" in active_strategies:
-            weighted_score += self.weights.react_energy * react_energy
+        def _resolve_value(signal: dict[str, str]) -> float:
+            src = sample_metrics
+            kind = signal["kind"]
+            if kind == "flag":
+                return 1.0 if src.get(signal["flag_key"], False) else 0.0
+            if kind == "score":
+                return float(src.get(signal["score_key"], 0.0))
+            if kind == "special":
+                if signal["id"] == "energy_ood":
+                    score = src.get("energy_score")
+                    if score is not None:
+                        return float(score > src.get("energy_threshold", float("inf")))
+                    return 1.0 if src.get("energy_is_novel", False) else 0.0
+                if signal["id"] == "mixture_gaussian":
+                    score = src.get("log_likelihood")
+                    if score is not None:
+                        return float(
+                            score < src.get("log_likelihood_threshold", float("-inf"))
+                        )
+                    return 1.0 if src.get("mixture_gaussian_is_novel", False) else 0.0
+            return 0.0
+
+        for strategy_id in active_strategies:
+            signal = _SIGNAL_BY_ID.get(strategy_id)
+            if signal is None:
+                continue
+            weight = getattr(self.weights, signal["weight"], 0.0)
+            weighted_score += weight * _resolve_value(signal)
 
         return float(np.clip(weighted_score, 0.0, 1.0))
 

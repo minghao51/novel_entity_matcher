@@ -15,7 +15,7 @@ from . import (
     run_timezones,
     run_universities,
 )
-from .base import resolve_output_dirs, run_all_concurrent
+from .base import resolve_output_dirs, run_all_concurrent_detailed
 
 logger = get_logger(__name__)
 
@@ -68,6 +68,11 @@ def main(argv=None):
         default=4,
         help="Maximum number of concurrent ingestions (default: 4)",
     )
+    parser.add_argument(
+        "--continue-on-error",
+        action="store_true",
+        help="Continue processing other datasets when one ingestion fails",
+    )
 
     args = parser.parse_args(argv)
 
@@ -80,7 +85,6 @@ def main(argv=None):
     if args.dataset == "all":
         if args.concurrent:
             print(f"Running all ingestions concurrently (max {args.max_concurrent})...")
-            failures: list[tuple[str, Exception]] = []
             fetchers = []
             for name, func in INGESTORS.items():
                 if name == "all" or func is None:
@@ -98,16 +102,29 @@ def main(argv=None):
                 fetchers.append((fetcher, f"{name}.csv"))
 
             try:
-                output_paths = run_all_concurrent(
-                    fetchers, max_concurrent=args.max_concurrent
+                run_result = run_all_concurrent_detailed(
+                    fetchers,
+                    max_concurrent=args.max_concurrent,
+                    continue_on_error=args.continue_on_error,
                 )
                 print("\nAll concurrent ingestions complete!")
                 print("Output files:")
-                for path in output_paths:
+                for path in run_result.output_paths:
                     print(f"  - {path}")
+                if run_result.failures:
+                    print("\nConcurrent ingestion failures:", file=sys.stderr)
+                    for failure in run_result.failures:
+                        print(
+                            (
+                                f"  - {failure.fetcher} ({failure.output_filename}): "
+                                f"{failure.error_type}: {failure.message}"
+                            ),
+                            file=sys.stderr,
+                        )
+                    raise SystemExit(1)
             except Exception as e:
                 print(f"Error during concurrent ingestion: {e}", file=sys.stderr)
-                raise SystemExit(1)
+                raise SystemExit(1) from e
         else:
             print("Running all ingestions sequentially...")
             failures = []

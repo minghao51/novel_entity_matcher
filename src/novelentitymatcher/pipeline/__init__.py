@@ -10,7 +10,13 @@ from .adapters import (
     ProposalStage,
 )
 from .config import PipelineConfig
-from .contracts import PipelineRunResult, PipelineStage, StageContext, StageResult
+from .contracts import (
+    PipelineRunResult,
+    PipelineStage,
+    PipelineStageError,
+    StageContext,
+    StageResult,
+)
 from .match_result import MatchRecord, MatchResultWithMetadata
 from .orchestrator import PipelineOrchestrator
 
@@ -26,6 +32,7 @@ __all__ = [
     "PipelineOrchestrator",
     "PipelineRunResult",
     "PipelineStage",
+    "PipelineStageError",
     "ProposalStage",
     "StageContext",
     "StageResult",

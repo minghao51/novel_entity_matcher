@@ -36,16 +36,30 @@ class StageResult:
 
 
 @dataclass
+class PipelineStageError:
+    """Structured error payload for stage-level failures."""
+
+    stage_name: str
+    error_type: str
+    message: str
+
+
+@dataclass
 class PipelineRunResult:
     """Terminal result for an internal pipeline run."""
 
     context: StageContext
     stage_results: list[StageResult] = field(default_factory=list)
     timing_breakdown: dict[str, float] = field(default_factory=dict)
+    errors: list[PipelineStageError] = field(default_factory=list)
 
     @property
     def total_time_ms(self) -> float:
         return sum(self.timing_breakdown.values())
+
+    @property
+    def has_errors(self) -> bool:
+        return bool(self.errors)
 
 
 class PipelineStage(ABC):
