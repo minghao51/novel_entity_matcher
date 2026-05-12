@@ -1,141 +1,274 @@
-# Codebase Concerns
+# Concerns
 
-**Analysis Date:** 2026-05-01
-
-## Tech Debt
-
-**mypy `ignore_errors` overrides for multiple modules:**
-- Issue: Several module groups have `ignore_errors = true` in `pyproject.toml`, suppressing all type errors without fixing them
-- Files: `pyproject.toml:278-296`
-- Impact: Type safety regressions in novelty strategies (`self_knowledge_impl`, `prototypical_impl`, `oneclass_impl`, `setfit_impl`), clustering, storage, and hybrid matcher go undetected
-- Fix approach: Progressively fix type errors and remove individual modules from the override list
-
-**Duplicate API key resolution logic:**
-- Issue: `_get_api_keys_from_env()` in `llm.py:261-275` and `_provider_to_env_var()` in `llm.py:277-284` maintain the same provider-to-env mapping separately; `litellm.py:23-26` and `litellm.py:44-47` each have their own `_get_api_key()` with different env var (`LITELLM_API_KEY`)
-- Files: `src/novelentitymatcher/novelty/proposal/llm.py:261-291`, `src/novelentitymatcher/backends/litellm.py:23-26,44-47`
-- Impact: Divergent env var handling across backends; adding a new provider requires editing multiple places
-- Fix approach: Consolidate API key resolution into a single shared utility
-
-**Duplicated novelty orchestration paths:**
-- Issue: `NovelEntityMatcher` (entity_matcher.py) and `DiscoveryPipeline` (discovery.py) both orchestrate Matcher + NoveltyDetector + LLMClassProposer with overlapping but non-identical logic
-- Files: `src/novelentitymatcher/novelty/entity_matcher.py:63-556`, `src/novelentitymatcher/pipeline/discovery.py:59-573`
-- Impact: Feature drift between the two entry points; bug fixes may not propagate to both
-- Fix approach: Extract shared orchestration into a single internal module both classes delegate to
-
-**Fallback stubs for optional dependencies reduce safety:**
-- Issue: `tenacity` and `aiobreaker` fallback stubs in `llm.py:27-57` silently disable retry/circuit-breaker when the optional `llm` extra is not installed; no warning is emitted
-- Files: `src/novelentitymatcher/novelty/proposal/llm.py:18-57`
-- Impact: Users may unknowingly run without retry protection, causing transient failure storms
-- Fix approach: Emit a `logger.warning` when fallback stubs are activated
-
-**`except Exception: pass` blocks swallow errors:**
-- Issue: Broad exception handlers with `pass` silently swallow errors in `__init__.py:24-26` (logging config), `llm.py:509` (attribute parsing), and other locations
-- Files: `src/novelentitymatcher/__init__.py:24-26`, `src/novelentitymatcher/novelty/proposal/llm.py:509-510`
-- Impact: Hard-to-debug failures when logging setup or attribute parsing breaks
-- Fix approach: Replace with narrow exception types or at minimum log the exception
-
-## Security Concerns
-
-**Encrypted `.env` file contains API keys (mitigated by dotenvx):**
-- Risk: `.env` file contains encrypted API keys for OpenRouter, Anthropic, OpenAI; `.env.keys` contains the private decryption key
-- Files: `.env:17` (encrypted OPENROUTER_API_KEY), `.env.keys:6` (DOTENV_PRIVATE_KEY)
-- Current mitigation: `.env` and `.env.*` are in `.gitignore`; only `.env.example` is tracked by git; encryption via dotenvx is used
-- Recommendations: Confirmed safe — keys are encrypted and not in version control. Consider adding a pre-commit hook to prevent accidental `.env` commits
-
-**API key redaction pattern may miss key formats:**
-- Risk: The regex `_API_KEY_PATTERN` in `exceptions.py:131-133` only matches `sk-or-v1-`, `sk-ant-`, `sk-` (20+ chars), and `hf_` prefixed keys; other provider key formats (e.g., Google AI, Azure) would not be redacted
-- Files: `src/novelentitymatcher/exceptions.py:131-137`
-- Current mitigation: Covers the three main providers used in the codebase
-- Recommendations: Add patterns for additional providers as they are integrated; consider a broader catch-all for high-entropy strings in log output
-
-**SHA-1 used for reference signature hash:**
-- Risk: SHA-1 is used to compute reference corpus signatures in `detector.py:59-66`; while not used for security purposes, it is deprecated for collision resistance
-- Files: `src/novelentitymatcher/novelty/core/detector.py:59`
-- Current mitigation: Used only for change detection, not cryptographic purposes
-- Recommendations: Low priority — replace with SHA-256 for consistency with best practices
-
-## Performance Issues
-
-**`iterrows()` used in benchmark runners:**
-- Problem: `DataFrame.iterrows()` is extremely slow for large datasets, used in 6 benchmark/data pipeline files
-- Files: `src/novelentitymatcher/benchmarks/runner.py:297,401,506`, `src/novelentitymatcher/benchmarks/classification/evaluator.py:60`, `src/novelentitymatcher/benchmarks/visualization.py:295`, `src/novelentitymatcher/benchmarks/novelty/evaluator.py:81,91`
-- Cause: `iterrows()` creates Series objects per row; vectorized operations are 100-1000x faster
-- Improvement path: Replace with vectorized pandas/numpy operations or `.itertuples()`
-
-**Full-reference re-initialization on every detect call when corpus changes:**
-- Problem: `NoveltyDetector.detect_novel_samples()` recomputes SHA-1 hash of all reference embeddings on every call and re-initializes all strategies if the signature differs (`detector.py:144-151`)
-- Files: `src/novelentitymatcher/novelty/core/detector.py:144-151`
-- Cause: Hash computation includes `tobytes()` over the full embedding array plus all labels
-- Improvement path: Cache the signature externally and only recompute when the corpus is known to have changed; avoid `tobytes()` for large arrays
-
-**HNSW index has fixed `max_elements` capacity:**
-- Problem: `ANNIndex` is initialized with a fixed `max_elements` (default 100K) and raises `ValueError` when exceeded (`index.py:120-123`); no dynamic resizing
-- Files: `src/novelentitymatcher/novelty/storage/index.py:120-123`
-- Cause: HNSWlib requires pre-allocated index size
-- Improvement path: Implement dynamic re-indexing or over-provision with a configurable multiplier
-
-**`_vectors` np.vstack on every add:**
-- Problem: `ANNIndex.add_vectors()` uses `np.vstack` to grow the internal vector array on every call (`index.py:128`), causing O(n) copies
-- Files: `src/novelentitymatcher/novelty/storage/index.py:128`
-- Cause: Pre-allocated numpy arrays are not used; vstack copies all existing data
-- Improvement path: Pre-allocate with `max_elements` capacity or use a list buffer with periodic consolidation
-
-## Code Quality Issues
-
-**Very large files exceeding 1000 lines:**
-- Files: `src/novelentitymatcher/benchmarks/novelty_bench.py` (1328 lines), `src/novelentitymatcher/novelty/proposal/llm.py` (1181 lines), `src/novelentitymatcher/benchmarks/runner.py` (1093 lines)
-- Why fragile: High cognitive load for maintenance; multiple responsibilities in single files
-- Safe modification: Extract logical sections into separate modules (e.g., separate prompt building from API calling in `llm.py`)
-- Test coverage: Covered but changes risk side effects across large surface areas
-
-**`Config.__getattr__` silently creates nested Config objects:**
-- Files: `src/novelentitymatcher/config.py:167-173`
-- Why fragile: Accessing any attribute that exists in `_config` returns a value; typos on non-existent keys raise `AttributeError` but dict-valued keys return a new `Config` wrapper, which can mask bugs
-- Safe modification: Add an explicit `__dir__` and consider a typed config schema
-
-**`Matcher` class has many delegated property pairs:**
-- Files: `src/novelentitymatcher/core/matcher.py:296-341`
-- Why fragile: Six pairs of public/private property accessors (`embedding_matcher`/`_embedding_matcher`, etc.) with manual setter delegation to `MatcherComponentFactory` internals
-- Safe modification: Consolidate through a single component registry pattern
-
-**`bert_classifier.py` imports `torch` at module level inside methods:**
-- Files: `src/novelentitymatcher/core/bert_classifier.py:176,392`
-- Why fragile: `torch` is imported inside `train()` and `load()` methods rather than at module level, but the class already depends on `transformers` which depends on `torch`; the conditional import adds complexity without clear benefit since the module already fails without torch transitively
-
-## Missing Features / Gaps
-
-**No async LLM proposal:**
-- Problem: `LLMClassProposer.propose_classes()` is synchronous; litellm supports `acompletion` but it is not used
-- Files: `src/novelentitymatcher/novelty/proposal/llm.py:293-329`
-- Blocks: High-throughput async discovery pipelines must block on LLM calls
-
-**No retry configuration for ANN index persistence:**
-- Problem: `ANNIndex` does not support save/load; the index is ephemeral and must be rebuilt on restart
-- Files: `src/novelentitymatcher/novelty/storage/index.py` (no `save`/`load` methods)
-- Blocks: Production deployments that need to warm-start from a pre-built index
-
-**No input sanitization for LLM prompts:**
-- Problem: User-provided entity names and sample texts are interpolated directly into LLM prompts without sanitization
-- Files: `src/novelentitymatcher/novelty/proposal/llm.py:330-460` (prompt building methods)
-- Blocks: Risk of prompt injection when matching against untrusted input text
-
-**No structured logging output:**
-- Problem: All logging uses f-string formatted messages; no JSON structured logging option for production log aggregation
-- Files: `src/novelentitymatcher/utils/logging_config.py`
-- Blocks: Integration with observability platforms (ELK, Datadog, etc.)
-
-**Missing test coverage for ingestion modules:**
-- Problem: The ingestion modules (`universities.py` 384 lines, `products.py` 379 lines, `currencies.py`, `industries.py`, `languages.py`, `occupations.py`, `timezones.py`) have minimal tests — only `test_timezones.py` (5 lines) exists
-- Files: `tests/unit/ingestion/` (nearly empty)
-- Risk: Web scraping/data fetching changes break silently
-- Priority: Low (ingestion is offline tooling)
-
-**No concurrency limit for strategy detection:**
-- Problem: `NoveltyDetector.detect_novel_samples()` runs all configured strategies sequentially with no option for parallel execution
-- Files: `src/novelentitymatcher/novelty/core/detector.py:158-167`
-- Risk: Detection latency scales linearly with number of strategies
-- Priority: Medium
+Tech debt, bugs, security, performance, and maintainability issues found in the codebase.
 
 ---
 
-*Concerns audit: 2026-05-01*
+## Critical
+
+### C-01: LLM response access without null checks
+
+`src/novelentitymatcher/novelty/proposal/llm.py:1169`
+
+```python
+return response.choices[0].message.content
+```
+
+`choices` may be empty, and `content` can be `None` (e.g., tool-call responses). Will raise `IndexError` or return `None` into JSON parsing, producing opaque failures.
+
+### C-02: Persistence deserialization lacks KeyError guards
+
+`src/novelentitymatcher/novelty/storage/persistence.py:252`
+
+```python
+timestamp = datetime.fromisoformat(data["timestamp"])
+```
+
+`_dict_to_report` accesses `data["timestamp"]`, `data["novel_sample_report"]["novel_samples"]`, etc. without defensive checks. A corrupt or version-mismatched YAML file raises raw `KeyError` with no context.
+
+### C-03: mypy ignores errors on broad module swaths
+
+`pyproject.toml:229-247`
+
+Four mypy override blocks set `ignore_errors = true` for:
+- `novelentitymatcher.novelty.strategies.*`
+- `novelty.clustering.*`
+- `novelty.storage.*`
+- `core.hybrid`
+- `self_knowledge_impl`, `prototypical_impl`, `oneclass_impl`, `setfit_impl`
+
+These modules have zero type-checking. Any type regression goes undetected.
+
+---
+
+## Security
+
+### S-01: Dynamic `__import__` in ingestion CLI
+
+`src/novelentitymatcher/ingestion/cli.py:92`
+
+```python
+module = __import__(
+    f"novelentitymatcher.ingestion.{name}",
+    fromlist=[name.capitalize() + "Fetcher"],
+)
+fetcher_cls = getattr(module, name.capitalize() + "Fetcher")
+```
+
+`name` comes from the hardcoded `INGESTORS` dict, so the attack surface is limited. However, `getattr` has no `AttributeError` handling if the expected class name doesn't exist in the module.
+
+### S-02: `trust_remote_code` in model loading
+
+`src/novelentitymatcher/utils/embeddings.py:159-175`
+
+`get_cached_sentence_transformer` accepts `trust_remote_code=False` by default. Callers can pass `True`, which executes arbitrary code from model repos. Not a vulnerability today, but a risk surface.
+
+### S-03: `.env.keys` contains private decryption key
+
+`.env.keys:6` contains `DOTENV_PRIVATE_KEY` for decrypting `.env`. The file is gitignored via `.env.*` (with `!.env.example` exception), but a misconfigured `.gitignore` would leak it.
+
+---
+
+## Performance
+
+### P-01: Redundant embedding encoding in benchmarks
+
+`src/novelentitymatcher/benchmarks/novelty_bench.py`
+
+Every benchmark method (`benchmark_knn`, `benchmark_mahalanobis`, `benchmark_lof`, `benchmark_oneclass_svm`, `benchmark_isolation_forest`, `benchmark_setfit_centroid`, `benchmark_uncertainty`, `benchmark_self_knowledge`, `benchmark_prototypical`, `benchmark_setfit`, `benchmark_ensemble`, `benchmark_ensemble_adaptive`, `benchmark_signal_combiner`) independently calls:
+```python
+train_emb = self.encode_texts(split.train_texts)
+val_emb = self.encode_texts(split.val_texts)
+test_emb = self.encode_texts(split.test_texts)
+```
+
+For a `run_depth("full")` call, the same texts are encoded 12+ times. Encoding is the dominant cost (seconds per call). Pre-encoding once and passing embeddings through would cut total benchmark runtime by an order of magnitude.
+
+### P-02: Unbounded model cache with imprecise eviction
+
+`src/novelentitymatcher/utils/embeddings.py:23-76`
+
+`ModelCache` uses `_estimate_model_bytes` which estimates memory from config attributes, returning `0` on any exception (line 67-68). If estimation fails, entries are cached with zero memory footprint and never evicted. The 4 GB default budget is never exhausted.
+
+### P-03: Mahalanobis covariance inversion without singularity check
+
+`src/novelentitymatcher/benchmarks/novelty_bench.py:365`
+
+```python
+global_cov = np.cov(train_emb, rowvar=False) + 1e-6 * np.eye(train_emb.shape[1])
+cov_inv = np.linalg.inv(global_cov)
+```
+
+With small training sets or high-dimensional embeddings, the regularized covariance may still be ill-conditioned. Should use `np.linalg.pinv` or check condition number.
+
+### P-04: N+1 pattern in novelty benchmark strategy construction
+
+`src/novelentitymatcher/benchmarks/novelty_bench.py:236-296`
+
+`_build_strategy_outputs` re-initializes four strategies (ConfidenceStrategy, KNNDistanceStrategy, PatternScorer, SetFitCentroidStrategy) for every call. Called separately for val and test, for every ensemble method.
+
+---
+
+## Code Complexity
+
+### X-01: `novelty_bench.py` — 1444 lines, heavy duplication
+
+The `NoveltyBenchmark` class repeats the same pattern across 15 benchmark methods:
+1. Encode texts
+2. Prepare labels
+3. Run strategy
+4. Compute metrics
+5. Build result
+
+Only steps 3-4 vary. A template method or shared helper would halve the file size.
+
+### X-02: `llm.py` — 1268 lines, fallback chain complexity
+
+`LLMClassProposer` manages model selection, retry logic, circuit breaker, DSPy delegation, hierarchical summarization, schema discovery, and response parsing in a single class. The `_call_llm_with_fallback` method (lines 1026-1109) has 6 exception categories with different handling. The class has 4 public methods and 15 private methods.
+
+### X-03: `runner.py` — 1096 lines, orchestration sprawl
+
+`BenchmarkRunner` handles entity resolution, classification, novelty, processed-ood novelty, auto-thresholding, and result persistence. The `run_novelty_on_processed` method alone is 196 lines (lines 806-1001).
+
+### X-04: `Matcher` god class — 708 lines, 5 modes, implicit state machine
+
+`src/novelentitymatcher/core/matcher.py`
+
+The `Matcher` class manages:
+- Training mode detection (`_detect_training_mode`)
+- Strategy selection (`_get_strategy`, `_select_matcher`)
+- Sync/async matching (`match`, `match_async`, `_match_sync_impl`, `_match_async_impl`)
+- Metadata matching (`_match_with_metadata`, `_match_with_metadata_async`)
+- Batch processing (delegated to `_BatchEngine`)
+- Diagnostics (delegated to `_DiagnosisEngine`)
+- Component lifecycle (`_components`)
+- Async executor lifecycle
+
+State (`_training_mode`, `_detected_mode`, `_active_matcher`, `_has_training_data`) is managed implicitly across `__init__`, `fit`, `fit_async`, and `match`. No formal state machine or validation of state transitions.
+
+### X-05: Novelty strategy implementations share no common helper
+
+Each strategy (knn_distance, confidence, pattern, uncertainty, energy, setfit, etc.) independently implements `initialize()` and `detect()` with nearly identical boilerplate for embedding handling and metric extraction. No shared base helper exists beyond the abstract `BaseNoveltyStrategy`.
+
+---
+
+## Missing Error Handling
+
+### E-01: Benchmark methods silently swallow errors
+
+`src/novelentitymatcher/benchmarks/novelty_bench.py:399,433`
+
+```python
+except (ValueError, RuntimeError):
+    pass
+```
+
+LOF and OneClassSVM benchmark methods catch exceptions and silently discard results. Failures are invisible to the user.
+
+### E-02: Bare `except Exception` catch-alls
+
+6 instances across the codebase:
+- `src/novelentitymatcher/novelty/proposal/llm.py:1093` — defensive wrapper
+- `src/novelentitymatcher/utils/embeddings.py:67` — model size estimation
+- `src/novelentitymatcher/__init__.py:33` — version fallback
+- `src/novelentitymatcher/utils/benchmarks.py:258,437` — monkeypatch-exercised paths
+- `src/novelentitymatcher/ingestion/cli.py:108` — concurrent ingestion
+
+Each masks the real exception type and makes debugging harder.
+
+### E-03: Ingestion CLI `getattr` without `AttributeError` guard
+
+`src/novelentitymatcher/ingestion/cli.py:96`
+
+```python
+fetcher_cls = getattr(module, name.capitalize() + "Fetcher")
+```
+
+If a module doesn't export a class with the expected name, this raises `AttributeError` with no helpful message.
+
+---
+
+## Test Coverage Gaps
+
+### T-01: 43 source files have no dedicated test files
+
+Key untested modules:
+- All novelty strategies: `knn_distance.py`, `confidence.py`, `pattern.py`, `uncertainty.py`, `energy.py`, `setfit.py`, `setfit_centroid.py`, `prototypical.py`, `clustering.py`, `oneclass.py`
+- All novelty strategy implementations: `oneclass_impl.py`, `prototypical_impl.py`, `setfit_impl.py`, `self_knowledge_impl.py`, `pattern_impl.py`
+- All clustering: `scalable.py`, `backends.py`, `graph.py`, `incremental.py`, `stability.py`, `params.py`
+- Novelty schemas: `models.py`, `results.py`, `reports.py`
+- Novelty storage: `index.py`, `review.py`
+- Novelty proposal: `llm.py`, `retrieval.py`, `schema_enforcement.py`
+- Novelty evaluation: `evaluator.py`, `splitters.py`
+- Pipeline stages: `drift_hook.py`
+- Top-level: `api.py`, `config_registry.py`, `exceptions.py`
+
+### T-02: Static embedding backend tests are skipped
+
+`tests/integration/backends/test_static_embedding.py:10`
+
+```python
+@pytest.mark.skip(reason="RikkaBotan model requires additional SSE module dependencies")
+```
+
+An entire backend has no active test coverage.
+
+### T-03: Integration tests dominate, unit coverage may be thin
+
+912 total test functions, but many are integration tests requiring model downloads or network access. Unit test isolation for core logic (strategy detection, signal combination, weight optimization) is unclear.
+
+---
+
+## Tech Debt
+
+### D-01: Python version inconsistency
+
+`pyproject.toml` declares `requires-python = ">=3.10"` but `tool.mypy.python_version = "3.11"`. Type checking may not match runtime behavior on 3.10 or 3.12.
+
+### D-02: `disallow_untyped_defs = false` in mypy config
+
+`pyproject.toml:180`
+
+All functions can be defined without type annotations, weakening the value of mypy. Progress toward strict typing is not tracked.
+
+### D-03: Backwards-compatible aliases add noise
+
+`src/novelentitymatcher/core/matcher.py:49-51`
+
+```python
+_coerce_texts = coerce_texts
+_extract_top_prediction_metadata = extract_top_prediction_metadata
+_resolve_threshold = resolve_threshold
+```
+
+These private-module aliases for functions moved to `matcher_shared.py` serve no purpose if no external caller depends on them.
+
+### D-04: `novelty_bench.py` uses `print()` instead of logging
+
+Lines 671, 739, 805, 889, etc. use `print(f"...")` for progress output. Should use `logger.info()` for consistency with the rest of the codebase and to allow output control.
+
+### D-05: Hardcoded strategy score/flag key lists
+
+`src/novelentitymatcher/novelty/core/signal_combiner.py:21-62`
+
+`_SCORE_KEYS` and `_FLAG_KEYS` are hardcoded lists that must be manually updated when a new strategy is added. Adding a new strategy requires touching this file, or the new signals are silently ignored in fusion.
+
+### D-06: Package bundles heavy ML dependencies unconditionally
+
+`pyproject.toml:24-43` — `torch`, `transformers`, `sentence-transformers`, `setfit`, `optuna`, `matplotlib` are all core dependencies. Users who only need static embedding matching still download ~4 GB of ML libraries. The `opinion` extras group adds more, but the split is not clean.
+
+---
+
+## Maintainability
+
+### M-01: Deep import chains
+
+`pipeline/` → `novelty/` → `core/` → `utils/` creates a 4-layer dependency chain. Changes in low-level utilities can cascade unpredictably through novelty detection and pipeline orchestration.
+
+### M-02: Large data files in `data/raw/`
+
+`data/raw/industries/naics_2022.json`, `data/raw/products/unspsc.json`, and `data/raw/universities/universities.json` are bundled in the repo. These may be large and should be downloaded at build/runtime rather than stored in version control.
+
+### M-03: Accumulating output directories
+
+`proposals/`, `benchmark_results/`, `artifacts/`, and `experiments/` accumulate generated files. While gitignored, they create clutter in local development and are not cleaned automatically.

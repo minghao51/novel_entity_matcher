@@ -1,144 +1,153 @@
-# Integrations — novel-entity-matcher
+# Integrations
 
-## External APIs
+## LLM Providers (via LiteLLM)
 
-### LLM Providers (via litellm)
+Multi-provider LLM integration for novel class proposal. LiteLLM abstracts provider differences.
 
-All LLM calls go through **litellm** (`src/novelentitymatcher/backends/litellm.py`, `src/novelentitymatcher/novelty/proposal/llm.py`), which provides a unified interface to multiple providers:
+| Provider | Env var | Models used | Key files |
+|----------|---------|-------------|-----------|
+| OpenRouter | `OPENROUTER_API_KEY` | `anthropic/claude-sonnet-4`, `openai/gpt-4o` | `novelty/proposal/llm.py:173–178` |
+| Anthropic | `ANTHROPIC_API_KEY` | `anthropic/claude-sonnet-4` | `novelty/proposal/llm.py:175` |
+| OpenAI | `OPENAI_API_KEY` | `openai/gpt-4o` | `novelty/proposal/llm.py:176` |
+| LiteLLM (embeddings/rerank) | `LITELLM_API_KEY` | Configurable | `backends/litellm.py:27,48` |
 
-| Provider | Env Key | Models Used | Files |
-|----------|---------|-------------|-------|
-| **OpenRouter** | `OPENROUTER_API_KEY` | `anthropic/claude-sonnet-4`, any OpenRouter-supported model | `src/novelentitymatcher/novelty/proposal/llm.py`, `.env.example:10` |
-| **Anthropic** | `ANTHROPIC_API_KEY` | `claude-sonnet-4` | `.env.example:14` |
-| **OpenAI** | `OPENAI_API_KEY` | `gpt-4o` | `.env.example:18` |
+Provider-to-env mapping: `utils/api_keys.py:3–7`
 
-Configuration env vars:
-- `LLM_CLASS_PROPOSER_PROVIDER` — default provider (`openrouter`, `anthropic`, `openai`)
-- `LLM_CLASS_PROPOSER_MODEL` — default model name
+**LLM configuration** (`novelty/proposal/config.py`):
 - `LLM_TIMEOUT` — request timeout (default 30s)
 - `LLM_MAX_RETRIES` — max retry attempts (default 5)
-- `LLM_CIRCUIT_FAIL_MAX` — consecutive failures before circuit breaker opens (default 3)
-- `LLM_CIRCUIT_RESET_SECONDS` — circuit breaker reset duration (default 60s)
+- `LLM_CIRCUIT_FAIL_MAX` — failures before circuit breaker opens (default 3)
+- `LLM_CIRCUIT_RESET_SECONDS` — circuit breaker recovery (default 60s)
+- `LLM_CLASS_PROPOSER_PROVIDER` — default provider
+- `LLM_CLASS_PROPOSER_MODEL` — default model
 
-Source: `.env.example`, `src/novelentitymatcher/novelty/proposal/llm.py`, `scripts/setup_llm.sh`
+**Resilience features**:
+- Circuit breaker via `aiobreaker` (`novelty/proposal/llm.py:52–68`)
+- Retry with exponential jitter via `tenacity` (`novelty/proposal/llm.py:1111–1117`)
+- Automatic fallback chain across providers (`novelty/proposal/llm.py:1026–1109`)
 
-Resilience features:
-- **Retry** via `tenacity` — exponential backoff with jitter (`src/novelentitymatcher/novelty/proposal/llm.py:19-27`)
-- **Circuit breaker** via `aiobreaker` — prevents cascading failures (`src/novelentitymatcher/novelty/proposal/llm.py:46-57`)
-- **Model fallback** — tries `primary_model` then `fallback_models` sequentially (`src/novelentitymatcher/novelty/proposal/llm.py:977-978`)
+## DSPy Prompt Optimization (optional)
 
-### Hugging Face Hub
+DSPy replaces handcrafted prompts with optimized Signatures and Modules, trained via GEPA teleprompter.
 
-| Integration | Purpose | Files |
-|-------------|---------|-------|
-| Model downloads | SentenceTransformer, SetFit, BERT model weights | `src/novelentitymatcher/utils/embeddings.py`, `src/novelentitymatcher/core/classifier.py` |
-| Token (optional) | `HF_TOKEN` env var for gated/private models | `.env.example:51` |
-| Benchmark datasets | `datasets` library for loading HF datasets | `pyproject.toml:31` |
+| Component | File | Purpose |
+|-----------|------|---------|
+| `ClusterProposalSignature` | `novelty/proposal/dspy_module.py:24` | DSPy Signature defining inputs/outputs |
+| `DSPyProposalModule` | `novelty/proposal/dspy_module.py:45` | ChainOfThought module for class proposals |
+| `DSPyProposalOptimizer` | `novelty/proposal/dspy_optimizer.py:36` | GEPA optimization with review record training data |
+| `records_to_dspy_examples` | `novelty/proposal/dspy_module.py:87` | Converts review records to `dspy.Example` |
+| `proposal_metric` | `novelty/proposal/dspy_module.py:129` | Metric function for GEPA optimization |
 
-### Data Source APIs (Ingestion)
+DSPy is optional — `LLMClassProposer` falls back to manual prompts when no `dspy_module` is provided (`novelty/proposal/llm.py:361–367`).
 
-Each fetcher in `src/novelentitymatcher/ingestion/` uses `requests` to download reference data:
+## HuggingFace Hub
 
-| Fetcher | Source | File |
-|---------|--------|------|
-| **Universities** | External university list APIs | `src/novelentitymatcher/ingestion/universities.py` |
-| **Products** | Product reference data | `src/novelentitymatcher/ingestion/products.py` |
-| **Occupations** | Occupation/taxonomy data | `src/novelentitymatcher/ingestion/occupations.py` |
-| **Industries** | Industry classification data | `src/novelentitymatcher/ingestion/industries.py` |
-| **Currencies** | Currency reference data | `src/novelentitymatcher/ingestion/currencies.py` |
-| **Languages** | Language reference data | `src/novelentitymatcher/ingestion/languages.py` |
-| **Timezones** | Timezone reference data | `src/novelentitymatcher/ingestion/timezones.py` |
+| Usage | File | Details |
+|-------|------|---------|
+| Model downloads | `utils/embeddings.py:213–232` | `SetFitModel.from_pretrained`, `SentenceTransformer` |
+| Dataset loading | `benchmarks/loader.py:25–29` | `datasets.load_dataset`, `huggingface_hub.dataset_info` |
+| BERT models | `core/bert_classifier.py:18` | `transformers.AutoModelForSequenceClassification` |
+| Static embeddings | `backends/static_embedding.py:48` | `model2vec.StaticModel` |
+| Auth token | `.env.example:51` | `HF_TOKEN` (optional, for gated models) |
 
-All use the `BaseFetcher` pattern from `src/novelentitymatcher/ingestion/base.py` with `requests.get()` and configurable timeouts (default 60s).
+Models referenced:
+- `sentence-transformers/paraphrase-mpnet-base-v2` (`config.yaml:4`)
+- `BAAI/bge-m3` (`config.yaml:13`)
+- `minishlab/potion-base-8M`, `minishlab/potion-base-32M` (`backends/static_embedding.py:29–30`)
+- `distilbert-base-uncased` (`core/bert_classifier.py:65`)
 
-### Benchmark Dataset Downloads
+## Vector Store / ANN Backends
 
-Entity resolution datasets are downloaded at benchmark time:
+Approximate Nearest Neighbor index for similarity search in novelty detection.
 
-| Source | Files |
-|--------|-------|
-| HTTP download of CSV files (tableA, tableB, test pairs) | `src/novelentitymatcher/benchmarks/loader.py:169-199` |
+| Backend | Package | File | Details |
+|---------|---------|------|---------|
+| HNSWLib (default) | `hnswlib` | `novelty/storage/index.py:69–85` | Cosine similarity, configurable ef_construction and M |
+| FAISS | `faiss-cpu` | `novelty/storage/index.py:89–100` | `IndexFlatIP` (inner product) |
+| ChromaDB | `chromadb` | `core/vector_store.py:129–140` | Persistent or ephemeral client |
+| Exact search | numpy | `novelty/storage/index.py` | Fallback when no ANN library available |
 
-Uses `requests` with 60s timeout, 100MB size limit, content-type validation.
+Default config: `config_registry.py:153–158`
 
-## Databases
+## Clustering Libraries
 
-**No traditional database integration.** The project is a library, not a service.
+| Algorithm | Package | File | Purpose |
+|-----------|---------|------|---------|
+| HDBSCAN | `hdbscan` | `novelty/clustering/backends.py:67–76` | Density-based clustering (primary) |
+| UMAP + HDBSCAN | `umap-learn` + `hdbscan` | `novelty/clustering/backends.py:266–325` | Dimensionality reduction then clustering |
+| Leiden | `python-igraph` + `leidenalg` | `novelty/clustering/graph.py:93–148` | Community detection on similarity graph |
+| Louvain | `networkx` | `novelty/clustering/graph.py:194` | Community detection alternative |
+| OPTICS | scikit-learn | `novelty/clustering/backends.py` | Ordered-based clustering |
 
-### Local Storage
+## External Data Sources (Ingestion)
 
-| Storage Type | Purpose | Files |
-|-------------|---------|-------|
-| **CSV files** | Training data, processed ingestion data, benchmark results | `data/`, `src/novelentitymatcher/ingestion/base.py` |
-| **JSON files** | Default config, country codes | `src/novelentitymatcher/data/default_config.json`, `src/novelentitymatcher/data/country_codes.json` |
-| **YAML config** | User configuration overrides | `config.yaml`, `src/novelentitymatcher/config.py` |
-| **ANN indexes** | In-memory HNSW/FAISS indexes (no persistent DB) | `src/novelentitymatcher/novelty/storage/index.py` |
-| **File-based persistence** | Proposal review and class storage | `src/novelentitymatcher/novelty/storage/persistence.py`, `src/novelentitymatcher/novelty/storage/review.py` |
-| **ML checkpoints** | Model weights (safetensors, .pt, .bin) — gitignored | `.gitignore:44-49` |
+HTTP data ingestion for reference entity lists via `requests`.
 
-## Auth Providers
+| Dataset | Source URL | Fetcher | File |
+|---------|-----------|---------|------|
+| Universities | `github.com/Hipo/university-domains-list` | `UniversitiesFetcher` | `ingestion/universities.py` |
+| O*NET Occupations | `www.onetcenter.org/dl/30_2/occupation_data.zip` | `OccupationsFetcher` | `ingestion/occupations.py:18` |
+| UNSPSC Products | `unstats.un.org/unsd/services/v2/` | `UNSPSCFetcher` | `ingestion/products.py:19` |
+| NAICS Industries | `github.com/erickogore/country-code-json`, `github.com/datasets/industry-codes` | `IndustriesFetcher` | `ingestion/industries.py:19–22` |
+| ISO 4217 Currencies | `datahub.io/core/currency-codes/r/codes-all.csv` | `CurrenciesFetcher` | `ingestion/currencies.py:12` |
+| ISO 639 Languages | `datahub.io/core/language-codes/r/language-codes-full.csv` | `LanguagesFetcher` | `ingestion/languages.py:12` |
+| IANA Timezones | `github.com/eggert/tz/main/zone.tab` | `TimezonesFetcher` | `ingestion/timezones.py:12` |
 
-**No auth provider integration.** The library authenticates to external APIs via API keys in environment variables:
+All fetchers extend `BaseFetcher` (`ingestion/base.py`) with async support, rate limiting, and size validation.
 
-| Service | Auth Method | Env Var | File |
-|---------|-------------|---------|------|
-| OpenRouter | API key | `OPENROUTER_API_KEY` | `.env.example:10` |
-| Anthropic | API key | `ANTHROPIC_API_KEY` | `.env.example:14` |
-| OpenAI | API key | `OPENAI_API_KEY` | `.env.example:18` |
-| Hugging Face | Token (optional) | `HF_TOKEN` | `.env.example:51` |
+## Environment Variables
 
-API key redaction is handled by `_redact_api_keys()` in `src/novelentitymatcher/exceptions.py:136-137` to prevent accidental logging of secrets.
+| Variable | Default | Purpose | File |
+|----------|---------|---------|------|
+| `OPENROUTER_API_KEY` | — | OpenRouter LLM API key | `utils/api_keys.py:4` |
+| `ANTHROPIC_API_KEY` | — | Anthropic API key | `utils/api_keys.py:5` |
+| `OPENAI_API_KEY` | — | OpenAI API key | `utils/api_keys.py:6` |
+| `LITELLM_API_KEY` | — | LiteLLM embedding/rerank key | `backends/litellm.py:27,48` |
+| `LLM_CLASS_PROPOSER_PROVIDER` | `openrouter` | Default LLM provider | `.env.example:26` |
+| `LLM_CLASS_PROPOSER_MODEL` | `anthropic/claude-sonnet-4` | Default LLM model | `.env.example:30` |
+| `LLM_TIMEOUT` | `30` | Request timeout (seconds) | `novelty/proposal/config.py:25–31` |
+| `LLM_MAX_RETRIES` | `5` | Max retry attempts | `novelty/proposal/config.py:33–38` |
+| `LLM_CIRCUIT_FAIL_MAX` | `3` | Circuit breaker threshold | `novelty/proposal/config.py:40–46` |
+| `LLM_CIRCUIT_RESET_SECONDS` | `60` | Circuit breaker reset | `novelty/proposal/config.py:48–55` |
+| `HF_TOKEN` | — | HuggingFace token (optional) | `.env.example:51` |
+| `NOVEL_ENTITY_MATCHER_VERBOSE` | `false` | Verbose logging | `__init__.py:19`, `core/matcher.py:80` |
+| `PYTORCH_ENABLE_MPS_FALLBACK` | `1` (macOS ARM) | CPU fallback for MPS ops | `core/matcher.py:15`, `backends/static_embedding.py:12` |
 
-## Third-party Services
+Environment management: `pydantic-settings` with `.env` file support (`novelty/proposal/config.py:65–70`).
 
-### CI/CD (GitHub Actions)
+## ML Models & Frameworks
 
-| Workflow | Purpose | File |
-|----------|---------|------|
-| **Lint** | ruff, mypy, pre-commit, build verification, pip-audit security scan | `.github/workflows/lint.yml` |
-| **Test** | Smoke tests, fast unit tests, heavy integration tests (Python 3.10-3.12 matrix) | `.github/workflows/test.yml` |
-| **Publish** | Build sdist/wheel, publish to PyPI via Trusted Publishing | `.github/workflows/publish.yml` |
-| **Deploy Docs** | MkDocs build, marimo notebook export (md + html), GitHub Pages deployment | `.github/workflows/docs.yml` |
+| Framework | Purpose | Key files |
+|-----------|---------|-----------|
+| PyTorch | Backend for transformers, tensor ops, device management (CPU/CUDA/MPS) | `core/bert_classifier.py` |
+| Sentence Transformers | Dense embeddings (`encode`), cross-encoder reranking, semantic search | `core/matcher.py`, `core/embedding_matcher.py`, `backends/sentencetransformer.py` |
+| SetFit | Few-shot classification via sentence embedding fine-tuning | `core/classifier.py`, `novelty/strategies/setfit_impl.py` |
+| HuggingFace Transformers | BERT-based sequence classification | `core/bert_classifier.py` |
+| Model2Vec | Static embedding distillation (potion models) | `backends/static_embedding.py` |
+| scikit-learn | Cosine similarity, TF-IDF, LOF, PCA, train/test split, metrics | `core/blocking.py`, `core/embedding_matcher.py`, `novelty/strategies/lof.py` |
+| NLTK | Stopword removal, lemmatization | `utils/preprocessing.py` |
+| BM25 (rank-bm25) | Sparse retrieval for candidate blocking | `core/blocking.py` |
+| RapidFuzz | Fuzzy string matching for blocking | `core/blocking.py` |
+| Optuna | Bayesian hyperparameter optimization | `benchmarks/weight_optimizer.py` |
 
-### PyPI
+## Monitoring & Observability
 
-- Package: `novel-entity-matcher` — published via `pypa/gh-action-pypi-publish` with Trusted Publishing (OIDC)
-- Source: `.github/workflows/publish.yml:32-33`
+| Component | File | Purpose |
+|-----------|------|---------|
+| `get_logger` | `utils/logging_config.py` | Structured logging with configurable verbosity |
+| API key redaction | `exceptions.py` (`_redact_api_keys`) | Prevents API key leakage in logs |
+| LLM call logging | `novelty/proposal/llm.py` | Logs model attempts, retryable errors, fallbacks |
+| Circuit breaker state | `novelty/proposal/llm.py:258–261` | Tracks LLM provider health |
+| Drift detection | `novelty/drift/` | Snapshot-based distribution monitoring |
 
-### GitHub Pages
+## Documentation Pipeline
 
-- Documentation site hosted at `https://minghao51.github.io/novel_entity_matcher/`
-- Versioned via `mike` (declared in `mkdocs.yml:141-142`)
-- Source: `.github/workflows/docs.yml`, `mkdocs.yml`
+| Tool | File | Purpose |
+|------|------|---------|
+| MkDocs Material | `mkdocs.yml` | Static docs site |
+| mkdocstrings | `mkdocs.yml:99` | Python API reference from docstrings |
+| mike | `mkdocs.yml:148` | Versioned docs deployment |
+| Quarto | `notebooks/_quarto.yml`, `Makefile` | Notebook rendering with freeze cache |
+| Marimo | `pyproject.toml:52` | Interactive notebook authoring |
 
-### Pre-trained Model Sources
-
-All models are loaded from Hugging Face Hub via `sentence-transformers`, `transformers`, `setfit`, or `model2vec`:
-
-| Model Alias | Full Name | Backend | File |
-|-------------|-----------|---------|------|
-| `potion-8m` | minishlab/potion-base-8M | static | `src/novelentitymatcher/config_registry.py:4-9` |
-| `potion-32m` | minishlab/potion-base-32M | static | `src/novelentitymatcher/config_registry.py:11-16` |
-| `bge-m3` | BAAI/bge-m3 | sentence-transformers | `src/novelentitymatcher/config_registry.py:34-39` |
-| `bge-base` | BAAI/bge-base-en-v1.5 | sentence-transformers | `src/novelentitymatcher/config_registry.py:29-33` |
-| `mpnet` | sentence-transformers/all-mpnet-base-v2 | sentence-transformers | `src/novelentitymatcher/config_registry.py:47-52` |
-| `minilm` | sentence-transformers/all-MiniLM-L6-v2 | sentence-transformers | `src/novelentitymatcher/config_registry.py:54-58` |
-| `nomic` | nomic-ai/nomic-embed-text-v1 | sentence-transformers | `src/novelentitymatcher/config_registry.py:41-45` |
-| `distilbert` | distilbert-base-uncased | bert | `src/novelentitymatcher/config_registry.py:59-66` |
-| `tinybert` | huawei-noah/TinyBERT_General_4L_312D | bert | `src/novelentitymatcher/config_registry.py:68-76` |
-
-## Webhooks/Callbacks
-
-### User-facing Callbacks
-
-| Callback | Purpose | File |
-|----------|---------|------|
-| **MetricEvent callbacks** | User-provided callbacks for custom metric handling | `src/novelentitymatcher/monitoring/metrics.py:14-33` |
-| **Pipeline stage hooks** | `StageContext` / `StageResult` for pipeline extensibility | `src/novelentitymatcher/pipeline/` |
-
-The library does **not** receive webhooks. It emits events through callback interfaces that users can subscribe to. No incoming HTTP server or webhook listener exists.
-
-### Pipeline Observability
-
-- `MetricEvent` dataclass with standard metric names (`METRIC_MATCH_LATENCY`, `METRIC_NOVELTY_RATE`, etc.)
-- Source: `src/novelentitymatcher/monitoring/metrics.py:37-40`
+Deployed to GitHub Pages via `.github/workflows/docs.yml`.

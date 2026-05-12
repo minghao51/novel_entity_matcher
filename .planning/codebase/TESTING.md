@@ -1,337 +1,209 @@
-# Testing Patterns
-
-**Analysis Date:** 2026-04-30
+# Testing
 
 ## Framework & Setup
 
-### Test Runner
+- **Framework:** pytest 9.x with pytest-asyncio
+- **Configuration:** `pyproject.toml [tool.pytest.ini_options]` (lines 152-167)
+- **Import mode:** `importlib` (avoids `sys.path` manipulation)
+- **Async mode:** `auto` — all `async def test_*` functions run as coroutines without explicit markers
+- **Strict markers:** enabled — all markers must be registered
+- **Max failures:** 10 (`--maxfail=10`)
+- **Durations:** shows top 10 slowest tests (`--durations=10`)
 
-- **Framework:** pytest (>= 9.0.3)
-- **Config:** `pyproject.toml` `[tool.pytest.ini_options]` (line 203-218)
-- **Async support:** `pytest-asyncio` (>= 1.2.0) with `asyncio_mode = "auto"`
-- **Import mode:** `--import-mode=importlib`
-
-### Key pytest settings
-
-```toml
-testpaths = ["tests"]
-addopts = ["--strict-markers", "-ra", "--durations=10", "--import-mode=importlib"]
-```
-
-### Registered Markers
-
-Defined in `pyproject.toml:206-217`:
-
-| Marker | Purpose |
-|--------|---------|
-| `unit` | Fast isolated tests with no external dependencies |
-| `integration` | Tests that depend on external services or network access |
-| `slow` | Expensive tests for non-default CI |
-| `e2e` | End-to-end tests exercising multiple components |
-| `hf` | Hugging Face model-backed tests |
-| `llm` | Tests making actual LLM API calls (require key, slow) |
-| `llm_mocked` | LLM logic tests using mocks instead of real API |
-| `serial` | Tests that cannot run in parallel |
-| `network` | Tests requiring internet access |
-| `smoke` | Critical path tests |
-
-### Run Commands
-
-```bash
-uv run pytest                          # Run all tests
-uv run pytest tests/unit/              # Unit tests only
-uv run pytest tests/integration/       # Integration tests only
-uv run pytest -m unit                  # By marker
-uv run pytest -m "not slow"            # Exclude slow tests
-uv run pytest -m smoke                 # Smoke tests only
-uv run pytest --durations=10           # Show 10 slowest (default from addopts)
-```
-
-## Test Structure
-
-### Directory Layout
+## Test Directory Structure
 
 ```
 tests/
-├── conftest.py                          # Global fixtures + auto-marking
-├── fixtures/
-│   ├── sample_countries.json            # (currently empty)
-│   └── sample_texts.json                # (currently empty)
-├── unit/
-│   ├── backends/
-│   ├── benchmarks/
-│   ├── core/
-│   │   ├── test_async_utils.py
-│   │   └── test_normalizer.py
-│   ├── ingestion/
-│   ├── monitoring/
-│   ├── novelty/
-│   │   ├── test_ann_index.py
-│   │   ├── test_conformal.py
-│   │   ├── test_novelty_detector.py
-│   │   ├── test_novelty_detector_lifecycle.py
-│   │   ├── test_oneclass_strategy.py
-│   │   ├── test_pattern_strategy.py
-│   │   ├── test_prototypical_strategy.py
-│   │   ├── test_setfit_novelty.py
-│   │   └── test_signal_combiner.py
-│   ├── pipeline/
-│   ├── utils/
-│   ├── test_config.py
-│   ├── test_discovery_pipeline.py
-│   ├── test_llm_proposer.py
-│   ├── test_packaging.py
-│   ├── test_phase2_features.py
-│   ├── test_security_logging.py
-│   ├── test_smoke_paths.py
-│   └── test_smoke_static_embedding.py
-└── integration/
-    ├── backends/
-    ├── core/
-    ├── utils/
-    ├── test_async_sync_parity.py
-    ├── test_discovery_pipeline_extended.py
-    ├── test_integration.py
-    ├── test_integration_extended.py
-    └── test_novel_entity_matcher.py
+├── conftest.py              # Global fixtures + auto-marker assignment
+├── fixtures/                # Static test data
+│   ├── sample_countries.json
+│   └── sample_texts.json
+├── unit/                    # Fast, isolated, no external deps
+│   ├── backends/            # Backend contract tests
+│   ├── benchmarks/          # Benchmark utility tests
+│   ├── core/                # Core matcher/classifier/embedding tests
+│   ├── ingestion/           # Data ingestion tests
+│   ├── monitoring/          # Metrics/performance tests
+│   ├── novelty/             # Novelty detection unit tests
+│   │   ├── drift/           # Drift detection tests
+│   │   └── ...              # Strategy-specific tests
+│   ├── pipeline/            # Pipeline orchestrator/stage tests
+│   ├── utils/               # Utility function tests
+│   └── test_*.py            # Top-level unit tests
+├── integration/             # External deps, models, network
+│   ├── backends/            # HuggingFace, static embedding tests
+│   ├── core/                # Matcher/classifier/hierarchy integration
+│   ├── utils/               # Embedding utils integration
+│   └── test_*.py            # Pipeline & matcher integration tests
+└── e2e/                     # End-to-end tests (currently empty)
 ```
 
-### File Naming
+## Test Markers
 
-- Test files: `test_<module_or_feature>.py`
-- Test directories mirror `src/novelentitymatcher/` package structure
-- E.g., `tests/unit/novelty/test_novelty_detector.py` tests `src/novelentitymatcher/novelty/core/detector.py`
+Defined in `pyproject.toml [tool.pytest.ini_options]`:
 
-### Auto-Marking
+| Marker | Purpose | CI Selection |
+|--------|---------|-------------|
+| `unit` | Fast isolated tests, no external deps | `not integration and not slow` |
+| `integration` | Tests depending on external services/network | `integration or slow` |
+| `slow` | Expensive tests (model loading, training) | `integration or slow` |
+| `e2e` | End-to-end feature tests | (not currently run in CI) |
+| `hf` | HuggingFace model-backed tests | (subset of integration) |
+| `llm` | Real LLM API calls (API key required) | (not run in CI) |
+| `llm_mocked` | LLM logic with mocks instead of real calls | (unit-level) |
+| `serial` | Cannot run in parallel | (future use) |
+| `network` | Requires internet access | (subset of integration) |
+| `smoke` | Critical path tests | `-m smoke` |
 
-`tests/conftest.py:15-28` automatically applies markers based on file path:
+### Auto-Marker Assignment (`tests/conftest.py:15-29`)
+
+The `pytest_collection_modifyitems` hook automatically assigns markers based on file path:
 - Files under `tests/unit/` → `@pytest.mark.unit`
 - Files under `tests/integration/` → `@pytest.mark.integration` + `@pytest.mark.slow`
-- Async tests get `@pytest.mark.anyio` added automatically
+- Async tests also get `@pytest.mark.anyio` automatically
 
-## Test Patterns
+## Fixtures
 
-### Test Class Organization
+### Global Fixtures (`tests/conftest.py`)
 
-Tests are organized into classes named `Test<Feature>`:
+- **`clear_model_cache` (autouse)** — Clears the global embedding model cache before and after every test to prevent cross-test contamination
 
+### Per-Test Fixtures
+
+Fixtures are defined locally in test files, typically as:
+- **Data fixtures:** `sample_entities`, `training_data`, `test_queries`, `sample_embeddings`, `reference_labels`
+- **Instance fixtures:** `matcher` (trained `EmbeddingMatcher`), `detector` (configured `NoveltyDetector`), `trained_matcher`
+- **Private helpers:** `_make_entities()` factory pattern for entity creation
+
+Example fixture pattern:
 ```python
-class TestTextNormalizer:
-    """Tests for TextNormalizer - text normalization utilities."""
-
-    def test_normalizer_init_defaults(self):
-        normalizer = TextNormalizer()
-        assert normalizer.lowercase is True
+@pytest.fixture
+def matcher():
+    entities = _make_entities(["apple", "banana", "cherry"])
+    m = EmbeddingMatcher(entities=entities, model_name="potion-32m")
+    m.build_index()
+    return m
 ```
 
-- Each class has a docstring describing what it tests
-- Methods are plain functions (no `self` when using standalone test functions)
-- Descriptive test names: `test_<what>_<condition>_<expected>`
+## Mocking Patterns
 
-### Standalone Test Functions
+### Primary Approaches
 
-Many tests use simple standalone functions without classes:
+1. **`monkeypatch`** (most common, 89+ uses) — preferred for:
+   - Replacing methods: `monkeypatch.setattr(Config, "_default_config_candidates", lambda self: [path])`
+   - Replacing module attributes: `monkeypatch.setattr("model2vec.StaticModel", MockClass)`
+   - Environment variables: `monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-123")`
+   - Module injection: `monkeypatch.setitem(sys.modules, "litellm", mock_litellm)`
 
-```python
-def test_config_loads_default_and_nested_access(tmp_path, monkeypatch):
-    ...
-```
+2. **`unittest.mock`** — used for:
+   - `MagicMock` for complex mock objects
+   - `patch` as context manager for scoped mocking
+   - `Mock` for simple stub objects
 
-### Fixtures
+### Skip Patterns
 
-**Global autouse fixture** (`conftest.py:6-12`):
-```python
-@pytest.fixture(autouse=True)
-def clear_model_cache():
-    """Clear the global model cache before each test."""
-    cache = get_default_cache()
-    cache.clear()
-    yield
-    cache.clear()
-```
-
-**Per-test-class fixtures** (defined inside test classes):
-
-```python
-class TestNoveltyDetector:
-    @pytest.fixture
-    def sample_texts(self):
-        return ["quantum physics research", ...]
-
-    @pytest.fixture
-    def reference_embeddings(self):
-        return np.array([...], dtype=np.float32)
-```
-
-### Mocking
-
-**`monkeypatch`** (preferred over `unittest.mock`):
-
-```python
-def test_static_embedding_backend_model2vec_path(monkeypatch):
-    monkeypatch.setattr("model2vec.StaticModel", _MockModel2Vec)
-    # or:
-    monkeypatch.setattr(Config, "_default_config_candidates", lambda self: [default_path])
-```
-
-**Inline mock classes** (common pattern):
-
-```python
-class _MockModel2Vec:
-    dim = 256
-    def __init__(self, model_name=None):
-        pass
-    @classmethod
-    def from_pretrained(cls, model_name):
-        return cls()
-    def encode(self, texts):
-        return np.random.rand(len(texts), self.dim)
-```
-
-**Module-level monkeypatching** (for harder cases):
-
-```python
-import novelentitymatcher.backends.static_embedding as se
-original = se.get_cached_sentence_transformer
-se.get_cached_sentence_transformer = lambda name, trust_remote_code=False: FakeSentenceTransformer()
-try:
-    # test code
-finally:
-    se.get_cached_sentence_transformer = original
-```
-
-**Availability guard pattern** (for optional dependencies):
-
+Tests use `@pytest.mark.skipif` for optional dependencies:
 ```python
 def _hdbscan_available() -> bool:
     try:
-        import hdbscan  # noqa: F401
+        import hdbscan
         return True
     except ImportError:
         return False
+
+@pytest.mark.skipif(not _hdbscan_available(), reason="hdbscan not installed")
 ```
 
-### Parametrization
+## Test Organization Patterns
 
-Not heavily used, but markers serve as a form of test categorization. Tests rely on descriptive names and separate test files for different scenarios.
+### Class-Based Grouping
 
-### Async Testing
+Related tests are grouped in classes:
+```python
+class TestAddEntities:
+    def test_add_entities_new_ids_in_index(self, matcher): ...
+    def test_add_entities_increases_entity_count(self, matcher): ...
 
-- `asyncio_mode = "auto"` — no need for `@pytest.mark.asyncio` on most async tests
-- `conftest.py:16-18` adds `anyio` marker to async tests for compatibility
-- Pattern:
-  ```python
-  def test_matcher_sync_async_parity():
-      sync_result = matcher.match(queries)
-      async_result = asyncio.run(matcher.match_async(queries))
-      assert len(sync_result) == len(async_result)
-  ```
+class TestNovelClassDetectionIntegration:
+    @pytest.mark.asyncio
+    async def test_full_pipeline(self, trained_matcher): ...
+```
+
+### Test Naming
+
+- Descriptive names: `test_config_loads_default_and_nested_access`, `test_add_entities_raises_before_build_index`
+- Assert-assertive patterns: `test_<thing>_<expected_behavior>`
+- Negative tests: `test_*_raises_*`, `test_*_exits_non_zero_on_failure`
+
+### Helper Functions
+
+- Private helpers prefixed with `_`: `_make_entities()`, `_hdbscan_available()`, `_leiden_available()`
+- Factory functions for creating test data
 
 ## Coverage
 
-### Coverage Tool
+### Configuration (`pyproject.toml [tool.coverage]`)
 
-- `.coverage` file exists at project root
-- No explicit coverage threshold enforced in config
-- No `coverage` configuration in `pyproject.toml`
+- **Source:** `src/`
+- **Omit:** `*/tests/*`, `*/__pycache__/*`
+- **Excluded lines:**
+  - `pragma: no cover`
+  - `def __repr__`
+  - `raise AssertionError`
+  - `raise NotImplementedError`
+  - `if __name__ == .__main__.:`
+- **Coverage file:** `.coverage` at project root
 
 ### CI Coverage
 
-- Pre-commit hooks run mypy but not coverage
-- No coverage gate in CI pipeline (no `.github/workflows/` CI config observed)
+Coverage is not enforced as a CI gate. The configuration exists for local development use.
+
+## CI Test Pipeline (`.github/workflows/ci.yml`)
+
+| Job | Trigger | What it runs |
+|-----|---------|-------------|
+| `pre-commit` | All pushes + PRs | Full pre-commit hook suite (ruff, mypy, pip-audit, uv-lock, etc.) |
+| `typecheck` | All pushes + PRs | `mypy src/novelentitymatcher` |
+| `test-fast` | All pushes + PRs | Smoke tests, then `not integration and not slow`, coverage floor |
+| `test-heavy` | Main push or manual | `integration or slow` |
+| `test-matrix` | Main push or manual | Python 3.10, 3.11, 3.12 — `not integration and not slow`, pip-audit |
+| `security` | All pushes + PRs | `pip-audit` with CVE ignores |
+| `build` | All pushes + PRs | `uv sync --extra all`, build sdist/wheel, twine check |
+
+All jobs use `uv sync --frozen --group dev` for dependency installation.
+
+## Running Tests
+
+```bash
+# All tests
+uv run pytest
+
+# Unit tests only (fast)
+uv run pytest -m "not integration and not slow"
+
+# Integration tests only
+uv run pytest -m "integration or slow"
+
+# Smoke tests
+uv run pytest -m smoke
+
+# Specific marker
+uv run pytest -m "not hf and not llm"
+
+# Single test file
+uv run pytest tests/unit/test_config.py
+
+# With coverage
+uv run pytest --cov=src --cov-report=term-missing
+```
 
 ## Test Data
 
-### Fixtures Directory
+### Fixture Files (`tests/fixtures/`)
 
-- `tests/fixtures/` — contains JSON files (`sample_countries.json`, `sample_texts.json`), currently empty
-- Most test data is **inline** within test files or fixtures
+- `sample_countries.json` — country entity test data
+- `sample_texts.json` — sample text inputs for matching tests
 
-### Inline Test Data Pattern
+### In-Code Test Data
 
-Test data is typically defined as fixtures within test classes:
-
-```python
-@pytest.fixture
-def sample_entities(self):
-    return [
-        {"id": "physics", "name": "Quantum Physics"},
-        {"id": "cs", "name": "Computer Science"},
-    ]
-```
-
-### tmp_path Usage
-
-Tests use pytest's `tmp_path` fixture for file-based tests:
-
-```python
-def test_config_loads_default_and_nested_access(tmp_path, monkeypatch):
-    default_path = tmp_path / "default.yaml"
-    default_path.write_text("default_model: base-model\n")
-```
-
-## Test Types
-
-### Unit Tests (`tests/unit/`)
-
-- Fast, isolated, no external dependencies
-- Heavy use of `monkeypatch` to mock models and external services
-- Test pure logic: config loading, validation, normalization, error formatting
-- Examples: `test_config.py`, `test_normalizer.py`, `test_security_logging.py`
-
-### Integration Tests (`tests/integration/`)
-
-- May load real models (e.g., `model="minilm"`)
-- Test cross-component interactions (matcher + novelty detector + pipeline)
-- Auto-marked as `slow`
-- Examples: `test_integration.py`, `test_async_sync_parity.py`, `test_novel_entity_matcher.py`
-
-### Smoke Tests
-
-- Marked with `@pytest.mark.smoke`
-- Critical path verification
-- Example: `test_smoke_static_embedding.py`, `test_smoke_paths.py`
-
-### E2E Tests
-
-- Marked with `@pytest.mark.e2e`
-- Exercise full pipelines end-to-end
-- Example: `test_discovery_pipeline.py`, `test_discovery_pipeline_extended.py`
-
-## Common Patterns
-
-### Error Testing
-
-```python
-def test_redacts_openai_key(self):
-    result = _redact_api_keys("api key is sk-abc123def456ghi789jkl012")
-    assert "sk-abc123def456ghi789jkl012" not in result
-    assert "...REDACTED..." in result
-```
-
-### Isolated Config Testing
-
-```python
-def test_config_instances_do_not_share_state(tmp_path, monkeypatch):
-    monkeypatch.setattr(Config, "_default_config_candidates", lambda self: [first_default])
-    first = Config()
-    monkeypatch.setattr(Config, "_default_config_candidates", lambda self: [second_default])
-    second = Config()
-    assert first.default_model == "first"
-    assert second.default_model == "second"
-```
-
-### Sync/Async Parity Testing
-
-```python
-def test_matcher_sync_async_parity():
-    sync_result = matcher.match(queries)
-    async_result = asyncio.run(matcher.match_async(queries))
-    for sync_match, async_match in zip(sync_result, async_result, strict=False):
-        assert sync_match["id"] == async_match["id"]
-        assert abs(sync_match["score"] - async_match["score"]) < 1e-9
-```
-
----
-
-*Testing analysis: 2026-04-30*
+Most test data is constructed inline via fixtures and helper functions rather than external files. This keeps tests self-contained and readable.
