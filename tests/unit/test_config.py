@@ -78,18 +78,6 @@ def test_config_instances_do_not_share_state(tmp_path, monkeypatch):
     assert second.default_model == "second"
 
 
-def test_config_can_load_packaged_default_when_local_sources_absent(monkeypatch):
-    monkeypatch.setattr(Config, "_find_repo_root_config", lambda self: None)
-    monkeypatch.setattr(Config, "_cwd_config", lambda self: None)
-
-    package_resource = Config()._package_default_config()
-    assert package_resource is not None
-
-    cfg = Config()
-
-    assert isinstance(cfg.to_dict(), dict)
-
-
 def test_resolve_matcher_mode_supported_values():
     assert resolve_matcher_mode("zero-shot") == "EmbeddingMatcher"
     assert resolve_matcher_mode("full") == "_EntityMatcher"

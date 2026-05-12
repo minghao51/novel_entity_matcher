@@ -1,8 +1,10 @@
+import builtins
 from pathlib import Path
 
 import pytest
 
 from novelentitymatcher.ingestion import cli
+from novelentitymatcher.ingestion.base import IngestionFailure, IngestionRunResult
 
 
 def test_cli_lists_datasets(capsys):
@@ -67,3 +69,60 @@ def test_cli_all_exits_non_zero_on_failure(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert "Error ingesting currencies: boom" in captured.err
     assert "Ingestion completed with failures:" in captured.err
+
+
+def test_cli_all_concurrent_continue_on_error_reports_structured_failures(
+    monkeypatch, capsys
+):
+    class _DummyFetcher:
+        def __init__(self, raw_dir, processed_dir):
+            self.raw_dir = raw_dir
+            self.processed_dir = processed_dir
+
+    original_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if not name.startswith("novelentitymatcher.ingestion."):
+            return original_import(name, globals, locals, fromlist, level)
+
+        class _M:
+            LanguagesFetcher = _DummyFetcher
+            CurrenciesFetcher = _DummyFetcher
+
+        return _M
+
+    def fake_run_all_concurrent_detailed(fetchers, **kwargs):
+        assert kwargs["continue_on_error"] is True
+        return IngestionRunResult(
+            output_paths=[Path("/tmp/languages.csv")],
+            failures=[
+                IngestionFailure(
+                    fetcher="CurrenciesFetcher",
+                    output_filename="currencies.csv",
+                    error_type="RuntimeError",
+                    message="boom",
+                )
+            ],
+        )
+
+    monkeypatch.setattr(
+        cli,
+        "INGESTORS",
+        {
+            "languages": object(),
+            "currencies": object(),
+            "all": None,
+        },
+    )
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    monkeypatch.setattr(
+        cli, "run_all_concurrent_detailed", fake_run_all_concurrent_detailed
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(["all", "--concurrent", "--continue-on-error"])
+
+    assert exc_info.value.code == 1
+    captured = capsys.readouterr()
+    assert "Concurrent ingestion failures:" in captured.err
+    assert "CurrenciesFetcher (currencies.csv): RuntimeError: boom" in captured.err

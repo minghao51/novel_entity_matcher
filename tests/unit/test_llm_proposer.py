@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from novelentitymatcher.exceptions import LLMError
 from novelentitymatcher.novelty.proposal.llm import LLMClassProposer
 from novelentitymatcher.novelty.schemas import DiscoveryCluster, NovelSampleMetadata
 
@@ -231,6 +232,23 @@ class TestLLMClassProposer:
 
         assert model_used == "working-model"
         assert '"analysis_summary":"ok"' in response
+
+    def test_call_llm_with_fallback_raises_llmerror_after_all_models_fail(
+        self, proposer
+    ):
+        proposer.primary_model = "broken-a"
+        proposer.fallback_models = ["broken-b"]
+
+        with patch.object(
+            proposer,
+            "_call_litellm",
+            side_effect=[RuntimeError("first"), RuntimeError("second")],
+        ):
+            with pytest.raises(LLMError) as exc_info:
+                proposer._call_llm_with_fallback("prompt")
+
+        assert exc_info.value.attempted_models == ["broken-a", "broken-b"]
+        assert exc_info.value.last_error is not None
 
     def test_enrich_proposals_with_schema_reads_top_level_attributes(self, proposer):
         analysis = proposer._parse_response(

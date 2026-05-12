@@ -2,6 +2,8 @@
 
 import asyncio
 
+import pytest
+
 from novelentitymatcher.pipeline import PipelineOrchestrator, StageContext, StageResult
 
 
@@ -16,6 +18,8 @@ class CountingStage:
 
     def run(self, context: StageContext) -> StageResult:
         self.call_count += 1
+        if self.fail_on_nth is not None and self.call_count == self.fail_on_nth:
+            raise RuntimeError("boom")
         return StageResult(
             stage_name=self.name,
             artifacts={"calls": self.call_count},
@@ -167,3 +171,31 @@ def test_orchestrator_multiple_stages_preserve_order():
     orchestrator.run(StageContext(inputs=[]))
 
     assert call_order == [1, 2, 3]
+
+
+def test_orchestrator_continue_on_error_records_structured_error():
+    good_stage = CountingStage()
+    failing_stage = CountingStage(fail_on_nth=1)
+    failing_stage.name = "failing"
+    final_stage = CountingStage()
+    final_stage.name = "final"
+
+    orchestrator = PipelineOrchestrator(stages=[good_stage, failing_stage, final_stage])
+
+    result = orchestrator.run(StageContext(inputs=["test"]), continue_on_error=True)
+
+    assert len(result.stage_results) == 3
+    assert result.has_errors
+    assert len(result.errors) == 1
+    assert result.errors[0].stage_name == "failing"
+    assert result.errors[0].error_type == "RuntimeError"
+    assert "boom" in result.errors[0].message
+    assert result.context.metadata["stage_errors"][0]["stage_name"] == "failing"
+
+
+def test_orchestrator_without_continue_on_error_raises():
+    failing_stage = CountingStage(fail_on_nth=1)
+    orchestrator = PipelineOrchestrator(stages=[failing_stage])
+
+    with pytest.raises(RuntimeError, match="boom"):
+        orchestrator.run(StageContext(inputs=["test"]))

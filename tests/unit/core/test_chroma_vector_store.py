@@ -3,7 +3,14 @@
 import numpy as np
 import pytest
 
+try:
+    import chromadb
+except ImportError:
+    chromadb = None
+
 from novelentitymatcher.core.vector_store import ChromaVectorStore
+
+pytestmark = pytest.mark.skipif(chromadb is None, reason="chromadb not installed")
 
 
 class TestChromaVectorStore:

@@ -204,20 +204,6 @@ class TestMetaLearnerSignalCombiner:
         config = self._make_config("meta_learner")
         combiner = SignalCombiner(config)
 
-        features = np.array(
-            [
-                [1.0, 0.8, 0.7, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.6, 0.5, 0.3],
-                [0.0, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.2, 0.1],
-                [1.0, 0.9, 0.8, 0.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.7, 0.6, 0.4],
-                [0.0, 0.05, 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.05, 0.1, 0.05],
-            ]
-        )
-        labels = np.array([1, 0, 1, 0])
-
-        accuracy = combiner.train_meta_learner(features, labels)
-        assert accuracy >= 0.5
-
-        strategy_outputs = {"confidence": ({0, 1}, {}), "setfit_centroid": ({0}, {})}
         all_metrics = {
             0: {
                 "confidence_is_novel": True,
@@ -249,6 +235,17 @@ class TestMetaLearnerSignalCombiner:
             },
         }
 
+        feature_matrix = np.array(
+            [
+                combiner._extract_features(idx, all_metrics)
+                for idx in sorted(all_metrics)
+            ]
+        )
+        labels = np.array([1, 0])
+        accuracy = combiner.train_meta_learner(feature_matrix, labels)
+        assert accuracy >= 0.5
+
+        strategy_outputs = {"confidence": ({0, 1}, {}), "setfit_centroid": ({0}, {})}
         _novel_indices, scores = combiner.combine(strategy_outputs, all_metrics)
         assert 0 in scores
         assert 1 in scores
@@ -257,12 +254,13 @@ class TestMetaLearnerSignalCombiner:
         config = self._make_config("meta_learner")
         combiner = SignalCombiner(config)
 
-        features = np.array(
-            [
-                [1.0, 0.8, 0.7, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.6, 0.5, 0.3],
-                [0.0, 0.1, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.2, 0.1],
-            ]
+        base = np.array(
+            combiner._extract_features(0, {0: {"confidence_is_novel": True}})
         )
+        alt = np.array(
+            combiner._extract_features(1, {1: {"confidence_is_novel": False}})
+        )
+        features = np.vstack([base, alt])
         labels = np.array([1, 0])
         combiner.train_meta_learner(features, labels)
 
@@ -368,5 +366,8 @@ class TestAdaptiveWeights:
             + normalized.setfit_centroid
             + normalized.mahalanobis
             + normalized.lof
+            + normalized.energy_ood
+            + normalized.mixture_gaussian
+            + normalized.react_energy
         )
         assert abs(total - 1.0) < 0.01

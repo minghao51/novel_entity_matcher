@@ -3,12 +3,21 @@
 import json
 from typing import ClassVar
 
+import pytest
+
 from novelentitymatcher.novelty.proposal.dspy_module import (
     _extract_domain_context,
     _extract_existing_classes,
     _record_to_analysis_json,
     _record_to_cluster_json,
 )
+
+try:
+    import dspy as _dspy  # noqa: F401
+
+    HAS_DSPY = True
+except ImportError:
+    HAS_DSPY = False
 
 
 class TestRecordHelpers:
@@ -95,6 +104,7 @@ class TestRecordHelpers:
         assert _extract_domain_context(record) == ""
 
 
+@pytest.mark.skipif(not HAS_DSPY, reason="dspy not installed")
 class TestReviewRecordsToExamples:
     """Tests that require dspy to be importable."""
 
@@ -173,6 +183,7 @@ class TestReviewRecordsToExamples:
         assert data["rejected_as_noise"] == ["all"]
 
 
+@pytest.mark.skipif(not HAS_DSPY, reason="dspy not installed")
 class TestProposalMetric:
     """Tests for the GEPA proposal metric."""
 

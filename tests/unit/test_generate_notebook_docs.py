@@ -16,11 +16,7 @@ def test_parse_qmd_reads_frontmatter(tmp_path):
     mod = _load_module()
     qmd = tmp_path / "01_sample.qmd"
     qmd.write_text(
-        "---\n"
-        "title: Notebook A\n"
-        "description: Demo notebook\n"
-        "---\n\n"
-        "Body\n",
+        "---\ntitle: Notebook A\ndescription: Demo notebook\n---\n\nBody\n",
         encoding="utf-8",
     )
 

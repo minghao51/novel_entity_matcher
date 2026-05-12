@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from novelentitymatcher.utils.embedding_cache import LRUEmbeddingCache
+from novelentitymatcher.utils.embeddings import LRUEmbeddingCache
 
 
 class TestLRUEmbeddingCache:

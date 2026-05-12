@@ -8,7 +8,15 @@ from unittest.mock import patch
 
 import pytest
 
+try:
+    import dspy as _dspy  # noqa: F401
 
+    HAS_DSPY = True
+except ImportError:
+    HAS_DSPY = False
+
+
+@pytest.mark.skipif(not HAS_DSPY, reason="dspy not installed")
 class TestDSPyProposalOptimizer:
     """Tests for DSPyProposalOptimizer."""
 

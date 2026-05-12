@@ -6,9 +6,13 @@ def test_optional_dependency_section_declares_expected_extras():
     content = pyproject.read_text(encoding="utf-8")
 
     assert "[project.optional-dependencies]" in content
-    assert "\njupyter = [\n" in content
-    assert "\ndev = [\n" in content
+    assert "\ndocs = [\n" in content
+    assert "\nnovelty = [\n" in content
+    assert "\nllm = [\n" in content
+    assert "\nviz = [\n" in content
     assert "\nall = [\n" in content
+    assert "\n[dependency-groups]\n" in content
+    assert "\ndev = [\n" in content
 
 
 def test_optional_dependency_section_has_no_self_references():
