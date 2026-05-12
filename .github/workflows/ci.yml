@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --frozen --group dev
+      - uses: pre-commit/action@v3.0.1
+
+  typecheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --frozen --group dev
+      - name: Mypy type check
+        run: uv run mypy src/novelentitymatcher
+
+  test-fast:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --frozen --group dev
+      - name: Run smoke tests
+        run: uv run pytest -q -m smoke --maxfail=3
+      - name: Run fast tests (exclude network/model-heavy)
+        run: uv run pytest -q -m "not integration and not slow"
+      - name: Enforce fast-test coverage floor
+        run: uv run pytest -q -m "not integration and not slow" --cov=src --cov-report=term --cov-fail-under=54
+      - name: Validate planning doc paths
+        run: uv run python scripts/validate_planning_paths.py
+
+  test-heavy:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --frozen --group dev
+      - name: Run heavy integration tests
+        run: uv run pytest -q -m "integration or slow"
+
+  test-matrix:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --frozen --group dev
+      - name: Run fast tests (exclude network/model-heavy)
+        run: uv run pytest -q -m "not integration and not slow"
+      - name: Enforce fast-test coverage floor
+        run: uv run pytest -q -m "not integration and not slow" --cov=src --cov-report=term --cov-fail-under=54
+      - name: Validate planning doc paths
+        run: uv run python scripts/validate_planning_paths.py
+      - name: Run dependency vulnerability audit
+        run: uv run pip-audit --ignore-vuln CVE-2026-1839 --ignore-vuln CVE-2026-3219 --ignore-vuln CVE-2025-69872 --ignore-vuln GHSA-xqmj-j6mv-4862
+
+  security:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --frozen --group dev
+      - name: Scan dependencies for known vulnerabilities
+        run: >
+          uv run pip-audit
+          --ignore-vuln CVE-2026-1839
+          --ignore-vuln CVE-2026-3219
+          --ignore-vuln CVE-2025-69872
+          --ignore-vuln GHSA-xqmj-j6mv-4862
+
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+          enable-cache: true
+      - name: Verify optional extras resolve
+        run: uv sync --frozen --extra all
+      - name: Build package
+        run: uv run python -m build --sdist --wheel
+      - name: Validate distributions
+        run: uv run python -m twine check dist/*
