@@ -96,6 +96,13 @@ class StrategyResult:
     extra: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class SplitEmbeddings:
+    train_emb: np.ndarray
+    val_emb: np.ndarray
+    test_emb: np.ndarray
+
+
 def load_and_split_data(
     ds_name: str,
     max_train: int = 200,
@@ -304,6 +311,13 @@ class NoveltyBenchmark:
     def encode_texts(self, texts: list[str]) -> np.ndarray:
         return self.model.encode(texts, show_progress_bar=False)
 
+    def _prepare_split_embeddings(self, split: SplitData) -> SplitEmbeddings:
+        return SplitEmbeddings(
+            train_emb=self.encode_texts(split.train_texts),
+            val_emb=self.encode_texts(split.val_texts),
+            test_emb=self.encode_texts(split.test_texts),
+        )
+
     def _make_result(
         self,
         strategy: str,
@@ -336,37 +350,43 @@ class NoveltyBenchmark:
         if k_values is None:
             k_values = [3, 5, 10, 20, 30]
 
-        train_emb = self.encode_texts(split.train_texts)
-        val_emb = self.encode_texts(split.val_texts)
-        test_emb = self.encode_texts(split.test_texts)
+        embeddings = self._prepare_split_embeddings(split)
         val_true = prepare_binary_labels(split.val_labels, "__OOD__")
         test_true = prepare_binary_labels(split.test_labels, "__OOD__")
 
         results = []
         for k in k_values:
-            val_novelty = _compute_knn_novelty(train_emb, val_emb, k=k)
-            test_novelty = _compute_knn_novelty(train_emb, test_emb, k=k)
+            val_novelty = _compute_knn_novelty(
+                embeddings.train_emb, embeddings.val_emb, k=k
+            )
+            test_novelty = _compute_knn_novelty(
+                embeddings.train_emb, embeddings.test_emb, k=k
+            )
             val_m = compute_ood_metrics(val_true, val_novelty)
             test_m = compute_ood_metrics(test_true, test_novelty)
             results.append(self._make_result("knn_distance", {"k": k}, val_m, test_m))
         return results
 
     def benchmark_mahalanobis(self, split: SplitData) -> list[StrategyResult]:
-        train_emb = self.encode_texts(split.train_texts)
-        val_emb = self.encode_texts(split.val_texts)
-        test_emb = self.encode_texts(split.test_texts)
+        embeddings = self._prepare_split_embeddings(split)
         val_true = prepare_binary_labels(split.val_labels, "__OOD__")
         test_true = prepare_binary_labels(split.test_labels, "__OOD__")
 
         class_means = {}
         for lbl in set(split.train_labels):
             mask = np.array([s == lbl for s in split.train_labels])
-            class_means[lbl] = train_emb[mask].mean(axis=0)
-        global_cov = np.cov(train_emb, rowvar=False) + 1e-6 * np.eye(train_emb.shape[1])
+            class_means[lbl] = embeddings.train_emb[mask].mean(axis=0)
+        global_cov = np.cov(embeddings.train_emb, rowvar=False) + 1e-6 * np.eye(
+            embeddings.train_emb.shape[1]
+        )
         cov_inv = np.linalg.inv(global_cov)
 
-        val_novelty = _compute_mahalanobis_novelty(val_emb, class_means, cov_inv)
-        test_novelty = _compute_mahalanobis_novelty(test_emb, class_means, cov_inv)
+        val_novelty = _compute_mahalanobis_novelty(
+            embeddings.val_emb, class_means, cov_inv
+        )
+        test_novelty = _compute_mahalanobis_novelty(
+            embeddings.test_emb, class_means, cov_inv
+        )
         val_m = compute_ood_metrics(val_true, val_novelty)
         test_m = compute_ood_metrics(test_true, test_novelty)
         return [self._make_result("mahalanobis", {}, val_m, test_m)]
@@ -378,9 +398,7 @@ class NoveltyBenchmark:
 
         if n_neighbors_list is None:
             n_neighbors_list = [10, 20, 30]
-        train_emb = self.encode_texts(split.train_texts)
-        val_emb = self.encode_texts(split.val_texts)
-        test_emb = self.encode_texts(split.test_texts)
+        embeddings = self._prepare_split_embeddings(split)
         val_true = prepare_binary_labels(split.val_labels, "__OOD__")
         test_true = prepare_binary_labels(split.test_labels, "__OOD__")
 
@@ -388,9 +406,9 @@ class NoveltyBenchmark:
         for n in n_neighbors_list:
             try:
                 lof = LocalOutlierFactor(n_neighbors=n, contamination=0.1, novelty=True)
-                lof.fit(train_emb)
-                val_scores = -lof.score_samples(val_emb)
-                test_scores = -lof.score_samples(test_emb)
+                lof.fit(embeddings.train_emb)
+                val_scores = -lof.score_samples(embeddings.val_emb)
+                test_scores = -lof.score_samples(embeddings.test_emb)
                 val_m = compute_ood_metrics(val_true, val_scores)
                 test_m = compute_ood_metrics(test_true, test_scores)
                 results.append(
@@ -407,9 +425,7 @@ class NoveltyBenchmark:
 
         if nu_values is None:
             nu_values = [0.05, 0.1, 0.2]
-        train_emb = self.encode_texts(split.train_texts)
-        val_emb = self.encode_texts(split.val_texts)
-        test_emb = self.encode_texts(split.test_texts)
+        embeddings = self._prepare_split_embeddings(split)
         val_true = prepare_binary_labels(split.val_labels, "__OOD__")
         test_true = prepare_binary_labels(split.test_labels, "__OOD__")
 
@@ -418,11 +434,11 @@ class NoveltyBenchmark:
             try:
                 start = time.perf_counter()
                 ocsvm = OneClassSVM(nu=nu, kernel="rbf", gamma="scale")
-                ocsvm.fit(train_emb)
+                ocsvm.fit(embeddings.train_emb)
                 train_time = time.perf_counter() - start
 
-                val_scores = -ocsvm.decision_function(val_emb)
-                test_scores = -ocsvm.decision_function(test_emb)
+                val_scores = -ocsvm.decision_function(embeddings.val_emb)
+                test_scores = -ocsvm.decision_function(embeddings.test_emb)
                 val_m = compute_ood_metrics(val_true, val_scores)
                 test_m = compute_ood_metrics(test_true, test_scores)
                 results.append(
@@ -437,9 +453,7 @@ class NoveltyBenchmark:
     def benchmark_isolation_forest(self, split: SplitData) -> list[StrategyResult]:
         from sklearn.ensemble import IsolationForest
 
-        train_emb = self.encode_texts(split.train_texts)
-        val_emb = self.encode_texts(split.val_texts)
-        test_emb = self.encode_texts(split.test_texts)
+        embeddings = self._prepare_split_embeddings(split)
         val_true = prepare_binary_labels(split.val_labels, "__OOD__")
         test_true = prepare_binary_labels(split.test_labels, "__OOD__")
 
@@ -449,11 +463,11 @@ class NoveltyBenchmark:
             iso = IsolationForest(
                 n_estimators=n_est, contamination=0.1, random_state=42
             )
-            iso.fit(train_emb)
+            iso.fit(embeddings.train_emb)
             train_time = time.perf_counter() - start
 
-            val_scores = -iso.score_samples(val_emb)
-            test_scores = -iso.score_samples(test_emb)
+            val_scores = -iso.score_samples(embeddings.val_emb)
+            test_scores = -iso.score_samples(embeddings.test_emb)
             val_m = compute_ood_metrics(val_true, val_scores)
             test_m = compute_ood_metrics(test_true, test_scores)
             results.append(

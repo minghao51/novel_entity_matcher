@@ -5,7 +5,7 @@ import json
 import time
 from collections.abc import Callable
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -139,7 +139,11 @@ class PerformanceMonitor:
             for operation, timings in self.metrics.items():
                 for timing in timings:
                     writer.writerow(
-                        [operation, timing * 1000, datetime.now().isoformat()]
+                        [
+                            operation,
+                            timing * 1000,
+                            datetime.now(timezone.utc).isoformat(),
+                        ]
                     )
 
     def export_json(self, filepath: str) -> Path:
@@ -153,7 +157,7 @@ class PerformanceMonitor:
         """
         output_path = Path(filepath)
         data = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "metrics": self.summary(),
             "raw_timings": self.to_dict(),
         }

@@ -58,8 +58,9 @@ class MatcherMetadataStage(PipelineStage):
         self._collect_sync = collect_sync
         self._collect_async = collect_async
 
-    def run(self, context: StageContext) -> StageResult:
-        match_result, reference = self._collect_sync(context.inputs)
+    def _build_stage_result(
+        self, match_result: Any, reference: Any, num_queries: int
+    ) -> StageResult:
         match_method = (match_result.metadata or {}).get("match_method")
         return StageResult(
             stage_name=self.name,
@@ -68,29 +69,20 @@ class MatcherMetadataStage(PipelineStage):
                 "reference_corpus": reference,
             },
             metadata={
-                "num_queries": len(context.inputs),
+                "num_queries": num_queries,
                 "candidate_top_k": (match_result.metadata or {}).get("top_k"),
                 "match_method": match_method,
             },
             stage_config_snapshot={"top_k": (match_result.metadata or {}).get("top_k")},
         )
 
+    def run(self, context: StageContext) -> StageResult:
+        match_result, reference = self._collect_sync(context.inputs)
+        return self._build_stage_result(match_result, reference, len(context.inputs))
+
     async def run_async(self, context: StageContext) -> StageResult:
         match_result, reference = await self._collect_async(context.inputs)
-        match_method = (match_result.metadata or {}).get("match_method")
-        return StageResult(
-            stage_name=self.name,
-            artifacts={
-                "match_result": match_result,
-                "reference_corpus": reference,
-            },
-            metadata={
-                "num_queries": len(context.inputs),
-                "candidate_top_k": (match_result.metadata or {}).get("top_k"),
-                "match_method": match_method,
-            },
-            stage_config_snapshot={"top_k": (match_result.metadata or {}).get("top_k")},
-        )
+        return self._build_stage_result(match_result, reference, len(context.inputs))
 
 
 class OODDetectionStage(PipelineStage):

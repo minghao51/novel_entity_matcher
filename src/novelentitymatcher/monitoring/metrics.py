@@ -8,7 +8,7 @@ and is suitable for library usage patterns.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 @dataclass
@@ -76,7 +76,7 @@ def create_metric(
         value=value,
         unit=unit,
         labels=labels or {},
-        timestamp=datetime.now(),
+        timestamp=datetime.now(timezone.utc),
     )
 
 

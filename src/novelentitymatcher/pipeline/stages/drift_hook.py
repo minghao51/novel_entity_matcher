@@ -89,7 +89,7 @@ class DriftCheckStage(PipelineStage):
         match_result = context.artifacts.get("match_result")
         if match_result is not None and hasattr(match_result, "embeddings"):
             return match_result.embeddings
-        return context.artifacts.get("query_embeddings")
+        return context.artifacts.get("query_embeddings")  # type: ignore[return-value]
 
     def _extract_labels(self, context: StageContext) -> list[str] | None:
         """Try to pull predicted labels from upstream artifacts."""

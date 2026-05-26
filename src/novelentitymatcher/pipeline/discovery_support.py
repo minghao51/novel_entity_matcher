@@ -6,7 +6,7 @@ import asyncio
 import csv
 import json
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -194,14 +194,14 @@ def export_pipeline_metrics(
         raise ValueError(f"Unsupported format: {format}. Use 'json' or 'csv'.")
 
     if path is None:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         path = f"metrics_{timestamp}.{format}"
 
     output_path = Path(path)
 
     if format == "json":
         data = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "metrics": metrics,
         }
         output_path.write_text(json.dumps(data, indent=2), encoding="utf-8")

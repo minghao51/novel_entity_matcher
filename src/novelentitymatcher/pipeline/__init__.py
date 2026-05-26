@@ -1,7 +1,6 @@
 """Internal staged discovery pipeline contracts and adapters."""
 
-from importlib import import_module
-
+from ..core.match_result import MatchRecord, MatchResultWithMetadata
 from .adapters import (
     ClusterEvidenceStage,
     CommunityDetectionStage,
@@ -11,13 +10,13 @@ from .adapters import (
 )
 from .config import PipelineConfig
 from .contracts import (
+    PipelineArtifacts,
     PipelineRunResult,
     PipelineStage,
     PipelineStageError,
     StageContext,
     StageResult,
 )
-from .match_result import MatchRecord, MatchResultWithMetadata
 from .orchestrator import PipelineOrchestrator
 
 __all__ = [
@@ -28,6 +27,7 @@ __all__ = [
     "MatchResultWithMetadata",
     "MatcherMetadataStage",
     "OODDetectionStage",
+    "PipelineArtifacts",
     "PipelineConfig",
     "PipelineOrchestrator",
     "PipelineRunResult",
@@ -42,6 +42,8 @@ __all__ = [
 def __getattr__(name):
     if name != "DiscoveryPipeline":
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-    value = getattr(import_module(".discovery", __name__), name)
+    from ..novelty.entity_matcher import NovelEntityMatcher
+
+    value = NovelEntityMatcher
     globals()[name] = value
     return value

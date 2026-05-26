@@ -11,8 +11,12 @@ from .base import EmbeddingBackend
 if platform.system() == "Darwin" and platform.machine() == "arm64":
     os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
-from sentence_transformers.models import StaticEmbedding
+try:
+    from sentence_transformers.sentence_transformer.models import StaticEmbedding
+except ImportError:  # pragma: no cover - compatibility with older sentence-transformers
+    from sentence_transformers.models import StaticEmbedding
 
+from ..config import get_trusted_remote_code_models
 from ..utils.embeddings import get_cached_sentence_transformer
 
 
@@ -30,7 +34,14 @@ class StaticEmbeddingBackend(EmbeddingBackend):
     - minishlab/potion-base-32M (model2vec)
     """
 
-    def __init__(self, model_name: str, embedding_dim: int | None = None):
+    def __init__(
+        self,
+        model_name: str,
+        embedding_dim: int | None = None,
+        *,
+        trust_remote_code: bool = False,
+        trusted_remote_code_models: set[str] | None = None,
+    ):
         """
         Initialize static embedding backend.
 
@@ -42,6 +53,14 @@ class StaticEmbeddingBackend(EmbeddingBackend):
         self.embedding_dim = embedding_dim
         self.backend_type: str | None = None
         self.model: Any = None
+        self._trusted_remote_code_models = (
+            trusted_remote_code_models
+            if trusted_remote_code_models is not None
+            else get_trusted_remote_code_models()
+        )
+        self._trust_remote_code = trust_remote_code or (
+            model_name in self._trusted_remote_code_models
+        )
 
         # Try to load with model2vec first (for minishlab models)
         try:
@@ -55,10 +74,8 @@ class StaticEmbeddingBackend(EmbeddingBackend):
 
         # Fall back to SentenceTransformer (for RikkaBotan MRL and others)
         try:
-            # Some models (like RikkaBotan) require trust_remote_code=True
-            # to load custom modules like SSE
             self.model = get_cached_sentence_transformer(
-                model_name, trust_remote_code=True
+                model_name, trust_remote_code=self._trust_remote_code
             )
             self.backend_type = "sentence_transformers"
             self._is_native_static = any(
