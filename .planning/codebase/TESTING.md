@@ -156,7 +156,9 @@ class TestNovelClassDetectionIntegration:
 
 ### CI Coverage
 
-Coverage is not enforced as a CI gate. The configuration exists for local development use.
+Coverage is enforced for fast-test jobs with `--cov-fail-under=55` in:
+- `test-fast` on all pushes/PRs
+- `test-matrix` on `main` pushes and manual runs
 
 ## CI Test Pipeline (`.github/workflows/ci.yml`)
 

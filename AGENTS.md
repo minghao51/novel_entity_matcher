@@ -1,12 +1,20 @@
 ## Workflow
 - **Analyze first.** Read files before proposing. Never hallucinate.
+- **Check skills.** Before any task, check + follow matching skill.
 - **Approve changes.** Present plan before modifying code.
 - **Minimal scope.** Change as little as possible. No new abstractions.
+- **Verify.** Run `uv run ruff check` (lint) and `uv run mypy src` (type-check) after changes. Ask user for command if unsure.
+- **No commits.** Never commit unless explicitly asked.
 
 ## Output Style
 - sharp and concise, remove filler words, repetition and weak phrasing.
 - be thorough in implementation, never leave TODOs or placeholders, complete all code changes fully
 - No speculation about unread code.
+
+## File Operations
+- **Read before edit.** Always read a file before editing it.
+- **Edit over Write.** Prefer Edit tool for surgical changes.
+- **Edit existing over new.** Prefer editing existing files over creating new ones.
 
 ## Technical Stack
 - **Python:** Package manager `uv`. Always `uv run <command>`. Never `python`. Sync via `uv sync`.

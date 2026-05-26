@@ -177,7 +177,7 @@ Key functions:
 - Attribute access for nested keys: `cfg.training.num_epochs`
 - Dot-notation fallback: `cfg.get("training.batch_size")`
 
-### Registry Pattern (`src/novelentitymatcher/config_registry.py`)
+### Registry Pattern (`src/novelentitymatcher/config.py`)
 
 - `MODEL_SPECS` dict maps aliases → model metadata (name, backend, supports_training, language)
 - `MODEL_REGISTRY`, `STATIC_MODEL_REGISTRY`, `DYNAMIC_MODEL_REGISTRY` for model classification

@@ -51,12 +51,35 @@ jobs:
         run: uv sync --frozen --group dev
       - name: Run smoke tests
         run: uv run pytest -q -m smoke --maxfail=3
+      - name: Run e2e happy-path test
+        run: uv run pytest -q -m e2e --maxfail=1
       - name: Run fast tests (exclude network/model-heavy)
         run: uv run pytest -q -m "not integration and not slow"
       - name: Enforce fast-test coverage floor
-        run: uv run pytest -q -m "not integration and not slow" --cov=src --cov-report=term --cov-fail-under=54
+        run: uv run pytest -q -m "not integration and not slow" --cov=src --cov-report=term --cov-fail-under=55
       - name: Validate planning doc paths
         run: uv run python scripts/validate_planning_paths.py
+      - name: Validate planning/CI consistency
+        run: uv run python scripts/validate_planning_consistency.py
+
+  test-optional-features:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+          enable-cache: true
+      - name: Install dependencies with optional extras
+        run: uv sync --frozen --group dev --extra all
+      - name: Run optional-feature regression tests
+        run: >
+          uv run pytest -q
+          tests/unit/core/test_chroma_vector_store.py
+          tests/unit/novelty/test_ann_index.py
+          tests/unit/novelty/test_clustering_backends.py
+          tests/unit/test_dspy_module.py
+          tests/unit/test_dspy_optimizer.py
 
   test-heavy:
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
@@ -90,7 +113,7 @@ jobs:
       - name: Run fast tests (exclude network/model-heavy)
         run: uv run pytest -q -m "not integration and not slow"
       - name: Enforce fast-test coverage floor
-        run: uv run pytest -q -m "not integration and not slow" --cov=src --cov-report=term --cov-fail-under=54
+        run: uv run pytest -q -m "not integration and not slow" --cov=src --cov-report=term --cov-fail-under=55
       - name: Validate planning doc paths
         run: uv run python scripts/validate_planning_paths.py
       - name: Run dependency vulnerability audit

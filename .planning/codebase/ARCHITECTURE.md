@@ -32,7 +32,7 @@
 ### Core Matching Layer
 - Purpose: Entity matching with multiple training strategies
 - Location: `src/novelentitymatcher/core/`
-- Contains: `Matcher` (unified entry point), `_EntityMatcher` (SetFit/BERT), `EmbeddingMatcher` (zero-shot), matching strategy hierarchy, blocking, reranking, normalization, vector store
+- Contains: `Matcher` (unified entry point), `_EntityMatcher` (SetFit/BERT), `EmbeddingMatcher` (zero-shot), mode objects (ZeroShotMode, TrainingMode, HybridMode), blocking, reranking, normalization, vector store
 - Depends on: `backends/` for embedding generation, `config.py` for model aliases/specs, `utils/` for validation
 - Used by: API layer, Novelty layer (for reference corpus), Pipeline layer
 
@@ -76,14 +76,14 @@
 ### Entity Matching Flow (zero-shot):
 1. User creates `Matcher(entities=..., model="potion-32m", mode="zero-shot")`
 2. `Matcher.fit()` -> `EmbeddingMatcher.build_index()` encodes all entity names into embeddings
-3. `Matcher.match(texts)` -> `ZeroShotStrategy.match()` -> `EmbeddingMatcher.match()` computes cosine similarity against index
+3. `Matcher.match(texts)` -> `ZeroShotMode.match()` -> `EmbeddingMatcher.match()` computes cosine similarity against index
 4. Returns `{"id": ..., "score": ..., "text": ...}` per query
 
 ### Entity Matching Flow (trained):
 1. User creates `Matcher(entities=..., mode="auto")` and calls `fit(training_data)`
 2. `Matcher._detect_training_mode()` selects head-only/full/bert based on example counts
 3. `_EntityMatcher.train()` fits SetFit or BERT classifier on labeled data
-4. `Matcher.match()` routes through `HeadOnlyFullStrategy` or `BertStrategy`
+4. `Matcher.match()` routes through `TrainingMode` (handles setfit/bert)
 
 ### Novelty-Aware Matching Flow:
 1. User creates `NovelEntityMatcher(entities=..., matcher=matcher)`
@@ -117,8 +117,8 @@
 2. Each ingester fetches from external source, normalizes, writes to `data/raw/` and `data/processed/`
 
 **State Management:**
-- `MatcherRuntimeState` holds mutable matcher state (mode, training status)
-- `MatcherComponentFactory` lazily instantiates sub-matchers (embedding, entity, bert, hybrid)
+- `MatcherRuntimeState` holds mutable matcher state (mode, training status) — in `matcher_state.py`
+- `MatcherComponentFactory` lazily instantiates sub-matchers (embedding, entity, bert, hybrid) — in `matcher_state.py`
 - `StageContext.artifacts` is a mutable dict passed between pipeline stages
 - `LRUEmbeddingCache` caches computed embeddings with bounded size
 - `ProposalReviewManager` persists review state to JSON file
@@ -127,8 +127,8 @@
 
 **`MatchingStrategy` (ABC):**
 - Purpose: Polymorphic matching across modes
-- Examples: `src/novelentitymatcher/core/matching_strategy.py` (`ZeroShotStrategy`, `HeadOnlyFullStrategy`, `BertStrategy`, `HybridStrategy`)
-- Pattern: Strategy pattern with `MatcherFacade` as context
+- Examples: `src/novelentitymatcher/core/matcher_modes.py` (`ZeroShotMode`, `TrainingMode`, `HybridMode`)
+- Pattern: Mode objects with `Matcher` as context
 
 **`PipelineStage` (ABC):**
 - Purpose: Composable pipeline stages with sync/async execution
@@ -168,7 +168,7 @@
 ## Entry Points
 
 **`Matcher` class:**
-- Location: `src/novelentitymatcher/core/matcher.py`
+- Location: `src/novelentitymatcher/core/matcher.py` (683 lines)
 - Triggers: Direct instantiation, `NovelEntityMatcher`, `DiscoveryPipeline`
 - Responsibilities: Unified entity matching with auto mode detection, training, prediction, diagnostics
 
@@ -177,8 +177,8 @@
 - Triggers: Direct instantiation for matcher-first novelty workflows
 - Responsibilities: Matcher + novelty detection + LLM proposal in a single API
 
-**`DiscoveryPipeline` class:**
-- Location: `src/novelentitymatcher/pipeline/discovery.py`
+**`DiscoveryPipeline` alias:**
+- Location: `src/novelentitymatcher/pipeline/discovery.py` (alias to `NovelEntityMatcher`)
 - Triggers: Direct instantiation for pipeline-first discovery workflows (recommended for new projects)
 - Responsibilities: Full discovery pipeline with HITL review, promotion, and configuration
 

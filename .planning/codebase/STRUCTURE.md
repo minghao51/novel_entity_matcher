@@ -58,7 +58,7 @@ novel_entity_matcher/
 **`src/novelentitymatcher/core/`:**
 - Purpose: Entity matching engine with multiple training modes
 - Contains: `Matcher` (main facade), `EmbeddingMatcher` (zero-shot), `_EntityMatcher` (trained), `BERTClassifier`, `SetFitClassifier`, strategy pattern, blocking, reranking, hierarchy, vector store, normalization
-- Key files: `matcher.py` (708 lines, main entry), `matching_strategy.py` (strategy hierarchy), `embedding_matcher.py`, `classifier.py`, `bert_classifier.py`
+- Key files: `matcher.py` (683 lines, main entry), `matcher_state.py` (runtime state, component factory), `matcher_modes.py` (ZeroShotMode, TrainingMode, HybridMode), `matcher_diagnosis.py` (DiagnosisEngine), `matcher_batch.py` (BatchEngine), `embedding_matcher.py`, `classifier.py`, `bert_classifier.py`
 
 **`src/novelentitymatcher/novelty/`:**
 - Purpose: Out-of-distribution detection and novel class discovery
@@ -183,7 +183,7 @@ novel_entity_matcher/
 - `src/novelentitymatcher/core/embedding_matcher.py`: Zero-shot embedding-based matching
 - `src/novelentitymatcher/core/classifier.py`: SetFit few-shot classifier
 - `src/novelentitymatcher/core/bert_classifier.py`: BERT fine-tuning classifier
-- `src/novelentitymatcher/core/matching_strategy.py`: Strategy pattern (zero-shot, head-only, full, bert, hybrid)
+- `src/novelentitymatcher/core/matcher_modes.py`: Mode objects (ZeroShotMode, TrainingMode, HybridMode)
 - `src/novelentitymatcher/core/hybrid.py`: Hybrid blocking + retrieval matcher
 - `src/novelentitymatcher/core/blocking.py`: Blocking strategies (BM25, TF-IDF, Fuzzy, NoOp)
 - `src/novelentitymatcher/core/reranker.py`: Cross-encoder reranking
@@ -254,9 +254,9 @@ novel_entity_matcher/
 
 ## Where to Add New Code
 
-**New Matching Strategy:**
-- Implementation: `src/novelentitymatcher/core/matching_strategy.py` (add class extending `MatchingStrategy`)
-- Registration: Add to `_STRATEGY_MAP` dict in same file
+**New Matching Mode:**
+- Implementation: `src/novelentitymatcher/core/matcher_modes.py` (add mode class)
+- Registration: Add to `Matcher._build_modes()` in `matcher.py`
 - Tests: `tests/unit/core/`
 
 **New Novelty Detection Strategy:**

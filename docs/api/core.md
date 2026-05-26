@@ -16,17 +16,19 @@
 
 ::: novelentitymatcher.core.bert_classifier
 
-::: novelentitymatcher.core.matching_strategy
+::: novelentitymatcher.core.vector_store
 
 ::: novelentitymatcher.core.hybrid
 
-::: novelentitymatcher.core.matcher_engines
-
 ::: novelentitymatcher.core.matcher_entity
 
-::: novelentitymatcher.core.matcher_components
+::: novelentitymatcher.core.matcher_state
 
-::: novelentitymatcher.core.matcher_runtime
+::: novelentitymatcher.core.matcher_modes
+
+::: novelentitymatcher.core.matcher_diagnosis
+
+::: novelentitymatcher.core.matcher_batch
 
 ::: novelentitymatcher.core.matcher_shared
 

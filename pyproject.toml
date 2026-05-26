@@ -281,12 +281,3 @@ module = [
 ]
 no_implicit_optional = false
 ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = [
-    "novelentitymatcher.novelty.strategies.self_knowledge_impl.*",
-    "novelentitymatcher.novelty.strategies.prototypical_impl.*",
-    "novelentitymatcher.novelty.strategies.oneclass_impl.*",
-    "novelentitymatcher.novelty.strategies.setfit_impl.*",
-]
-ignore_errors = true
