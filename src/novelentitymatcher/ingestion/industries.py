@@ -2,7 +2,7 @@
 
 import csv
 import json
-from typing import Any
+from typing import Any, ClassVar
 
 import requests
 
@@ -16,12 +16,12 @@ logger = get_logger(__name__)
 class IndustriesFetcher(BaseFetcher):
     """Fetch NAICS and SIC industry classification codes."""
 
-    NAICS_URLS = [
+    NAICS_URLS: ClassVar[list[str]] = [
         "https://raw.githubusercontent.com/erickogore/country-code-json/refs/heads/master/industry-codes.json",
         "https://raw.githubusercontent.com/datasets/industry-codes/master/data/industry-codes.csv",
     ]
 
-    FALLBACK_NAICS = [
+    FALLBACK_NAICS: ClassVar[list[dict[str, str]]] = [
         {"Code": "11", "Title": "Agriculture, Forestry, Fishing and Hunting"},
         {"Code": "21", "Title": "Mining, Quarrying, and Oil and Gas Extraction"},
         {"Code": "22", "Title": "Utilities"},
@@ -43,7 +43,7 @@ class IndustriesFetcher(BaseFetcher):
         {"Code": "81", "Title": "Other Services (except Public Administration)"},
     ]
 
-    FALLBACK_SIC = [
+    FALLBACK_SIC: ClassVar[list[dict[str, str]]] = [
         {"SIC Code": "0111", "SIC Industry Title": "Wheat"},
         {"SIC Code": "1311", "SIC Industry Title": "Crude Petroleum and Natural Gas"},
         {"SIC Code": "2711", "SIC Industry Title": "Newspapers"},

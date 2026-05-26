@@ -3,7 +3,9 @@
 import argparse
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from ..utils.logging_config import get_logger
 from . import (
@@ -16,10 +18,17 @@ from . import (
     run_universities,
 )
 from .base import resolve_output_dirs, run_all_concurrent_detailed
+from .currencies import CurrenciesFetcher
+from .industries import IndustriesFetcher
+from .languages import LanguagesFetcher
+from .occupations import OccupationsFetcher
+from .products import UNSPSCFetcher
+from .timezones import TimezonesFetcher
+from .universities import UniversitiesFetcher
 
 logger = get_logger(__name__)
 
-INGESTORS = {
+INGESTORS: dict[str, Callable[..., object] | None] = {
     "languages": run_languages,
     "currencies": run_currencies,
     "industries": run_industries,
@@ -29,6 +38,23 @@ INGESTORS = {
     "universities": run_universities,
     "all": None,
 }
+
+FETCHER_REGISTRY: dict[str, type[Any]] = {
+    "languages": LanguagesFetcher,
+    "currencies": CurrenciesFetcher,
+    "industries": IndustriesFetcher,
+    "timezones": TimezonesFetcher,
+    "occupations": OccupationsFetcher,
+    "products": UNSPSCFetcher,
+    "universities": UniversitiesFetcher,
+}
+
+
+def _build_fetcher(name: str, raw_dir: Path, processed_dir: Path) -> Any:
+    fetcher_cls = FETCHER_REGISTRY.get(name)
+    if fetcher_cls is None:
+        raise KeyError(f"No fetcher registered for dataset '{name}'")
+    return fetcher_cls(raw_dir, processed_dir)
 
 
 def main(argv=None):
@@ -93,12 +119,7 @@ def main(argv=None):
                     name, args.raw_dir, args.processed_dir
                 )
 
-                module = __import__(
-                    f"novelentitymatcher.ingestion.{name}",
-                    fromlist=[name.capitalize() + "Fetcher"],
-                )
-                fetcher_cls = getattr(module, name.capitalize() + "Fetcher")
-                fetcher = fetcher_cls(raw_dir, processed_dir)
+                fetcher = _build_fetcher(name, raw_dir, processed_dir)
                 fetchers.append((fetcher, f"{name}.csv"))
 
             try:

@@ -1,7 +1,7 @@
 """Ingestion script for SOC occupation codes (O*NET)."""
 
 import csv
-from typing import Any
+from typing import Any, ClassVar
 
 import requests
 
@@ -17,7 +17,7 @@ class OccupationsFetcher(BaseFetcher):
 
     ONET_URL = "https://www.onetcenter.org/dl/30_2/occupation_data.zip"
 
-    FALLBACK_OCCUPATIONS = [
+    FALLBACK_OCCUPATIONS: ClassVar[list[dict[str, str]]] = [
         {"O*NET-SOC Code": "11-0000", "Title": "Management Occupations"},
         {
             "O*NET-SOC Code": "13-0000",

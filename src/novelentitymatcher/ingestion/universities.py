@@ -1,7 +1,7 @@
 """Ingestion script for university/institution data."""
 
 import json
-from typing import Any
+from typing import Any, ClassVar
 
 import requests
 
@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 class UniversitiesFetcher(BaseFetcher):
     """Fetch university/institution data from multiple sources."""
 
-    FALLBACK_UNIVERSITIES = [
+    FALLBACK_UNIVERSITIES: ClassVar[list[dict[str, str]]] = [
         {
             "name": "Harvard University",
             "aliases": "Harvard,Harvard Univ",

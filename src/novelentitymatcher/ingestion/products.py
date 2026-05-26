@@ -2,7 +2,7 @@
 
 import csv
 import json
-from typing import Any
+from typing import Any, ClassVar
 
 import requests
 
@@ -18,7 +18,7 @@ class UNSPSCFetcher(BaseFetcher):
 
     SOURCE_URL = "https://unstats.un.org/unsd/services/v2/"
 
-    FALLBACK_UNSPSC = [
+    FALLBACK_UNSPSC: ClassVar[list[dict[str, str]]] = [
         {"Code": "10", "Title": "Live animals and livestock"},
         {"Code": "11", "Title": "Crops"},
         {"Code": "12", "Title": "Forestry products"},
@@ -138,11 +138,11 @@ class UNSPSCFetcher(BaseFetcher):
 class MCCFetcher(BaseFetcher):
     """Fetch MCC (Merchant Category Codes)."""
 
-    SOURCE_URLS = [
+    SOURCE_URLS: ClassVar[list[str]] = [
         "https://raw.githubusercontent.com/greggles/mcc-codes/master/mcc_codes.csv"
     ]
 
-    FALLBACK_MCC = [
+    FALLBACK_MCC: ClassVar[list[dict[str, str]]] = [
         {"mcc": "0742", "description": "Veterinary Services"},
         {"mcc": "0780", "description": "Landscaping and Horticultural Services"},
         {
