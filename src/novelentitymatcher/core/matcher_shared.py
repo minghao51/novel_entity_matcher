@@ -1,19 +1,13 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Union
+from typing import Any
 
 import numpy as np
 
 from .normalizer import TextNormalizer
 
-if TYPE_CHECKING:
-    from sentence_transformers import SentenceTransformer
-
-    from ..backends.static_embedding import StaticEmbeddingBackend
-
-
-EmbeddingModel = Union["SentenceTransformer", "StaticEmbeddingBackend"]
-TextInput = Union[str, list[str]]
+EmbeddingModel = Any
+TextInput = str | list[str]
 
 
 def coerce_texts(texts: TextInput) -> tuple[list[str], bool]:

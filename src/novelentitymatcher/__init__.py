@@ -4,10 +4,7 @@ novel_entity_matcher - Entity matching with novelty detection and discovery.
 Public API hierarchy:
 - Matcher: Known-entity matching (zero-shot, SetFit, BERT, hybrid modes)
 - NovelEntityMatcher: Novelty-aware matching (matcher-first orchestration)
-- DiscoveryPipeline: Pipeline-first discovery with staged processing
-
-For new projects, prefer DiscoveryPipeline for discovery workflows.
-NovelEntityMatcher remains supported for matcher-first patterns.
+- DiscoveryPipeline: Alias for NovelEntityMatcher (backward compatibility)
 """
 
 import os
@@ -74,7 +71,7 @@ _EXPORTS = {
     "FuzzyBlocking": (".core.blocking", "FuzzyBlocking"),
     "NoOpBlocking": (".core.blocking", "NoOpBlocking"),
     "NovelEntityMatcher": (".novelty.entity_matcher", "NovelEntityMatcher"),
-    "DiscoveryPipeline": (".pipeline.discovery", "DiscoveryPipeline"),
+    "DiscoveryPipeline": (".novelty.entity_matcher", "NovelEntityMatcher"),
     "NoveltyDetector": (".novelty.core.detector", "NoveltyDetector"),
     "LLMClassProposer": (".novelty.proposal.llm", "LLMClassProposer"),
     "SemanticMatcherError": (".exceptions", "SemanticMatcherError"),

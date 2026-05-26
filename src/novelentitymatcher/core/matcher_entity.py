@@ -179,6 +179,17 @@ class _EntityMatcher:
 
         return unwrap_single(results, single_input)
 
+    async def aclose(self) -> None:
+        if self._async_executor is not None:
+            self._async_executor.shutdown()
+            self._async_executor = None
+
+    async def __aenter__(self) -> _EntityMatcher:
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        await self.aclose()
+
     async def train_async(
         self,
         training_data: list[dict],

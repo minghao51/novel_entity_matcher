@@ -280,12 +280,13 @@ class BERTClassifier:
         device = next(self.model.parameters()).device
         inputs = {k: v.to(device) for k, v in inputs.items()}
 
-        # Predict
+        if torch is None:
+            raise RuntimeError("PyTorch is required for BERT classification")
+
         with torch.no_grad():
             outputs = self.model(**inputs)
             predictions = outputs.logits.argmax(dim=-1)
 
-        # Convert to labels
         predicted_labels = [self.id2label[pred.item()] for pred in predictions]
 
         if single_input:
@@ -323,7 +324,9 @@ class BERTClassifier:
         device = next(self.model.parameters()).device
         inputs = {k: v.to(device) for k, v in inputs.items()}
 
-        # Predict with probabilities
+        if torch is None:
+            raise RuntimeError("PyTorch is required for BERT classification")
+
         with torch.no_grad():
             outputs = self.model(**inputs)
             probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
@@ -391,4 +394,4 @@ class BERTClassifier:
 try:
     import torch
 except ImportError:
-    pass
+    torch = None  # type: ignore[assignment]

@@ -277,6 +277,7 @@ class LRUEmbeddingCache:
         dim: int | None = None,
         key_prefix: str = "",
     ):
+        import threading
         from collections import OrderedDict
 
         self.max_entries = max_entries
@@ -285,40 +286,55 @@ class LRUEmbeddingCache:
         self._cache: OrderedDict[str, np.ndarray] = OrderedDict()
         self._hits = 0
         self._misses = 0
+        self._lock = threading.Lock()
 
     def _make_key(self, text: str) -> str:
         return f"{self.key_prefix}:{text}" if self.key_prefix else text
 
     def get(self, text: str) -> np.ndarray | None:
         key = self._make_key(text)
-        if key in self._cache:
-            self._cache.move_to_end(key)
-            self._hits += 1
-            return self._cache[key]
+        with self._lock:
+            if key in self._cache:
+                self._cache.move_to_end(key)
+                self._hits += 1
+                return self._cache[key]
         self._misses += 1
         return None
 
     def put(self, text: str, embedding: np.ndarray) -> None:
         key = self._make_key(text)
-        if key in self._cache:
-            self._cache.move_to_end(key)
-        self._cache[key] = embedding
-        if len(self._cache) > self.max_entries:
-            self._cache.popitem(last=False)
+        with self._lock:
+            if key in self._cache:
+                self._cache.move_to_end(key)
+            self._cache[key] = embedding
+            if len(self._cache) > self.max_entries:
+                self._cache.popitem(last=False)
 
     def get_batch(self, texts: list[str]) -> tuple[list[np.ndarray | None], list[int]]:
         results: list[np.ndarray | None] = []
         uncached: list[int] = []
-        for i, text in enumerate(texts):
-            emb = self.get(text)
-            results.append(emb)
-            if emb is None:
-                uncached.append(i)
+        with self._lock:
+            for i, text in enumerate(texts):
+                key = self._make_key(text)
+                if key in self._cache:
+                    self._cache.move_to_end(key)
+                    self._hits += 1
+                    results.append(self._cache[key])
+                else:
+                    self._misses += 1
+                    results.append(None)
+                    uncached.append(i)
         return results, uncached
 
     def put_batch(self, texts: list[str], embeddings: np.ndarray) -> None:
-        for text, emb in zip(texts, embeddings, strict=False):
-            self.put(text, emb)
+        with self._lock:
+            for text, emb in zip(texts, embeddings, strict=False):
+                key = self._make_key(text)
+                if key in self._cache:
+                    self._cache.move_to_end(key)
+                self._cache[key] = emb
+                if len(self._cache) > self.max_entries:
+                    self._cache.popitem(last=False)
 
     @property
     def hit_rate(self) -> float:
@@ -339,6 +355,7 @@ class LRUEmbeddingCache:
         }
 
     def clear(self) -> None:
-        self._cache.clear()
-        self._hits = 0
-        self._misses = 0
+        with self._lock:
+            self._cache.clear()
+            self._hits = 0
+            self._misses = 0

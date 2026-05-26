@@ -57,7 +57,7 @@ class EmbeddingMatcher:
 
         self.normalizer = TextNormalizer() if normalize else None
         self.cache = cache if cache is not None else get_default_cache()
-        self.embedding_cache = embedding_cache
+        self.embedding_cache = embedding_cache or LRUEmbeddingCache(max_entries=10000)
         self.model: EmbeddingModel | None = None
         self.entity_texts: list[str] = []
         self.entity_ids: list[str] = []
@@ -200,7 +200,13 @@ class EmbeddingMatcher:
 
         results: list[Any] = []
         for sim_row in similarities:
-            sorted_indices = np.argsort(sim_row)[::-1]
+            n_candidates = len(sim_row)
+            fetch_n = min(top_k * 3, n_candidates)
+            if fetch_n < n_candidates:
+                part_indices = np.argpartition(sim_row, -fetch_n)[-fetch_n:]
+                sorted_indices = part_indices[np.argsort(sim_row[part_indices])[::-1]]
+            else:
+                sorted_indices = np.argsort(sim_row)[::-1]
             matches: list[dict[str, Any]] = []
             seen_ids = set()
             for idx in sorted_indices:
@@ -248,10 +254,28 @@ class EmbeddingMatcher:
         ):
             new_embeddings = new_embeddings[:, : self.embedding_dim]
 
+        if new_embeddings.shape[1] != self.embeddings.shape[1]:
+            raise ValueError(
+                f"Embedding dimension mismatch: expected {self.embeddings.shape[1]}, "
+                f"got {new_embeddings.shape[1]}"
+            )
+
+        combined = np.vstack([self.embeddings, new_embeddings])
         self.entities.extend(new_entities)
         self.entity_texts.extend(new_texts)
         self.entity_ids.extend(new_ids)
-        self.embeddings = np.vstack([self.embeddings, new_embeddings])
+        self.embeddings = combined
+
+    async def aclose(self) -> None:
+        if self._async_executor is not None:
+            self._async_executor.shutdown()
+            self._async_executor = None
+
+    async def __aenter__(self) -> EmbeddingMatcher:
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        await self.aclose()
 
     async def build_index_async(self, batch_size: int | None = None):
         await self._ensure_async_executor().run_in_thread(self.build_index, batch_size)

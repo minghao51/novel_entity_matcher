@@ -7,7 +7,7 @@ This module provides:
 - HierarchicalMatcher: User-facing API for hierarchical matching
 """
 
-from typing import Any
+from typing import Any, ClassVar
 
 import networkx as nx
 import numpy as np
@@ -205,7 +205,7 @@ class HierarchicalScoring:
     """
 
     # Depth penalties: how much to reduce score based on relationship depth
-    DEPTH_PENALTIES = {
+    DEPTH_PENALTIES: ClassVar[dict[int, float]] = {
         0: 1.0,  # Self-match
         1: 0.9,  # Direct parent/child
         2: 0.75,  # Grandparent/grandchild
@@ -214,7 +214,7 @@ class HierarchicalScoring:
     }
 
     # Hierarchical boost: how much to boost score based on relationship type
-    HIERARCHICAL_BOOSTS = {
+    HIERARCHICAL_BOOSTS: ClassVar[dict[str, float]] = {
         "self": 0.5,
         "parent": 0.4,
         "child": 0.4,

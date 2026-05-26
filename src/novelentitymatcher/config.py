@@ -1,4 +1,5 @@
 import json
+import os
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -209,11 +210,19 @@ LLM_PROVIDERS = {
     },
 }
 
+_TRUST_REMOTE_CODE_MODELS_ENV = "NOVEL_ENTITY_MATCHER_TRUST_REMOTE_CODE_MODELS"
+
 
 def resolve_model_alias(model_name: str) -> str:
     result = MODEL_REGISTRY.get(model_name, model_name)
     assert isinstance(result, str)
     return result
+
+
+def get_trusted_remote_code_models() -> set[str]:
+    """Get model allowlist for `trust_remote_code=True` from env."""
+    raw = os.getenv(_TRUST_REMOTE_CODE_MODELS_ENV, "")
+    return {item.strip() for item in raw.split(",") if item.strip()}
 
 
 def get_model_spec(model_name: str) -> dict[str, Any] | None:
@@ -331,6 +340,7 @@ __all__ = [
     "get_embedding_model_aliases",
     "get_model_spec",
     "get_training_model_aliases",
+    "get_trusted_remote_code_models",
     "is_bert_model",
     "is_static_embedding_model",
     "recommend_model",
