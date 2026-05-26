@@ -13,25 +13,27 @@ from sklearn.metrics.pairwise import cosine_similarity
 from ...utils.logging_config import get_logger
 from ..config.strategies import EnergyConfig
 from ..core.strategies import StrategyRegistry
-from .base import NoveltyStrategy
+from .base import NoveltyStrategy, SignalInfo
+from .conformal_mixin import ConformalMixin
 
 logger = get_logger(__name__)
 
 
 @StrategyRegistry.register
-class EnergyOODStrategy(NoveltyStrategy):
-    """Energy score strategy for novelty detection.
-
-    Computes energy as ``E(x) = -T * log(sum_i exp(logit_i(x) / T))``
-    where logits are derived from cosine similarity to class centroids.
-    Samples with energy below the learned threshold are flagged as novel.
-    """
-
+class EnergyOODStrategy(ConformalMixin, NoveltyStrategy):
     strategy_id = "energy_ood"
     maturity = "experimental"
+    score_keys = ("energy_score",)
+    signal_info = SignalInfo(
+        score_key="energy_score",
+        flag_key="energy_is_novel",
+        weight_name="energy_ood",
+        kind="special",
+    )
+    default_weight = 0.3
 
     def __init__(self):
-        self._config: EnergyConfig = None
+        self._config: EnergyConfig | None = None
         self._centroids: dict[str, np.ndarray] = {}
         self._centroid_matrix: np.ndarray | None = None
         self._centroid_labels: list[str] = []
@@ -70,48 +72,10 @@ class EnergyOODStrategy(NoveltyStrategy):
         reference_embeddings: np.ndarray,
         reference_labels: list[str],
     ) -> None:
-        """Initialize with conformal calibration, splitting reference data."""
-        from .conformal import ConformalCalibrator
-
-        n = len(reference_embeddings)
-        frac = self._config.calibration_set_fraction
-        n_cal = max(1, int(n * frac))
-        if n_cal >= n:
-            logger.warning(
-                "Energy conformal calibration disabled: calibration split "
-                "would leave no core reference samples (n=%d, n_cal=%d)",
-                n,
-                n_cal,
-            )
-            self._initialize_core(reference_embeddings, reference_labels)
-            return
-
-        rng = np.random.RandomState(42)
-        indices = rng.permutation(n)
-        cal_indices = indices[:n_cal]
-        core_indices = indices[n_cal:]
-
-        core_embeddings = reference_embeddings[core_indices]
-        core_labels = [reference_labels[i] for i in core_indices]
-
-        self._initialize_core(core_embeddings, core_labels)
-
-        cal_embeddings = reference_embeddings[cal_indices]
-        cal_labels = [reference_labels[i] for i in cal_indices]
-        cal_logits = self._compute_logits(cal_embeddings)
-        cal_energies = self._compute_energy(cal_logits)
-
-        self._calibrator = ConformalCalibrator(
-            alpha=self._config.calibration_alpha,
-            method=self._config.calibration_method,
-        )
-        self._calibrator.calibrate(cal_energies, np.array(cal_labels))
-        logger.info(
-            "Energy strategy initialized with conformal calibration: "
-            "n_core=%d, n_cal=%d, method=%s",
-            len(core_embeddings),
-            n_cal,
-            self._config.calibration_method,
+        self._run_conformal_calibration(
+            reference_embeddings,
+            reference_labels,
+            lambda embs, _labels: self._compute_energy(self._compute_logits(embs)),
         )
 
     def _initialize_core(
@@ -120,9 +84,9 @@ class EnergyOODStrategy(NoveltyStrategy):
         reference_labels: list[str],
     ) -> None:
         """Core initialization: compute centroids and threshold."""
-        for label in set(reference_labels):
-            mask = np.array(reference_labels) == label
-            self._centroids[label] = reference_embeddings[mask].mean(axis=0)
+        self._centroids = self.compute_class_means(
+            reference_embeddings, reference_labels
+        )
 
         self._centroid_labels = list(self._centroids.keys())
         self._centroid_matrix = np.array(
@@ -157,7 +121,7 @@ class EnergyOODStrategy(NoveltyStrategy):
         logsumexp = np.log(stable_sum) + max_per_row.squeeze(axis=1)
         return -self._temperature * logsumexp
 
-    def detect(
+    def _detect(
         self,
         texts: list[str],
         embeddings: np.ndarray,
@@ -183,47 +147,32 @@ class EnergyOODStrategy(NoveltyStrategy):
         logits = self._compute_logits(embeddings)
         energies = self._compute_energy(logits)
 
-        if (
-            self._config.calibration_mode == "conformal"
-            and self._calibrator is not None
-            and self._calibrator.is_calibrated
-        ):
-            if self._config.calibration_method == "mondrian":
-                p_values = self._calibrator.predict_pvalues_for_class(
-                    energies, predicted_classes
-                )
-            else:
-                p_values = self._calibrator.predict_pvalues(energies)
+        if self._is_conformal_active():
+            return self._conformal_detect_loop(
+                energies,
+                predicted_classes,
+                lambda idx, energy, pv: {
+                    "energy_score": energy,
+                    "energy_threshold": self._threshold,
+                    "predicted_class": predicted_classes[idx],
+                    "energy_is_novel": pv < self._config.calibration_alpha,
+                },
+            )
 
-            for idx in range(len(embeddings)):
-                energy = float(energies[idx])
-                metrics[idx] = {
-                    "energy_score": energy,
-                    "energy_threshold": self._threshold,
-                    "predicted_class": predicted_classes[idx],
-                    "p_value": float(p_values[idx]),
-                    "calibration_mode": "conformal",
-                    "energy_is_novel": p_values[idx] < self._config.calibration_alpha,
-                }
-                if p_values[idx] < self._config.calibration_alpha:
-                    flags.add(idx)
-        else:
-            for idx in range(len(embeddings)):
-                energy = float(energies[idx])
-                metrics[idx] = {
-                    "energy_score": energy,
-                    "energy_threshold": self._threshold,
-                    "predicted_class": predicted_classes[idx],
-                    "energy_is_novel": energy > self._threshold,
-                }
-                if energy > self._threshold:
-                    flags.add(idx)
+        for idx in range(len(embeddings)):
+            energy = float(energies[idx])
+            is_novel = energy > self._threshold
+            metrics[idx] = {
+                "energy_score": energy,
+                "energy_threshold": self._threshold,
+                "predicted_class": predicted_classes[idx],
+                "energy_is_novel": is_novel,
+            }
+            if is_novel:
+                flags.add(idx)
 
         return flags, metrics
 
     @property
     def config_schema(self) -> type:
         return EnergyConfig
-
-    def get_weight(self) -> float:
-        return 0.30

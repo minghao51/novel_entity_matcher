@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -121,8 +121,8 @@ class ProposalReviewRecord(BaseModel):
     proposal: ClassProposal
     provenance: dict[str, Any] = Field(default_factory=dict)
     notes: str | None = None
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     reviewed_at: datetime | None = None
     promoted_at: datetime | None = None
 
@@ -133,7 +133,7 @@ class NovelClassDiscoveryReport(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     discovery_id: str
-    timestamp: datetime = Field(default_factory=datetime.now)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     matcher_config: dict[str, Any] = Field(default_factory=dict)
     detection_config: dict[str, Any] = Field(default_factory=dict)
     novel_sample_report: NovelSampleReport

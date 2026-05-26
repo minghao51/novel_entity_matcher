@@ -1140,33 +1140,71 @@ Please fix the errors above and return ONLY valid JSON matching the schema."""
         # Wrap LLM call with circuit breaker
         @self.llm_circuit_breaker
         def call_with_circuit_breaker():
-            kwargs: dict[str, Any] = {
-                "model": model,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": "You are an expert at categorizing text samples and proposing meaningful class names.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                "timeout": self.config.timeout,  # CRITICAL: Use configured timeout
-            }
-            api_key = self._api_key_for_model(model)
-            if api_key:
-                kwargs["api_key"] = api_key
-
-            return completion(
-                **kwargs,
+            kwargs = self._build_litellm_kwargs(
+                model=model,
+                prompt=prompt,
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
+            return completion(**kwargs)
 
         try:
             response = call_with_circuit_breaker()
         except CircuitBreakerError as exc:
             raise RuntimeError("LLM circuit breaker is open") from exc
 
-        return response.choices[0].message.content
+        return self._extract_litellm_content(response, model=model)
+
+    def _build_litellm_kwargs(
+        self,
+        *,
+        model: str,
+        prompt: str,
+        temperature: float,
+        max_tokens: int,
+    ) -> dict[str, Any]:
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are an expert at categorizing text samples and proposing meaningful class names.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "timeout": self.config.timeout,
+        }
+        api_key = self._api_key_for_model(model)
+        if api_key:
+            kwargs["api_key"] = api_key
+        return kwargs
+
+    def _extract_litellm_content(self, response: Any, *, model: str) -> str:
+        choices = getattr(response, "choices", None)
+        if not isinstance(choices, list) or not choices:
+            raise LLMError(
+                f"LLM response for model {model} did not contain choices",
+                last_error=ValueError(
+                    f"response_type={type(response).__name__} choices={choices!r}"
+                ),
+                attempted_models=[model],
+            )
+
+        for choice in choices:
+            message = getattr(choice, "message", None)
+            if message is None:
+                continue
+            content = getattr(message, "content", None)
+            if isinstance(content, str) and content.strip():
+                return content
+
+        raise LLMError(
+            f"LLM response for model {model} did not contain message content",
+            last_error=ValueError(f"choice_count={len(choices)}"),
+            attempted_models=[model],
+        )
 
     def _get_model_config(self, model: str) -> dict[str, Any]:
         """Get configuration for a specific model."""

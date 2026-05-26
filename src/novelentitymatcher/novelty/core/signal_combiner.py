@@ -17,123 +17,40 @@ from ..config.weights import WeightConfig
 
 logger = logging.getLogger(__name__)
 
-# Single source of truth for all strategy signals.
-# "kind": "flag" (binary), "score" (continuous), or "special" (threshold-based).
-# strategies with `score_only = False` only emit their flag key, not a score key.
-_STRATEGY_SIGNALS: list[dict[str, str]] = [
-    {
-        "id": "confidence",
-        "score_key": "confidence_score",
-        "flag_key": "confidence_is_novel",
-        "weight": "confidence",
-        "kind": "flag",
-    },
-    {
-        "id": "uncertainty",
-        "score_key": "uncertainty_score",
-        "flag_key": "uncertainty_is_novel",
-        "weight": "uncertainty",
-        "kind": "score",
-    },
-    {
-        "id": "knn_distance",
-        "score_key": "knn_novelty_score",
-        "flag_key": "knn_is_novel",
-        "weight": "knn",
-        "kind": "score",
-    },
-    {
-        "id": "clustering",
-        "score_key": "cluster_support_score",
-        "flag_key": "cluster_is_novel",
-        "weight": "cluster",
-        "kind": "score",
-    },
-    {
-        "id": "self_knowledge",
-        "score_key": "self_knowledge_score",
-        "flag_key": "self_knowledge_is_novel",
-        "weight": "self_knowledge",
-        "kind": "flag",
-    },
-    {
-        "id": "pattern",
-        "score_key": "pattern_score",
-        "flag_key": "pattern_is_novel",
-        "weight": "pattern",
-        "kind": "flag",
-    },
-    {
-        "id": "oneclass",
-        "score_key": "oneclass_score",
-        "flag_key": "oneclass_is_novel",
-        "weight": "oneclass",
-        "kind": "flag",
-    },
-    {
-        "id": "prototypical",
-        "score_key": "prototypical_score",
-        "flag_key": "prototypical_is_novel",
-        "weight": "prototypical",
-        "kind": "flag",
-    },
-    {
-        "id": "setfit",
-        "score_key": "setfit_score",
-        "flag_key": "setfit_is_novel",
-        "weight": "setfit",
-        "kind": "flag",
-    },
-    {
-        "id": "setfit_centroid",
-        "score_key": "setfit_centroid_novelty_score",
-        "flag_key": "setfit_centroid_is_novel",
-        "weight": "setfit_centroid",
-        "kind": "score",
-    },
-    {
-        "id": "mahalanobis",
-        "score_key": "mahalanobis_novelty_score",
-        "flag_key": "mahalanobis_is_novel",
-        "weight": "mahalanobis",
-        "kind": "score",
-    },
-    {
-        "id": "lof",
-        "score_key": "lof_novelty_score",
-        "flag_key": "lof_is_outlier",
-        "weight": "lof",
-        "kind": "score",
-    },
-    {
-        "id": "energy_ood",
-        "score_key": "energy_score",
-        "flag_key": "energy_is_novel",
-        "weight": "energy_ood",
-        "kind": "special",
-    },
-    {
-        "id": "mixture_gaussian",
-        "score_key": "log_likelihood",
-        "flag_key": "mixture_gaussian_is_novel",
-        "weight": "mixture_gaussian",
-        "kind": "special",
-    },
-    {
-        "id": "react_energy",
-        "flag_key": "react_energy_is_novel",
-        "weight": "react_energy",
-        "kind": "flag",
-        "score_only": "false",
-    },
-]
+_signal_tables_built = False
+_STRATEGY_SIGNALS: list[dict[str, str]] = []
+_SIGNAL_BY_ID: dict[str, dict[str, str]] = {}
+_SCORE_KEYS: list[str] = []
+_FLAG_KEYS: list[str] = []
 
-# Derived from the single source of truth above.
-_SIGNAL_BY_ID: dict[str, dict[str, str]] = {s["id"]: s for s in _STRATEGY_SIGNALS}
-_SCORE_KEYS: list[str] = [
-    s["score_key"] for s in _STRATEGY_SIGNALS if s.get("score_key")
-]
-_FLAG_KEYS: list[str] = [s["flag_key"] for s in _STRATEGY_SIGNALS]
+
+def _build_signal_tables() -> None:
+    global \
+        _signal_tables_built, \
+        _STRATEGY_SIGNALS, \
+        _SIGNAL_BY_ID, \
+        _SCORE_KEYS, \
+        _FLAG_KEYS
+    if _signal_tables_built:
+        return
+    from .strategies import StrategyRegistry
+
+    for sid in sorted(StrategyRegistry._strategies.keys()):
+        cls = StrategyRegistry._strategies[sid]
+        info = getattr(cls, "signal_info", None)
+        if info is None:
+            continue
+        entry: dict[str, str] = {"id": sid}
+        if info.score_key is not None:
+            entry["score_key"] = info.score_key
+        entry["flag_key"] = info.flag_key
+        entry["weight"] = info.weight_name
+        entry["kind"] = info.kind
+        _STRATEGY_SIGNALS.append(entry)
+    _SIGNAL_BY_ID = {s["id"]: s for s in _STRATEGY_SIGNALS}
+    _SCORE_KEYS = [s["score_key"] for s in _STRATEGY_SIGNALS if s.get("score_key")]
+    _FLAG_KEYS = [s["flag_key"] for s in _STRATEGY_SIGNALS]
+    _signal_tables_built = True
 
 
 class SignalCombiner:
@@ -148,16 +65,11 @@ class SignalCombiner:
     """
 
     def __init__(self, config: DetectionConfig):
-        """
-        Initialize the signal combiner.
-
-        Args:
-            config: Detection configuration
-        """
         self.config = config
         self.weights: WeightConfig = config.get_weight_config()
         self.combine_method = config.combine_method
         self._meta_model: Any | None = None
+        _build_signal_tables()
         self._feature_names: list[str] = _SCORE_KEYS + _FLAG_KEYS
 
     def _weight_for_strategy(self, strategy_id: str) -> float:

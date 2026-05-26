@@ -13,7 +13,7 @@ from sklearn.neighbors import LocalOutlierFactor
 
 from ..config.strategies import LOFConfig
 from ..core.strategies import StrategyRegistry
-from .base import NoveltyStrategy
+from .base import NoveltyStrategy, SignalInfo
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,14 @@ class LOFStrategy(NoveltyStrategy):
 
     strategy_id = "lof"
     maturity = "experimental"
+    score_keys = ("lof_novelty_score",)
+    signal_info = SignalInfo(
+        score_key="lof_novelty_score",
+        flag_key="lof_is_outlier",
+        weight_name="lof",
+        kind="score",
+    )
+    default_weight = 0.3
 
     def __init__(self):
         self._config: LOFConfig | None = None
@@ -59,7 +67,7 @@ class LOFStrategy(NoveltyStrategy):
         if n_ref < n_neighbors:
             logger.warning(
                 "LOF: reference set too small (%d < %d neighbors). "
-                "Falling back to flagging all samples.",
+                "Returning neutral scores.",
                 n_ref,
                 n_neighbors,
             )
@@ -75,12 +83,14 @@ class LOFStrategy(NoveltyStrategy):
                 novelty=True,
             )
             self._lof_model.fit(reference_embeddings)
-        except (ValueError, TypeError, RuntimeError) as exc:
-            logger.warning("LOF: failed to fit model: %s. Falling back.", exc)
+        except ValueError as exc:
+            logger.warning(
+                "LOF: failed to fit model: %s. Falling back.", exc, exc_info=True
+            )
             self._lof_model = None
             self._fallback = True
 
-    def detect(
+    def _detect(
         self,
         texts: list[str],
         embeddings: np.ndarray,
@@ -108,23 +118,25 @@ class LOFStrategy(NoveltyStrategy):
             for idx in range(len(embeddings)):
                 metrics[idx] = {
                     "lof_score": 0.0,
-                    "lof_novelty_score": 1.0,
-                    "lof_is_outlier": True,
+                    "lof_novelty_score": 0.0,
+                    "lof_is_outlier": False,
                 }
-                flags.add(idx)
             return flags, metrics
 
         try:
             raw_scores = self._lof_model.score_samples(embeddings)
-        except (ValueError, TypeError, RuntimeError) as exc:
-            logger.warning("LOF: score_samples failed: %s. Flagging all.", exc)
+        except ValueError as exc:
+            logger.warning(
+                "LOF: score_samples failed: %s. Returning neutral scores.",
+                exc,
+                exc_info=True,
+            )
             for idx in range(len(embeddings)):
                 metrics[idx] = {
                     "lof_score": 0.0,
-                    "lof_novelty_score": 1.0,
-                    "lof_is_outlier": True,
+                    "lof_novelty_score": 0.0,
+                    "lof_is_outlier": False,
                 }
-                flags.add(idx)
             return flags, metrics
 
         threshold = self._config.score_threshold
@@ -149,7 +161,3 @@ class LOFStrategy(NoveltyStrategy):
     def config_schema(self) -> type:
         """Return LOFConfig as the config schema."""
         return LOFConfig
-
-    def get_weight(self) -> float:
-        """Return weight for signal combination."""
-        return 0.30

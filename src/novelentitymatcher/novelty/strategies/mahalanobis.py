@@ -13,31 +13,27 @@ import numpy as np
 from ...utils.logging_config import get_logger
 from ..config.strategies import MahalanobisConfig
 from ..core.strategies import StrategyRegistry
-from .base import NoveltyStrategy
+from .base import NoveltyStrategy, SignalInfo
+from .conformal_mixin import ConformalMixin
 
 logger = get_logger(__name__)
 
 
 @StrategyRegistry.register
-class MahalanobisDistanceStrategy(NoveltyStrategy):
-    """
-    Mahalanobis distance strategy for novelty detection.
-
-    Computes the Mahalanobis distance from each sample to the class-conditional
-    distribution (mean + shared covariance) of its predicted class. Samples
-    whose distance exceeds a configurable threshold are flagged as novel.
-
-    When ``calibration_mode="conformal"``, raw distances are wrapped with
-    conformal p-values for statistically grounded routing. This is backward-
-    compatible: ``calibration_mode="none"`` produces identical results to the
-    original threshold-only behavior.
-    """
-
+class MahalanobisDistanceStrategy(ConformalMixin, NoveltyStrategy):
     strategy_id = "mahalanobis"
     maturity = "production"
+    score_keys = ("mahalanobis_novelty_score",)
+    signal_info = SignalInfo(
+        score_key="mahalanobis_novelty_score",
+        flag_key="mahalanobis_is_novel",
+        weight_name="mahalanobis",
+        kind="score",
+    )
+    default_weight = 0.35
 
     def __init__(self):
-        self._config: MahalanobisConfig = None
+        self._config: MahalanobisConfig | None = None
         self._class_means: dict[str, np.ndarray] = {}
         self._cov_inv: np.ndarray | None = None
         self._dim: int = 0
@@ -76,47 +72,10 @@ class MahalanobisDistanceStrategy(NoveltyStrategy):
         reference_embeddings: np.ndarray,
         reference_labels: list[str],
     ) -> None:
-        """Initialize with conformal calibration, splitting reference data."""
-        from .conformal import ConformalCalibrator
-
-        n = len(reference_embeddings)
-        frac = self._config.calibration_set_fraction
-        n_cal = max(1, int(n * frac))
-        if n_cal >= n:
-            logger.warning(
-                "Mahalanobis conformal calibration disabled because the calibration "
-                "split would leave no core reference samples (n=%d, n_cal=%d)",
-                n,
-                n_cal,
-            )
-            self._initialize_core(reference_embeddings, reference_labels)
-            return
-
-        rng = np.random.RandomState(42)
-        indices = rng.permutation(n)
-        cal_indices = indices[:n_cal]
-        core_indices = indices[n_cal:]
-
-        core_embeddings = reference_embeddings[core_indices]
-        core_labels = [reference_labels[i] for i in core_indices]
-
-        self._initialize_core(core_embeddings, core_labels)
-
-        cal_embeddings = reference_embeddings[cal_indices]
-        cal_labels = [reference_labels[i] for i in cal_indices]
-        cal_distances = self._compute_all_distances(cal_embeddings, cal_labels)
-
-        self._calibrator = ConformalCalibrator(
-            alpha=self._config.calibration_alpha,
-            method=self._config.calibration_method,
-        )
-        self._calibrator.calibrate(cal_distances, np.array(cal_labels))
-        logger.info(
-            "Mahalanobis strategy initialized with conformal calibration: "
-            "n_core=%d, n_cal=%d, method=%s",
-            len(core_embeddings),
-            n_cal,
-            self._config.calibration_method,
+        self._run_conformal_calibration(
+            reference_embeddings,
+            reference_labels,
+            self._compute_all_distances,
         )
 
     def _initialize_core(
@@ -125,11 +84,9 @@ class MahalanobisDistanceStrategy(NoveltyStrategy):
         reference_labels: list[str],
     ) -> None:
         """Core initialization: compute class means and pooled covariance."""
-        unique_labels = set(reference_labels)
-        for label in unique_labels:
-            mask = np.array([ref_label == label for ref_label in reference_labels])
-            class_embeddings = reference_embeddings[mask]
-            self._class_means[label] = np.mean(class_embeddings, axis=0)
+        self._class_means = self.compute_class_means(
+            reference_embeddings, reference_labels
+        )
 
         if self._config.use_class_conditional:
             cov = self._compute_pooled_covariance(
@@ -150,12 +107,17 @@ class MahalanobisDistanceStrategy(NoveltyStrategy):
         distances = np.empty(len(embeddings))
         for i in range(len(embeddings)):
             pred_class = labels[i]
-            if pred_class in self._class_means:
-                class_mean = self._class_means[pred_class]
-            else:
-                class_mean = np.mean(list(self._class_means.values()), axis=0)
+            global_mean = np.mean(list(self._class_means.values()), axis=0)
+            class_mean = self._resolve_class_mean(
+                pred_class, self._class_means, global_mean
+            )
             diff = embeddings[i] - class_mean
-            distances[i] = float(np.sqrt(np.abs(diff @ self._cov_inv @ diff)))
+            quad = float(diff @ self._cov_inv @ diff)
+            if quad < 0:
+                logger.warning(
+                    "Negative quadratic form in Mahalanobis distance: %.6f", quad
+                )
+            distances[i] = float(np.sqrt(max(quad, 0.0)))
         return distances
 
     def _compute_pooled_covariance(
@@ -189,7 +151,7 @@ class MahalanobisDistanceStrategy(NoveltyStrategy):
 
         return pooled_cov
 
-    def detect(
+    def _detect(
         self,
         texts: list[str],
         embeddings: np.ndarray,
@@ -197,62 +159,36 @@ class MahalanobisDistanceStrategy(NoveltyStrategy):
         confidences: np.ndarray,
         **kwargs: Any,
     ) -> tuple[set[int], dict[int, dict[str, Any]]]:
-        """
-        Detect novel samples using Mahalanobis distance.
-
-        When ``calibration_mode="conformal"``, flagging uses p-values
-        instead of raw distance thresholds. A sample is flagged if
-        ``p_value < calibration_alpha``.
-
-        Args:
-            texts: Input texts
-            embeddings: Text embeddings
-            predicted_classes: Predicted classes
-            confidences: Prediction confidences
-            **kwargs: Additional parameters
-
-        Returns:
-            (flags, metrics) - Flagged indices and per-sample metrics
-        """
         flags = set()
         metrics = {}
 
-        if (
-            self._config.calibration_mode == "conformal"
-            and self._calibrator is not None
-            and self._calibrator.is_calibrated
-        ):
+        if self._is_conformal_active():
             raw_distances = self._compute_all_distances(embeddings, predicted_classes)
-            if self._config.calibration_method == "mondrian":
-                p_values = self._calibrator.predict_pvalues_for_class(
-                    raw_distances, predicted_classes
-                )
-            else:
-                p_values = self._calibrator.predict_pvalues(raw_distances)
+            global_mean = np.mean(list(self._class_means.values()), axis=0)
+            return self._conformal_detect_loop(
+                raw_distances,
+                predicted_classes,
+                lambda idx, _score, _pv: {
+                    "mahalanobis_distance": float(raw_distances[idx]),
+                    "euclidean_distance": float(
+                        np.linalg.norm(
+                            embeddings[idx]
+                            - self._resolve_class_mean(
+                                predicted_classes[idx], self._class_means, global_mean
+                            )
+                        )
+                    ),
+                    "mahalanobis_is_novel": _pv < self._config.calibration_alpha,
+                },
+            )
 
-            for idx in range(len(embeddings)):
-                metric = self._compute_mahalanobis_metrics(
-                    idx,
-                    embeddings[idx],
-                    predicted_classes[idx],
-                )
-                metric["p_value"] = float(p_values[idx])
-                metric["calibration_mode"] = "conformal"
-                metrics[idx] = metric
-
-                if p_values[idx] < self._config.calibration_alpha:
-                    flags.add(idx)
-        else:
-            for idx in range(len(embeddings)):
-                metric = self._compute_mahalanobis_metrics(
-                    idx,
-                    embeddings[idx],
-                    predicted_classes[idx],
-                )
-                metrics[idx] = metric
-
-                if metric["mahalanobis_distance"] >= self._config.threshold:
-                    flags.add(idx)
+        for idx in range(len(embeddings)):
+            metric = self._compute_mahalanobis_metrics(
+                idx, embeddings[idx], predicted_classes[idx]
+            )
+            metrics[idx] = metric
+            if metric["mahalanobis_distance"] >= self._config.threshold:
+                flags.add(idx)
 
         return flags, metrics
 
@@ -273,22 +209,29 @@ class MahalanobisDistanceStrategy(NoveltyStrategy):
         Returns:
             Dictionary with Mahalanobis metrics
         """
-        if predicted_class in self._class_means:
-            class_mean = self._class_means[predicted_class]
-        else:
-            class_mean = np.mean(list(self._class_means.values()), axis=0)
+        global_mean = np.mean(list(self._class_means.values()), axis=0)
+        class_mean = self._resolve_class_mean(
+            predicted_class, self._class_means, global_mean
+        )
 
         diff = embedding - class_mean
-        left = diff @ self._cov_inv
-        mahalanobis_dist = float(np.sqrt(np.abs(left @ diff)))
+        quad = float((diff @ self._cov_inv) @ diff)
+        if quad < 0:
+            logger.warning(
+                "Negative quadratic form in Mahalanobis distance: %.6f", quad
+            )
+        mahalanobis_dist = float(np.sqrt(max(quad, 0.0)))
 
         euclidean_dist = float(np.linalg.norm(diff))
 
         novelty_score = 1.0 - np.exp(-mahalanobis_dist / self._config.threshold)
 
+        is_novel = mahalanobis_dist >= self._config.threshold
+
         return {
             "mahalanobis_distance": mahalanobis_dist,
             "mahalanobis_novelty_score": float(novelty_score),
+            "mahalanobis_is_novel": is_novel,
             "predicted_class_mean_distance": euclidean_dist,
             "predicted_class": predicted_class,
         }
@@ -297,7 +240,3 @@ class MahalanobisDistanceStrategy(NoveltyStrategy):
     def config_schema(self) -> type:
         """Return MahalanobisConfig as the config schema."""
         return MahalanobisConfig
-
-    def get_weight(self) -> float:
-        """Return weight for signal combination."""
-        return 0.35

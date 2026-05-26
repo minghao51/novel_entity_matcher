@@ -35,7 +35,7 @@ Importing Strategies:
 """
 
 # Base protocol
-from .base import NoveltyStrategy
+from .base import NoveltyStrategy, SignalInfo
 from .oneclass_impl import OneClassSVMDetector
 
 # Import low-level strategy helpers that are still useful directly.
@@ -45,14 +45,13 @@ from .self_knowledge_impl import SelfKnowledgeDetector, SparseAutoencoder
 from .setfit_impl import SetFitDetector
 
 __all__ = [
-    # Base
     "NoveltyStrategy",
     "OneClassSVMDetector",
-    # Low-level strategy helpers
     "PatternScorer",
     "PrototypicalDetector",
     "SelfKnowledgeDetector",
     "SetFitDetector",
+    "SignalInfo",
     "SparseAutoencoder",
     "score_batch_novelty",
 ]

@@ -17,28 +17,24 @@ from .score_calibrator import OODScoreCalibrator
 from .signal_combiner import SignalCombiner
 from .strategies import StrategyRegistry
 
-_STRATEGY_SCORE_KEYS: dict[str, list[str]] = {
-    "confidence": ["confidence_score"],
-    "uncertainty": ["uncertainty_score"],
-    "knn_distance": ["knn_novelty_score"],
-    "clustering": ["cluster_support_score"],
-    "self_knowledge": ["self_knowledge_score"],
-    "pattern": ["pattern_score"],
-    "oneclass": ["oneclass_score"],
-    "prototypical": ["prototypical_score"],
-    "setfit": ["setfit_score"],
-    "setfit_centroid": ["setfit_centroid_score"],
-    "mahalanobis": ["mahalanobis_novelty_score"],
-    "lof": ["lof_novelty_score"],
-    "energy_ood": ["energy_score"],
-    "mixture_gaussian": ["log_likelihood"],
-    "react_energy": ["energy_score"],
-}
-
 _CALIBRATION_STRATEGY_DENYLIST: set[str] = {
     "pattern",
     "self_knowledge",
 }
+
+_score_keys_cache: dict[str, list[str]] | None = None
+
+
+def _get_strategy_score_keys() -> dict[str, list[str]]:
+    global _score_keys_cache
+    if _score_keys_cache is not None:
+        return _score_keys_cache
+    _score_keys_cache = {}
+    for sid, cls in StrategyRegistry._strategies.items():
+        keys = getattr(cls, "score_keys", [])
+        if keys:
+            _score_keys_cache[sid] = list(keys)
+    return _score_keys_cache
 
 
 class NoveltyDetector:
@@ -149,7 +145,7 @@ class NoveltyDetector:
         self._calibrator.reset()
         reference_confidences = np.ones(len(reference_labels))
         score_keys_by_strategy: dict[str, list[str]] = {
-            k: list(v) for k, v in _STRATEGY_SCORE_KEYS.items()
+            k: list(v) for k, v in _get_strategy_score_keys().items()
         }
         strategy_scores: dict[str, list[float]] = {}
 

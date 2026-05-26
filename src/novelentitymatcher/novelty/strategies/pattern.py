@@ -10,7 +10,7 @@ import numpy as np
 
 from ..config.strategies import PatternConfig
 from ..core.strategies import StrategyRegistry
-from .base import NoveltyStrategy
+from .base import NoveltyStrategy, SignalInfo
 from .pattern_impl import PatternScorer
 
 
@@ -18,10 +18,18 @@ from .pattern_impl import PatternScorer
 class PatternStrategy(NoveltyStrategy):
     strategy_id = "pattern"
     maturity = "internal"
+    score_keys = ("pattern_novelty_score",)
+    signal_info = SignalInfo(
+        score_key="pattern_novelty_score",
+        flag_key="pattern_is_novel",
+        weight_name="pattern",
+        kind="flag",
+    )
+    default_weight = 0.2
 
     def __init__(self):
-        self._config: PatternConfig = None
-        self._pattern_scorer: PatternScorer = None
+        self._config: PatternConfig | None = None
+        self._pattern_scorer: PatternScorer | None = None
 
     def initialize(
         self,
@@ -32,7 +40,7 @@ class PatternStrategy(NoveltyStrategy):
         self._config = config or PatternConfig()
         self._pattern_scorer = PatternScorer(known_entities=reference_labels)
 
-    def detect(
+    def _detect(
         self,
         texts: list[str],
         embeddings: np.ndarray,
@@ -61,6 +69,3 @@ class PatternStrategy(NoveltyStrategy):
     @property
     def config_schema(self) -> type:
         return PatternConfig
-
-    def get_weight(self) -> float:
-        return 0.2

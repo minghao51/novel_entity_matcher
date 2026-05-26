@@ -63,6 +63,9 @@ class ClusteringConfig(BaseModel):
     cluster_selection_epsilon: float = Field(default=0.0, ge=0.0)
     """cluster_selection_epsilon for HDBSCAN."""
 
+    noise_percentile: int = Field(default=90, ge=50, le=99)
+    """Percentile threshold for noise detection in fast centroid-assignment path."""
+
 
 class SelfKnowledgeConfig(BaseModel):
     """Configuration for sparse autoencoder strategy."""

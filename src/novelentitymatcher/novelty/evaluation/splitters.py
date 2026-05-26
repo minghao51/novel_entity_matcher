@@ -64,8 +64,12 @@ class OODSplitter:
 
         for text, label in zip(texts, labels, strict=False):
             if label in known_classes:
-                train_texts.append(text)
-                train_labels.append(label)
+                if np.random.random() < 0.8:
+                    train_texts.append(text)
+                    train_labels.append(label)
+                else:
+                    test_texts.append(text)
+                    test_is_novel.append(False)
             else:
                 test_texts.append(text)
                 test_is_novel.append(True)

@@ -10,7 +10,7 @@ import numpy as np
 
 from ..config.strategies import UncertaintyConfig
 from ..core.strategies import StrategyRegistry
-from .base import NoveltyStrategy
+from .base import NoveltyStrategy, SignalInfo
 
 
 @StrategyRegistry.register
@@ -24,9 +24,17 @@ class UncertaintyStrategy(NoveltyStrategy):
 
     strategy_id = "uncertainty"
     maturity = "internal"
+    score_keys = ("uncertainty_score",)
+    signal_info = SignalInfo(
+        score_key="uncertainty_score",
+        flag_key="uncertainty_is_novel",
+        weight_name="uncertainty",
+        kind="score",
+    )
+    default_weight = 0.35
 
     def __init__(self):
-        self._config: UncertaintyConfig = None
+        self._config: UncertaintyConfig | None = None
 
     def initialize(
         self,
@@ -44,7 +52,7 @@ class UncertaintyStrategy(NoveltyStrategy):
         """
         self._config = config or UncertaintyConfig()
 
-    def detect(
+    def _detect(
         self,
         texts: list[str],
         embeddings: np.ndarray,
@@ -141,8 +149,3 @@ class UncertaintyStrategy(NoveltyStrategy):
     def config_schema(self) -> type:
         """Return UncertaintyConfig as the config schema."""
         return UncertaintyConfig
-
-    def get_weight(self) -> float:
-        """Return weight for signal combination."""
-        # Uncertainty is a strong signal
-        return 0.35

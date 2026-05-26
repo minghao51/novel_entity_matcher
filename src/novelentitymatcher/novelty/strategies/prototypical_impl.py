@@ -7,6 +7,7 @@ novelty by distance to nearest prototype.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -66,15 +67,22 @@ class PrototypicalDetector:
         if show_progress:
             logger.info(f"Computing prototypes for {len(class_texts)} classes...")
 
+        all_texts = []
+        class_slices: dict[str, tuple[int, int]] = {}
+        offset = 0
         for label, texts in class_texts.items():
-            if show_progress:
-                logger.info(f"  Encoding {len(texts)} examples for class '{label}'...")
+            all_texts.extend(texts)
+            class_slices[label] = (offset, offset + len(texts))
+            offset += len(texts)
 
-            embeddings = self.model.encode(
-                texts,
-                show_progress_bar=False,
-                convert_to_numpy=True,
-            )
+        all_embeddings = self.model.encode(
+            all_texts,
+            show_progress_bar=False,
+            convert_to_numpy=True,
+        )
+
+        for label, (start, end) in class_slices.items():
+            embeddings = all_embeddings[start:end]
 
             prototype = np.mean(embeddings, axis=0)
             self.prototypes[label] = prototype
@@ -127,22 +135,55 @@ class PrototypicalDetector:
 
         embeddings = self.model.encode(texts, convert_to_numpy=True)
 
+        label_list = list(self.prototypes.keys())
+        proto_matrix = np.array([self.prototypes[lbl] for lbl in label_list])
+
+        if self.distance_metric == "cosine":
+            dist_matrix = cosine_distances(embeddings, proto_matrix)
+        elif self.distance_metric == "euclidean":
+            dist_matrix = euclidean_distances(embeddings, proto_matrix)
+        elif self.distance_metric == "mahalanobis":
+            dist_matrix = self._mahalanobis_batch(embeddings, proto_matrix, label_list)
+        else:
+            raise ValueError(f"Unknown distance metric: {self.distance_metric}")
+
+        nearest_idx = np.argmin(dist_matrix, axis=1)
+        min_distances = dist_matrix[np.arange(len(embeddings)), nearest_idx]
+
         results = []
-        for embedding in embeddings:
-            nearest_label = None
-            min_distance = float("inf")
-
-            for label, prototype in self.prototypes.items():
-                distance = self._compute_distance(embedding, prototype, label)
-
-                if distance < min_distance:
-                    min_distance = distance
-                    nearest_label = label
-
-            is_novel = min_distance > self.distance_threshold
-            results.append((is_novel, float(min_distance), nearest_label))
+        for i in range(len(embeddings)):
+            is_novel = bool(min_distances[i] > self.distance_threshold)
+            results.append(
+                (is_novel, float(min_distances[i]), label_list[nearest_idx[i]])
+            )
 
         return results
+
+    def _mahalanobis_batch(
+        self,
+        embeddings: np.ndarray,
+        proto_matrix: np.ndarray,
+        label_list: list[str],
+    ) -> np.ndarray:
+        n = len(embeddings)
+        m = len(label_list)
+        dist_matrix = np.empty((n, m), dtype=np.float64)
+        for j, label in enumerate(label_list):
+            cov = self.class_covariances.get(label)
+            if cov is None:
+                dist_matrix[:, j] = euclidean_distances(
+                    embeddings, proto_matrix[j : j + 1]
+                ).ravel()
+                continue
+            try:
+                inv_cov = np.linalg.inv(cov)
+                diff = embeddings - proto_matrix[j]
+                dist_matrix[:, j] = np.sqrt(np.sum((diff @ inv_cov) * diff, axis=1))
+            except np.linalg.LinAlgError:
+                dist_matrix[:, j] = euclidean_distances(
+                    embeddings, proto_matrix[j : j + 1]
+                ).ravel()
+        return dist_matrix
 
     def _compute_distance(
         self,
@@ -200,41 +241,55 @@ class PrototypicalDetector:
         p = Path(path)
         p.mkdir(parents=True, exist_ok=True)
 
-        import json
+        labels = list(self.prototypes.keys())
+        proto_arrays = np.stack([self.prototypes[label] for label in labels])
 
-        prototypes_serializable = {
-            label: arr.tolist() for label, arr in self.prototypes.items()
+        save_dict: dict[str, Any] = {
+            "labels": np.array(labels),
+            "prototypes": proto_arrays,
+            "model_name": np.array(self.model_name),
+            "distance_threshold": np.array(self.distance_threshold),
+            "distance_metric": np.array(self.distance_metric),
         }
-        with open(p / "prototypes.json", "w") as f:
-            json.dump(prototypes_serializable, f)
 
         if self.class_covariances:
-            cov_serializable = {
-                label: arr.tolist() for label, arr in self.class_covariances.items()
-            }
-            with open(p / "covariances.json", "w") as f:
-                json.dump(cov_serializable, f)
+            cov_labels = list(self.class_covariances.keys())
+            cov_arrays = np.stack(
+                [self.class_covariances[label] for label in cov_labels]
+            )
+            save_dict["cov_labels"] = np.array(cov_labels)
+            save_dict["covariances"] = cov_arrays
 
-        metadata = {
-            "model_name": self.model_name,
-            "distance_threshold": self.distance_threshold,
-            "distance_metric": self.distance_metric,
-            "is_trained": self.is_trained,
-            "num_classes": len(self.prototypes),
-            "class_names": list(self.prototypes.keys()),
-        }
-
-        with open(p / "metadata.json", "w") as f:
-            json.dump(metadata, f, indent=2)
+        np.savez(p / "model.npz", **save_dict)
 
     @classmethod
     def load(cls, path: str) -> PrototypicalDetector:
         p = Path(path)
 
-        import json
+        npz_path = p / "model.npz"
+        json_path = p / "model.json"
 
-        with open(p / "metadata.json") as f:
-            metadata = json.load(f)
+        if npz_path.exists():
+            return cls._load_npz(npz_path)
+        if json_path.exists():
+            return cls._load_json(json_path)
+
+        raise FileNotFoundError(
+            f"No model file found at {path}/ (expected model.npz or model.json)"
+        )
+
+    @classmethod
+    def _load_npz(cls, npz_path: Path) -> PrototypicalDetector:
+        data = np.load(npz_path, allow_pickle=False)
+
+        labels = list(data["labels"])
+        proto_arrays = data["prototypes"]
+
+        metadata = {
+            "model_name": str(data["model_name"]),
+            "distance_threshold": float(data["distance_threshold"]),
+            "distance_metric": str(data["distance_metric"]),
+        }
 
         detector = cls(
             model_name=metadata["model_name"],
@@ -242,21 +297,39 @@ class PrototypicalDetector:
             distance_metric=metadata["distance_metric"],
         )
 
-        with open(p / "prototypes.json") as f:
-            proto_data = json.load(f)
-        detector.prototypes = {
-            label: np.array(arr) for label, arr in proto_data.items()
-        }
+        detector.prototypes = dict(zip(labels, proto_arrays, strict=True))
 
-        cov_path = p / "covariances.json"
-        if cov_path.exists():
-            with open(cov_path) as f:
-                cov_data = json.load(f)
-            detector.class_covariances = {
-                label: np.array(arr) for label, arr in cov_data.items()
-            }
+        if "covariances" in data:
+            cov_labels = list(data["cov_labels"])
+            cov_arrays = data["covariances"]
+            detector.class_covariances = dict(zip(cov_labels, cov_arrays, strict=True))
 
-        detector.is_trained = metadata["is_trained"]
+        detector.is_trained = True
         detector.model = get_cached_sentence_transformer(metadata["model_name"])
+
+        return detector
+
+    @classmethod
+    def _load_json(cls, json_path: Path) -> PrototypicalDetector:
+        with open(json_path) as f:
+            data = json.load(f)
+
+        metadata = data.get("metadata", data)
+        detector = cls(
+            model_name=metadata.get(
+                "model_name", "sentence-transformers/all-MiniLM-L6-v2"
+            ),
+            distance_threshold=metadata.get("distance_threshold", 0.5),
+            distance_metric=metadata.get("distance_metric", "cosine"),
+        )
+
+        for label, proto_list in data.get("prototypes", {}).items():
+            detector.prototypes[label] = np.array(proto_list, dtype=np.float64)
+
+        for label, cov_list in data.get("covariances", {}).items():
+            detector.class_covariances[label] = np.array(cov_list, dtype=np.float64)
+
+        detector.is_trained = True
+        detector.model = get_cached_sentence_transformer(detector.model_name)
 
         return detector

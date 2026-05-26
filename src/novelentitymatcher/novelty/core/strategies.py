@@ -5,7 +5,12 @@ Provides a central registry for all novelty detection strategies,
 allowing dynamic strategy registration and instantiation.
 """
 
-from ..strategies.base import NoveltyStrategy
+from typing import ClassVar
+
+from ...utils.logging_config import get_logger
+from ..strategies.base import NoveltyStrategy, SignalInfo
+
+logger = get_logger(__name__)
 
 
 class StrategyRegistry:
@@ -16,7 +21,7 @@ class StrategyRegistry:
     Once registered, they can be instantiated by their strategy_id.
     """
 
-    _strategies: dict[str, type[NoveltyStrategy]] = {}
+    _strategies: ClassVar[dict[str, type[NoveltyStrategy]]] = {}
 
     @classmethod
     def register(cls, strategy_cls: type[NoveltyStrategy]) -> type[NoveltyStrategy]:
@@ -49,6 +54,31 @@ class StrategyRegistry:
             )
 
         cls._strategies[strategy_id] = strategy_cls
+
+        score_keys = getattr(strategy_cls, "score_keys", None)
+        if not isinstance(score_keys, tuple):
+            logger.warning(
+                "Strategy '%s' has invalid score_keys=%r (expected tuple)",
+                strategy_id,
+                score_keys,
+            )
+
+        signal_info = getattr(strategy_cls, "signal_info", None)
+        if signal_info is not None and not isinstance(signal_info, SignalInfo):
+            logger.warning(
+                "Strategy '%s' has invalid signal_info=%r (expected SignalInfo)",
+                strategy_id,
+                signal_info,
+            )
+
+        default_weight = getattr(strategy_cls, "default_weight", None)
+        if not isinstance(default_weight, (int, float)) or default_weight <= 0:
+            logger.error(
+                "Strategy '%s' has invalid default_weight=%r (expected positive number)",
+                strategy_id,
+                default_weight,
+            )
+
         return strategy_cls
 
     @classmethod

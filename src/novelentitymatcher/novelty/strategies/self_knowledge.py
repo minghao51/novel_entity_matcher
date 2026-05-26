@@ -10,7 +10,7 @@ import numpy as np
 
 from ..config.strategies import SelfKnowledgeConfig
 from ..core.strategies import StrategyRegistry
-from .base import NoveltyStrategy
+from .base import NoveltyStrategy, SignalInfo
 from .self_knowledge_impl import SelfKnowledgeDetector
 
 
@@ -25,10 +25,18 @@ class SelfKnowledgeStrategy(NoveltyStrategy):
 
     strategy_id = "self_knowledge"
     maturity = "internal"
+    score_keys = ("self_knowledge_novelty_score",)
+    signal_info = SignalInfo(
+        score_key="self_knowledge_novelty_score",
+        flag_key="self_knowledge_is_novel",
+        weight_name="self_knowledge",
+        kind="flag",
+    )
+    default_weight = 0.15
 
     def __init__(self):
-        self._config: SelfKnowledgeConfig = None
-        self._detector: SelfKnowledgeDetector = None
+        self._config: SelfKnowledgeConfig | None = None
+        self._detector: SelfKnowledgeDetector | None = None
 
     def initialize(
         self,
@@ -44,7 +52,7 @@ class SelfKnowledgeStrategy(NoveltyStrategy):
         )
         self._detector.fit(reference_embeddings, verbose=False)
 
-    def detect(
+    def _detect(
         self,
         texts: list[str],
         embeddings: np.ndarray,
@@ -58,7 +66,7 @@ class SelfKnowledgeStrategy(NoveltyStrategy):
         if len(embeddings) == 0:
             return flags, metrics
 
-        if self._detector is None or not self._detector._is_fitted:
+        if self._detector is None or not self._detector.is_fitted:
             return flags, metrics
 
         novelty_scores = self._detector.compute_novelty_scores(embeddings)
@@ -80,6 +88,3 @@ class SelfKnowledgeStrategy(NoveltyStrategy):
     @property
     def config_schema(self) -> type:
         return SelfKnowledgeConfig
-
-    def get_weight(self) -> float:
-        return 0.15

@@ -49,6 +49,7 @@ class SparseAutoencoder:
         self.encoder_activation = encoder_activation
         self.decoder_activation = decoder_activation
         self.random_state = random_state
+        self._rng = np.random.default_rng(random_state)
 
         self.encoder_weights: np.ndarray | None = None
         self.encoder_bias: np.ndarray | None = None
@@ -60,17 +61,16 @@ class SparseAutoencoder:
 
     def _init_weights(self, input_dim: int) -> None:
         """Initialize encoder/decoder weights using Xavier initialization."""
-        np.random.seed(self.random_state)
         scale_encoder = np.sqrt(2.0 / (input_dim + self.hidden_dim))
         scale_decoder = np.sqrt(2.0 / (self.hidden_dim + input_dim))
 
         self.encoder_weights = (
-            np.random.randn(input_dim, self.hidden_dim).astype(np.float32)
+            self._rng.standard_normal((input_dim, self.hidden_dim)).astype(np.float32)
             * scale_encoder
         )
         self.encoder_bias = np.zeros(self.hidden_dim, dtype=np.float32)
         self.decoder_weights = (
-            np.random.randn(self.hidden_dim, input_dim).astype(np.float32)
+            self._rng.standard_normal((self.hidden_dim, input_dim)).astype(np.float32)
             * scale_decoder
         )
         self.decoder_bias = np.zeros(input_dim, dtype=np.float32)
@@ -131,7 +131,7 @@ class SparseAutoencoder:
             known_embeddings: Array of shape (n_samples, embedding_dim)
             epochs: Number of training epochs.
             batch_size: Mini-batch size.
-            learning_rate: Learning rate for Adam optimizer.
+            learning_rate: Learning rate for vanilla SGD optimizer.
             verbose: Whether to log progress.
 
         Returns:
@@ -149,7 +149,7 @@ class SparseAutoencoder:
 
         lr = learning_rate
         for epoch in range(epochs):
-            indices = np.random.permutation(n_samples)
+            indices = self._rng.permutation(n_samples)
             total_loss = 0.0
             total_recon_loss = 0.0
             total_sparsity_loss = 0.0
@@ -383,6 +383,10 @@ class SelfKnowledgeDetector:
         self.autoencoder: SparseAutoencoder | None = None
         self._is_fitted = False
         self._reference_embeddings: np.ndarray | None = None
+
+    @property
+    def is_fitted(self) -> bool:
+        return self._is_fitted
 
     def fit(
         self,

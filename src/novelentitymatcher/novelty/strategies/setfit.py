@@ -10,7 +10,7 @@ import numpy as np
 
 from ..config.strategies import SetFitConfig
 from ..core.strategies import StrategyRegistry
-from .base import NoveltyStrategy
+from .base import NoveltyStrategy, SignalInfo
 from .setfit_impl import SetFitDetector
 
 
@@ -18,10 +18,18 @@ from .setfit_impl import SetFitDetector
 class SetFitStrategy(NoveltyStrategy):
     strategy_id = "setfit"
     maturity = "internal"
+    score_keys = ("setfit_novelty_score",)
+    signal_info = SignalInfo(
+        score_key="setfit_novelty_score",
+        flag_key="setfit_is_novel",
+        weight_name="setfit",
+        kind="flag",
+    )
+    default_weight = 0.1
 
     def __init__(self):
-        self._config: SetFitConfig = None
-        self._detector: SetFitDetector = None
+        self._config: SetFitConfig | None = None
+        self._detector: SetFitDetector | None = None
 
     def initialize(
         self,
@@ -41,7 +49,10 @@ class SetFitStrategy(NoveltyStrategy):
         )
         self._detector.train(show_progress=False)
 
-    def detect(
+        if not self._detector.is_trained:
+            raise RuntimeError("SetFitDetector training failed")
+
+    def _detect(
         self,
         texts: list[str],
         embeddings: np.ndarray,
@@ -72,6 +83,3 @@ class SetFitStrategy(NoveltyStrategy):
     @property
     def config_schema(self) -> type:
         return SetFitConfig
-
-    def get_weight(self) -> float:
-        return 0.1

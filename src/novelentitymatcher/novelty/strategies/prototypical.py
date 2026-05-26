@@ -10,7 +10,7 @@ import numpy as np
 
 from ..config.strategies import PrototypicalConfig
 from ..core.strategies import StrategyRegistry
-from .base import NoveltyStrategy
+from .base import NoveltyStrategy, SignalInfo
 from .prototypical_impl import PrototypicalDetector
 
 
@@ -18,10 +18,18 @@ from .prototypical_impl import PrototypicalDetector
 class PrototypicalStrategy(NoveltyStrategy):
     strategy_id = "prototypical"
     maturity = "experimental"
+    score_keys = ("prototypical_novelty_score",)
+    signal_info = SignalInfo(
+        score_key="prototypical_novelty_score",
+        flag_key="prototypical_is_novel",
+        weight_name="prototypical",
+        kind="flag",
+    )
+    default_weight = 0.1
 
     def __init__(self):
-        self._config: PrototypicalConfig = None
-        self._detector: PrototypicalDetector = None
+        self._config: PrototypicalConfig | None = None
+        self._detector: PrototypicalDetector | None = None
 
     def initialize(
         self,
@@ -39,7 +47,7 @@ class PrototypicalStrategy(NoveltyStrategy):
         training_data = [{"text": label, "label": label} for label in reference_labels]
         self._detector.train(training_data, show_progress=False)
 
-    def detect(
+    def _detect(
         self,
         texts: list[str],
         embeddings: np.ndarray,
@@ -75,6 +83,3 @@ class PrototypicalStrategy(NoveltyStrategy):
     @property
     def config_schema(self) -> type:
         return PrototypicalConfig
-
-    def get_weight(self) -> float:
-        return 0.1

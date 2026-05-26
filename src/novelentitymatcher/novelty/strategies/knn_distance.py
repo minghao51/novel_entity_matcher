@@ -12,7 +12,7 @@ import numpy as np
 from ..config.strategies import KNNConfig
 from ..core.strategies import StrategyRegistry
 from ..storage.index import ANNIndex
-from .base import NoveltyStrategy
+from .base import NoveltyStrategy, SignalInfo
 
 
 @StrategyRegistry.register
@@ -26,9 +26,17 @@ class KNNDistanceStrategy(NoveltyStrategy):
 
     strategy_id = "knn_distance"
     maturity = "production"
+    score_keys = ("knn_novelty_score",)
+    signal_info = SignalInfo(
+        score_key="knn_novelty_score",
+        flag_key="knn_is_novel",
+        weight_name="knn",
+        kind="score",
+    )
+    default_weight = 0.45
 
     def __init__(self):
-        self._config: KNNConfig = None
+        self._config: KNNConfig | None = None
         self._ann_index: ANNIndex | None = None
 
     def initialize(
@@ -54,7 +62,7 @@ class KNNDistanceStrategy(NoveltyStrategy):
         )
         self._ann_index.add_vectors(reference_embeddings, reference_labels)
 
-    def detect(
+    def _detect(
         self,
         texts: list[str],
         embeddings: np.ndarray,
@@ -62,19 +70,8 @@ class KNNDistanceStrategy(NoveltyStrategy):
         confidences: np.ndarray,
         **kwargs: Any,
     ) -> tuple[set[int], dict[int, dict[str, Any]]]:
-        """
-        Detect novel samples using kNN distance.
-
-        Args:
-            texts: Input texts
-            embeddings: Text embeddings
-            predicted_classes: Predicted classes
-            confidences: Prediction confidences
-            **kwargs: Additional parameters
-
-        Returns:
-            (flags, metrics) - Flagged indices and per-sample metrics
-        """
+        if self._ann_index is None:
+            return set(), {}
         k = min(self._config.k, self._ann_index.n_elements)
 
         # Query kNN
@@ -120,25 +117,16 @@ class KNNDistanceStrategy(NoveltyStrategy):
         # Convert similarities to distances (cosine distance = 1 - similarity)
         distances = 1.0 - similarities
 
-        # Average distance to k-nearest neighbors
         mean_distance = float(np.mean(distances))
 
-        # Maximum distance (to the farthest neighbor)
         max_distance = float(np.max(distances))
 
-        # Check if predicted class matches neighbors
-        # (This would require label info, placeholder for now)
-        class_match_ratio = 1.0  # Placeholder
-
-        # Compute novelty score
-        # Higher distance = more novel
         novelty_score = mean_distance
 
         return {
             "knn_mean_distance": mean_distance,
             "knn_max_distance": max_distance,
             "knn_novelty_score": novelty_score,
-            "knn_class_match_ratio": class_match_ratio,
             "knn_predicted_class": predicted_class,
         }
 
@@ -146,8 +134,3 @@ class KNNDistanceStrategy(NoveltyStrategy):
     def config_schema(self) -> type:
         """Return KNNConfig as the config schema."""
         return KNNConfig
-
-    def get_weight(self) -> float:
-        """Return weight for signal combination."""
-        # kNN is a strong signal, give it high weight
-        return 0.45

@@ -11,6 +11,8 @@ from typing import Any
 
 import numpy as np
 import yaml
+from pydantic import BaseModel, Field
+from pydantic import ValidationError as PydanticValidationError
 
 from ...utils.logging_config import get_logger
 from ..schemas import (
@@ -24,6 +26,36 @@ from ..schemas import (
 )
 
 logger = get_logger(__name__)
+
+
+class _SerializedNovelSampleReport(BaseModel):
+    novel_samples: list[dict[str, Any]]
+    detection_strategies: list[str]
+    config: dict[str, Any] = Field(default_factory=dict)
+    signal_counts: dict[str, Any] = Field(default_factory=dict)
+
+
+class _SerializedClassProposals(BaseModel):
+    proposed_classes: list[dict[str, Any]] = Field(default_factory=list)
+    rejected_as_noise: list[str] = Field(default_factory=list)
+    analysis_summary: str = ""
+    cluster_count: int = 0
+    model_used: str = ""
+    validation_errors: list[str] = Field(default_factory=list)
+    proposal_metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class _SerializedDiscoveryReport(BaseModel):
+    discovery_id: str
+    timestamp: str
+    matcher_config: dict[str, Any] = Field(default_factory=dict)
+    detection_config: dict[str, Any] = Field(default_factory=dict)
+    novel_sample_report: _SerializedNovelSampleReport
+    discovery_clusters: list[dict[str, Any]] = Field(default_factory=list)
+    review_records: list[dict[str, Any]] = Field(default_factory=list)
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    class_proposals: _SerializedClassProposals | None = None
 
 
 def _to_builtin(value: Any) -> Any:
@@ -248,55 +280,60 @@ def _report_to_dict(report: NovelClassDiscoveryReport) -> dict[str, Any]:
 
 def _dict_to_report(data: dict[str, Any]) -> NovelClassDiscoveryReport:
     """Convert dict to NovelClassDiscoveryReport."""
+    try:
+        payload = _SerializedDiscoveryReport.model_validate(data)
+    except PydanticValidationError as exc:
+        raise ValueError(f"Invalid discovery report payload: {exc}") from exc
+
     # Parse timestamp
-    timestamp = datetime.fromisoformat(data["timestamp"])
+    timestamp = datetime.fromisoformat(payload.timestamp)
 
     # Reconstruct novel sample report
     novel_samples = [
-        NovelSampleMetadata(**s) for s in data["novel_sample_report"]["novel_samples"]
+        NovelSampleMetadata(**s) for s in payload.novel_sample_report.novel_samples
     ]
 
     novel_sample_report = NovelSampleReport(
         novel_samples=novel_samples,
-        detection_strategies=data["novel_sample_report"]["detection_strategies"],
-        config=data["novel_sample_report"]["config"],
-        signal_counts=data["novel_sample_report"]["signal_counts"],
+        detection_strategies=payload.novel_sample_report.detection_strategies,
+        config=payload.novel_sample_report.config,
+        signal_counts=payload.novel_sample_report.signal_counts,
     )
     discovery_clusters = [
-        DiscoveryCluster(**cluster) for cluster in data.get("discovery_clusters", [])
+        DiscoveryCluster(**cluster) for cluster in payload.discovery_clusters
     ]
     review_records = [
-        ProposalReviewRecord(**record) for record in data.get("review_records", [])
+        ProposalReviewRecord(**record) for record in payload.review_records
     ]
 
     # Reconstruct class proposals if available
     class_proposals = None
-    if data.get("class_proposals"):
-        proposal_data = data["class_proposals"]
+    if payload.class_proposals:
+        proposal_data = payload.class_proposals
         class_proposals = NovelClassAnalysis(
             proposed_classes=[
-                ClassProposal(**p) for p in proposal_data["proposed_classes"]
+                ClassProposal(**p) for p in proposal_data.proposed_classes
             ],
-            rejected_as_noise=proposal_data.get("rejected_as_noise", []),
-            analysis_summary=proposal_data.get("analysis_summary", ""),
-            cluster_count=proposal_data.get("cluster_count", 0),
-            model_used=proposal_data.get("model_used", ""),
-            validation_errors=proposal_data.get("validation_errors", []),
-            proposal_metadata=proposal_data.get("proposal_metadata", {}),
+            rejected_as_noise=proposal_data.rejected_as_noise,
+            analysis_summary=proposal_data.analysis_summary,
+            cluster_count=proposal_data.cluster_count,
+            model_used=proposal_data.model_used,
+            validation_errors=proposal_data.validation_errors,
+            proposal_metadata=proposal_data.proposal_metadata,
         )
 
     # Create report
     report = NovelClassDiscoveryReport(
-        discovery_id=data["discovery_id"],
+        discovery_id=payload.discovery_id,
         timestamp=timestamp,
-        matcher_config=data["matcher_config"],
-        detection_config=data["detection_config"],
+        matcher_config=payload.matcher_config,
+        detection_config=payload.detection_config,
         novel_sample_report=novel_sample_report,
         discovery_clusters=discovery_clusters,
         class_proposals=class_proposals,
         review_records=review_records,
-        diagnostics=data.get("diagnostics", {}),
-        metadata=data.get("metadata", {}),
+        diagnostics=payload.diagnostics,
+        metadata=payload.metadata,
     )
 
     return report

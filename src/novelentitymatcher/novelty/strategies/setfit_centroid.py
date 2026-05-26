@@ -16,7 +16,7 @@ import numpy as np
 
 from ..config.strategies import SetFitCentroidConfig
 from ..core.strategies import StrategyRegistry
-from .base import NoveltyStrategy
+from .base import NoveltyStrategy, SignalInfo
 
 
 @StrategyRegistry.register
@@ -30,6 +30,14 @@ class SetFitCentroidStrategy(NoveltyStrategy):
 
     strategy_id = "setfit_centroid"
     maturity = "experimental"
+    score_keys = ("setfit_centroid_novelty_score",)
+    signal_info = SignalInfo(
+        score_key="setfit_centroid_novelty_score",
+        flag_key="setfit_centroid_is_novel",
+        weight_name="setfit_centroid",
+        kind="score",
+    )
+    default_weight = 0.45
 
     def __init__(self) -> None:
         self._config: SetFitCentroidConfig | None = None
@@ -55,13 +63,8 @@ class SetFitCentroidStrategy(NoveltyStrategy):
         self._config = config or SetFitCentroidConfig()
         self._class_labels = list(set(reference_labels))
 
-        # Compute per-class centroids
-        centroids = {}
-        for label in self._class_labels:
-            mask = np.array(reference_labels) == label
-            class_embeddings = reference_embeddings[mask]
-            if len(class_embeddings) > 0:
-                centroids[label] = np.mean(class_embeddings, axis=0)
+        centroids = self.compute_class_means(reference_embeddings, reference_labels)
+        centroids = {k: v for k, v in centroids.items() if v is not None}
 
         # Sort centroids by class label for consistent indexing
         self._centroids = np.array(
@@ -77,7 +80,7 @@ class SetFitCentroidStrategy(NoveltyStrategy):
         else:
             self._threshold = self._config.threshold
 
-    def detect(
+    def _detect(
         self,
         texts: list[str],
         embeddings: np.ndarray,
@@ -170,14 +173,7 @@ class SetFitCentroidStrategy(NoveltyStrategy):
         Uses the 95th percentile of distances from each sample to its own
         class centroid, ensuring most known samples fall below threshold.
         """
-        unique_labels = list(set(reference_labels))
-        centroids = {}
-
-        for label in unique_labels:
-            mask = np.array(reference_labels) == label
-            class_embeddings = reference_embeddings[mask]
-            if len(class_embeddings) > 0:
-                centroids[label] = np.mean(class_embeddings, axis=0)
+        centroids = self.compute_class_means(reference_embeddings, reference_labels)
 
         distances = []
         for i, label in enumerate(reference_labels):
@@ -200,7 +196,3 @@ class SetFitCentroidStrategy(NoveltyStrategy):
     @property
     def config_schema(self) -> type:
         return SetFitCentroidConfig
-
-    def get_weight(self) -> float:
-        """Return weight for signal combination."""
-        return 0.45

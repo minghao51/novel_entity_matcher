@@ -50,11 +50,11 @@ class SetFitDetector:
     ) -> None:
         try:
             from datasets import Dataset
-            from setfit import SetFitModel, SetFitTrainer
-        except ImportError:
+            from setfit import SetFitModel
+        except ImportError as exc:
             raise ImportError(
                 "SetFit is not installed. Install with: pip install setfit"
-            )
+            ) from exc
 
         if show_progress:
             logger.info(f"Loading SetFit model: {self.model_name}")
@@ -81,15 +81,29 @@ class SetFitDetector:
 
         train_dataset = Dataset.from_dict({"text": train_texts, "label": train_labels})
 
-        trainer = SetFitTrainer(
-            model=self.model,
-            train_dataset=train_dataset,
-            num_iterations=self.num_epochs,
-            batch_size=self.batch_size,
-            learning_rate=self.learning_rate,
-        )
+        # Prefer newer SetFit Trainer API when available, fall back for older versions.
+        try:
+            from setfit import Trainer
 
-        trainer.train()
+            trainer = Trainer(
+                model=self.model,
+                train_dataset=train_dataset,
+                num_iterations=self.num_epochs,
+                batch_size=self.batch_size,
+                learning_rate=self.learning_rate,
+            )
+            trainer.train()
+        except (ImportError, TypeError):
+            from setfit import SetFitTrainer
+
+            trainer = SetFitTrainer(
+                model=self.model,
+                train_dataset=train_dataset,
+                num_iterations=self.num_epochs,
+                batch_size=self.batch_size,
+                learning_rate=self.learning_rate,
+            )
+            trainer.train()
 
         if show_progress:
             logger.info("Calibrating novelty threshold...")
@@ -223,10 +237,10 @@ class SetFitDetector:
             from setfit import SetFitModel
 
             detector.model = SetFitModel.from_pretrained(str(p / "setfit_model"))
-        except ImportError:
+        except ImportError as exc:
             raise ImportError(
                 "SetFit is not installed. Install with: pip install setfit"
-            )
+            ) from exc
 
         detector.known_embeddings = np.load(p / "known_embeddings.npy")
         detector.novelty_threshold = metadata["novelty_threshold"]

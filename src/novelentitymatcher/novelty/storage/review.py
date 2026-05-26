@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import Callable, Iterable
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from ..schemas import (
     NovelClassDiscoveryReport,
@@ -19,7 +19,7 @@ from ..schemas import (
 class ProposalReviewManager:
     """Persist and update proposal review records for HITL workflows."""
 
-    _ALLOWED_TRANSITIONS = {
+    _ALLOWED_TRANSITIONS: ClassVar[dict[str, set[str]]] = {
         "pending_review": {"approved", "rejected"},
         "approved": {"approved", "promoted"},
         "rejected": {"rejected"},
@@ -85,7 +85,7 @@ class ProposalReviewManager:
     ) -> ProposalReviewRecord:
         records = self.list_records()
         updated: ProposalReviewRecord | None = None
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
 
         for index, record in enumerate(records):
             if record.review_id != review_id:

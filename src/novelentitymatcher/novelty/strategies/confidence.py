@@ -10,7 +10,7 @@ import numpy as np
 
 from ..config.strategies import ConfidenceConfig
 from ..core.strategies import StrategyRegistry
-from .base import NoveltyStrategy
+from .base import NoveltyStrategy, SignalInfo
 
 
 @StrategyRegistry.register
@@ -24,9 +24,17 @@ class ConfidenceStrategy(NoveltyStrategy):
 
     strategy_id = "confidence"
     maturity = "production"
+    score_keys = ("confidence_score",)
+    signal_info = SignalInfo(
+        score_key="confidence_score",
+        flag_key="confidence_is_novel",
+        weight_name="confidence",
+        kind="flag",
+    )
+    default_weight = 0.35
 
     def __init__(self):
-        self._config: ConfidenceConfig = None
+        self._config: ConfidenceConfig | None = None
 
     def initialize(
         self,
@@ -44,7 +52,7 @@ class ConfidenceStrategy(NoveltyStrategy):
         """
         self._config = config or ConfidenceConfig()
 
-    def detect(
+    def _detect(
         self,
         texts: list[str],
         embeddings: np.ndarray,
@@ -85,8 +93,3 @@ class ConfidenceStrategy(NoveltyStrategy):
     def config_schema(self) -> type:
         """Return ConfidenceConfig as the config schema."""
         return ConfidenceConfig
-
-    def get_weight(self) -> float:
-        """Return weight for signal combination."""
-        # Confidence is a foundational signal, give it moderate weight
-        return 0.35

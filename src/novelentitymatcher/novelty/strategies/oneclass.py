@@ -10,7 +10,7 @@ import numpy as np
 
 from ..config.strategies import OneClassConfig
 from ..core.strategies import StrategyRegistry
-from .base import NoveltyStrategy
+from .base import NoveltyStrategy, SignalInfo
 from .oneclass_impl import OneClassSVMDetector
 
 
@@ -18,10 +18,18 @@ from .oneclass_impl import OneClassSVMDetector
 class OneClassStrategy(NoveltyStrategy):
     strategy_id = "oneclass"
     maturity = "experimental"
+    score_keys = ("oneclass_novelty_score",)
+    signal_info = SignalInfo(
+        score_key="oneclass_novelty_score",
+        flag_key="oneclass_is_novel",
+        weight_name="oneclass",
+        kind="flag",
+    )
+    default_weight = 0.1
 
     def __init__(self):
-        self._config: OneClassConfig = None
-        self._detector: OneClassSVMDetector = None
+        self._config: OneClassConfig | None = None
+        self._detector: OneClassSVMDetector | None = None
 
     def initialize(
         self,
@@ -39,7 +47,7 @@ class OneClassStrategy(NoveltyStrategy):
         )
         self._detector.train(reference_labels, show_progress=False)
 
-    def detect(
+    def _detect(
         self,
         texts: list[str],
         embeddings: np.ndarray,
@@ -70,6 +78,3 @@ class OneClassStrategy(NoveltyStrategy):
     @property
     def config_schema(self) -> type:
         return OneClassConfig
-
-    def get_weight(self) -> float:
-        return 0.1
