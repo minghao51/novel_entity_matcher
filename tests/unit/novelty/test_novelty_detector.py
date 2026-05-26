@@ -221,7 +221,7 @@ class TestNoveltyDetector:
             def initialize(self, reference_embeddings, reference_labels, config):
                 self.reference_sum = float(np.sum(reference_embeddings))
 
-            def detect(
+            def _detect(
                 self,
                 texts,
                 embeddings,

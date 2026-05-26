@@ -1,6 +1,6 @@
 """Unit tests for monitoring.metrics module."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -68,9 +68,9 @@ class TestCreateMetric:
         assert event.labels == labels
 
     def test_create_metric_timestamp_is_current(self):
-        before = datetime.now()
+        before = datetime.now(timezone.utc)
         event = create_metric(METRIC_CLUSTERING_DURATION, 1.0, "seconds")
-        after = datetime.now()
+        after = datetime.now(timezone.utc)
         assert before <= event.timestamp <= after
 
 

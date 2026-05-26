@@ -423,6 +423,30 @@ class TestLLMClassProposer:
         assert response == "Test response"
         mock_completion.assert_called_once()
 
+    def test_call_litellm_rejects_empty_choices(self, proposer, monkeypatch):
+        mock_completion = Mock()
+        mock_response = Mock()
+        mock_response.choices = []
+        mock_completion.return_value = mock_response
+        mock_litellm = ModuleType("litellm")
+        mock_litellm.completion = mock_completion
+        monkeypatch.setitem(sys.modules, "litellm", mock_litellm)
+
+        with pytest.raises(LLMError, match="did not contain choices"):
+            proposer._call_litellm("test-model", "prompt")
+
+    def test_call_litellm_rejects_missing_content(self, proposer, monkeypatch):
+        mock_completion = Mock()
+        mock_response = Mock()
+        mock_response.choices = [Mock(message=Mock(content=None))]
+        mock_completion.return_value = mock_response
+        mock_litellm = ModuleType("litellm")
+        mock_litellm.completion = mock_completion
+        monkeypatch.setitem(sys.modules, "litellm", mock_litellm)
+
+        with pytest.raises(LLMError, match="did not contain message content"):
+            proposer._call_litellm("test-model", "prompt")
+
     def test_call_litellm_import_error(self, proposer):
         """Test litellm call when litellm is not installed."""
         # This test verifies the error handling path

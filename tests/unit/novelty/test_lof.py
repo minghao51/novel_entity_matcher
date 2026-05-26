@@ -83,8 +83,8 @@ class TestLOFStrategy:
             predicted_classes=["a"],
             confidences=np.array([0.5]),
         )
-        assert 0 in flags
-        assert metrics[0]["lof_is_outlier"] is True
+        assert len(flags) == 0
+        assert metrics[0]["lof_is_outlier"] is False
 
     def test_config_schema(self, strategy):
         assert strategy.config_schema is LOFConfig

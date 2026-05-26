@@ -53,9 +53,14 @@ def test_static_embedding_backend_sentence_transformer_path(monkeypatch):
     import novelentitymatcher.backends.static_embedding as se
 
     original = se.get_cached_sentence_transformer
-    se.get_cached_sentence_transformer = lambda name, trust_remote_code=False: (
-        FakeSentenceTransformer()
-    )
+    captured: dict[str, bool] = {}
+
+    def _fake_get_cached(name, trust_remote_code=False):
+        del name
+        captured["trust_remote_code"] = trust_remote_code
+        return FakeSentenceTransformer()
+
+    se.get_cached_sentence_transformer = _fake_get_cached
 
     try:
         from novelentitymatcher.backends.static_embedding import StaticEmbeddingBackend
@@ -65,5 +70,53 @@ def test_static_embedding_backend_sentence_transformer_path(monkeypatch):
 
         assert len(embeddings) == 1
         assert len(embeddings[0]) == 384
+        assert captured["trust_remote_code"] is False
+    finally:
+        se.get_cached_sentence_transformer = original
+
+
+@pytest.mark.smoke
+def test_static_embedding_backend_sentence_transformer_allowlist(monkeypatch):
+    monkeypatch.setattr(
+        "model2vec.StaticModel.from_pretrained",
+        lambda name: (_ for _ in ()).throw(RuntimeError("fall through to ST")),
+    )
+
+    class FakeSentenceTransformer:
+        def get_sentence_embedding_dimension(self):
+            return 384
+
+        def encode(self, texts, batch_size=32, show_progress_bar=False):
+            if isinstance(texts, str):
+                texts = [texts]
+            return np.random.rand(len(texts), 384)
+
+        def modules(self):
+            return []
+
+    import novelentitymatcher.backends.static_embedding as se
+
+    original = se.get_cached_sentence_transformer
+    captured: dict[str, bool] = {}
+
+    def _fake_get_cached(name, trust_remote_code=False):
+        del name
+        captured["trust_remote_code"] = trust_remote_code
+        return FakeSentenceTransformer()
+
+    se.get_cached_sentence_transformer = _fake_get_cached
+
+    try:
+        from novelentitymatcher.backends.static_embedding import StaticEmbeddingBackend
+
+        backend = StaticEmbeddingBackend(
+            "RikkaBotan/test-model",
+            trusted_remote_code_models={"RikkaBotan/test-model"},
+        )
+        embeddings = backend.encode(["test query"])
+
+        assert len(embeddings) == 1
+        assert len(embeddings[0]) == 384
+        assert captured["trust_remote_code"] is True
     finally:
         se.get_cached_sentence_transformer = original

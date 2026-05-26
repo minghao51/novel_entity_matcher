@@ -228,6 +228,14 @@ def test_load_proposals_unsupported_format_raises_error(tmp_path: Path):
         persistence.load_proposals(file_path)
 
 
+def test_load_proposals_invalid_payload_raises_actionable_error(tmp_path: Path):
+    file_path = tmp_path / "invalid.yaml"
+    file_path.write_text("discovery_id: only-id\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Invalid discovery report payload"):
+        persistence.load_proposals(file_path)
+
+
 def test_list_proposals_empty_directory(tmp_path: Path):
     """list_proposals should return empty list for empty directory."""
     proposals = persistence.list_proposals(tmp_path / "nonexistent")

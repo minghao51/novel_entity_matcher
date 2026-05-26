@@ -1,4 +1,3 @@
-import builtins
 from pathlib import Path
 
 import pytest
@@ -79,18 +78,6 @@ def test_cli_all_concurrent_continue_on_error_reports_structured_failures(
             self.raw_dir = raw_dir
             self.processed_dir = processed_dir
 
-    original_import = builtins.__import__
-
-    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
-        if not name.startswith("novelentitymatcher.ingestion."):
-            return original_import(name, globals, locals, fromlist, level)
-
-        class _M:
-            LanguagesFetcher = _DummyFetcher
-            CurrenciesFetcher = _DummyFetcher
-
-        return _M
-
     def fake_run_all_concurrent_detailed(fetchers, **kwargs):
         assert kwargs["continue_on_error"] is True
         return IngestionRunResult(
@@ -114,7 +101,14 @@ def test_cli_all_concurrent_continue_on_error_reports_structured_failures(
             "all": None,
         },
     )
-    monkeypatch.setattr(builtins, "__import__", fake_import)
+    monkeypatch.setattr(
+        cli,
+        "FETCHER_REGISTRY",
+        {
+            "languages": _DummyFetcher,
+            "currencies": _DummyFetcher,
+        },
+    )
     monkeypatch.setattr(
         cli, "run_all_concurrent_detailed", fake_run_all_concurrent_detailed
     )
@@ -126,3 +120,8 @@ def test_cli_all_concurrent_continue_on_error_reports_structured_failures(
     captured = capsys.readouterr()
     assert "Concurrent ingestion failures:" in captured.err
     assert "CurrenciesFetcher (currencies.csv): RuntimeError: boom" in captured.err
+
+
+def test_build_fetcher_rejects_unknown_dataset():
+    with pytest.raises(KeyError, match="No fetcher registered"):
+        cli._build_fetcher("unknown", Path("/tmp/raw"), Path("/tmp/processed"))

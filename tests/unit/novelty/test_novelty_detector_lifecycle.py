@@ -161,7 +161,7 @@ class TestNoveltyDetectorStrategyManagement:
                     tuple(reference_labels),
                 )
 
-            def detect(
+            def _detect(
                 self, texts, embeddings, predicted_classes, confidences, **kwargs
             ):
                 return set(), {}
@@ -267,7 +267,7 @@ def test_calibrator_reference_fit_uses_blank_reference_texts():
         def initialize(self, reference_embeddings, reference_labels, config):
             return None
 
-        def detect(self, texts, embeddings, predicted_classes, confidences, **kwargs):
+        def _detect(self, texts, embeddings, predicted_classes, confidences, **kwargs):
             observed_text_batches.append(list(texts))
             return set(), {
                 i: {"probe_numeric_score": float(i + 1)} for i in range(len(texts))
