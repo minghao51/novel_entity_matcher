@@ -14,9 +14,6 @@ def clear_model_cache():
 
 def pytest_collection_modifyitems(items):
     for item in items:
-        if "asyncio" in item.keywords and "anyio" not in item.keywords:
-            item.add_marker(pytest.mark.anyio)
-
         nodeid = item.nodeid
         if "/unit/" in nodeid and not any(
             m.name == "unit" for m in item.iter_markers()

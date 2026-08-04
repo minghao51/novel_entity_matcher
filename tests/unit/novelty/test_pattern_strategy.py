@@ -2,6 +2,8 @@
 
 import pytest
 
+from novelentitymatcher.novelty.config.strategies import PatternConfig
+from novelentitymatcher.novelty.strategies.pattern import PatternStrategy
 from novelentitymatcher.novelty.strategies.pattern_impl import (
     PatternScorer,
     score_batch_novelty,
@@ -122,3 +124,50 @@ class TestPatternScorer:
         score2 = strategy.score_novelty(entity)
 
         assert score1 == score2
+
+
+class TestPatternStrategy:
+    def test_initialize_uses_reference_labels(self, monkeypatch):
+        captured = {}
+
+        class FakeScorer:
+            def __init__(self, known_entities):
+                captured["known_entities"] = known_entities
+
+        monkeypatch.setattr(
+            "novelentitymatcher.novelty.strategies.pattern.PatternScorer",
+            FakeScorer,
+        )
+
+        strategy = PatternStrategy()
+        strategy.initialize([], ["A", "B"], PatternConfig(threshold=0.4))
+        assert captured["known_entities"] == ["A", "B"]
+
+    def test_detect_applies_threshold_and_metrics_schema(self):
+        strategy = PatternStrategy()
+        strategy._config = PatternConfig(threshold=0.5)
+
+        class StubScorer:
+            def score_novelty(self, text):
+                return {"known": 0.2, "novel": 0.8}[text]
+
+        strategy._pattern_scorer = StubScorer()
+        flags, metrics = strategy._detect(
+            ["known", "novel"],
+            [],
+            ["A", "B"],
+            [],
+        )
+
+        assert flags == {1}
+        assert metrics[0]["pattern_is_novel"] is False
+        assert metrics[1]["pattern_is_novel"] is True
+        assert metrics[1]["pattern_text"] == "novel"
+        assert metrics[1]["pattern_novelty_score"] == 0.8
+
+    def test_metadata_and_config_schema_contract(self):
+        strategy = PatternStrategy()
+        assert strategy.config_schema is PatternConfig
+        assert strategy.strategy_id == "pattern"
+        assert strategy.score_keys == ("pattern_novelty_score",)
+        assert strategy.signal_info.flag_key == "pattern_is_novel"

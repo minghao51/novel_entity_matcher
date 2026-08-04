@@ -3,6 +3,8 @@
 import numpy as np
 import pytest
 
+from novelentitymatcher.novelty.config.strategies import OneClassConfig
+from novelentitymatcher.novelty.strategies.oneclass import OneClassStrategy
 from novelentitymatcher.novelty.strategies.oneclass_impl import OneClassSVMDetector
 
 
@@ -144,3 +146,84 @@ class TestOneClassSVMDetector:
 
             assert detector.is_trained is True
             assert detector.kernel == kernel
+
+
+class TestOneClassStrategy:
+    def test_initialize_wires_config_to_detector(self, monkeypatch):
+        captured = {}
+
+        class FakeDetector:
+            def __init__(self, model_name, nu, kernel, gamma):
+                captured["init"] = {
+                    "model_name": model_name,
+                    "nu": nu,
+                    "kernel": kernel,
+                    "gamma": gamma,
+                }
+                self.is_trained = False
+
+            def train(self, labels, show_progress=False):
+                captured["train_labels"] = labels
+                captured["show_progress"] = show_progress
+                self.is_trained = True
+
+        monkeypatch.setattr(
+            "novelentitymatcher.novelty.strategies.oneclass.OneClassSVMDetector",
+            FakeDetector,
+        )
+
+        strategy = OneClassStrategy()
+        cfg = OneClassConfig(model_name="m", nu=0.2, kernel="linear", gamma="auto")
+        strategy.initialize(np.zeros((2, 3)), ["A", "B"], cfg)
+
+        assert captured["init"] == {
+            "model_name": "m",
+            "nu": 0.2,
+            "kernel": "linear",
+            "gamma": "auto",
+        }
+        assert captured["train_labels"] == ["A", "B"]
+        assert captured["show_progress"] is False
+
+    def test_detect_returns_empty_when_untrained(self):
+        strategy = OneClassStrategy()
+
+        class StubDetector:
+            is_trained = False
+
+        strategy._detector = StubDetector()
+        flags, metrics = strategy._detect(
+            ["x"], np.zeros((1, 2)), ["A"], np.array([0.9])
+        )
+        assert flags == set()
+        assert metrics == {}
+
+    def test_detect_returns_expected_flags_and_metrics(self):
+        strategy = OneClassStrategy()
+
+        class StubDetector:
+            is_trained = True
+
+            def score_batch(self, texts):
+                assert texts == ["known", "novel"]
+                return [(False, 0.2), (True, 0.9)]
+
+        strategy._detector = StubDetector()
+        flags, metrics = strategy._detect(
+            ["known", "novel"],
+            np.zeros((2, 2)),
+            ["A", "B"],
+            np.array([0.9, 0.1]),
+        )
+
+        assert flags == {1}
+        assert metrics[0]["oneclass_is_novel"] is False
+        assert metrics[1]["oneclass_is_novel"] is True
+        assert metrics[1]["oneclass_novelty_score"] == 0.9
+
+    def test_metadata_and_config_schema_contract(self):
+        strategy = OneClassStrategy()
+        assert strategy.config_schema is OneClassConfig
+        assert strategy.strategy_id == "oneclass"
+        assert strategy.score_keys == ("oneclass_novelty_score",)
+        assert strategy.signal_info.score_key == "oneclass_novelty_score"

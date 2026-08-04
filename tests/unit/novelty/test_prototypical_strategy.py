@@ -3,6 +3,8 @@
 import numpy as np
 import pytest
 
+from novelentitymatcher.novelty.config.strategies import PrototypicalConfig
+from novelentitymatcher.novelty.strategies.prototypical import PrototypicalStrategy
 from novelentitymatcher.novelty.strategies.prototypical_impl import (
     PrototypicalDetector,
 )
@@ -182,3 +184,78 @@ class TestPrototypicalDetector:
         # (though this depends on the actual distances)
         assert isinstance(is_novel_strict, bool)
         assert isinstance(is_novel_lenient, bool)
+
+
+class TestPrototypicalStrategy:
+    def test_initialize_builds_training_data_from_labels(self, monkeypatch):
+        captured = {}
+
+        class FakeDetector:
+            def __init__(self, distance_threshold, model_name):
+                captured["init"] = {
+                    "distance_threshold": distance_threshold,
+                    "model_name": model_name,
+                }
+                self.is_trained = False
+
+            def train(self, data, show_progress=False):
+                captured["train_data"] = data
+                captured["show_progress"] = show_progress
+                self.is_trained = True
+
+        monkeypatch.setattr(
+            "novelentitymatcher.novelty.strategies.prototypical.PrototypicalDetector",
+            FakeDetector,
+        )
+
+        strategy = PrototypicalStrategy()
+        cfg = PrototypicalConfig(distance_threshold=0.7, model_name="mini")
+        strategy.initialize(np.zeros((2, 2)), ["X", "Y"], cfg)
+
+        assert captured["init"] == {"distance_threshold": 0.7, "model_name": "mini"}
+        assert captured["train_data"] == [
+            {"text": "X", "label": "X"},
+            {"text": "Y", "label": "Y"},
+        ]
+        assert captured["show_progress"] is False
+
+    def test_detect_returns_empty_when_detector_missing_or_untrained(self):
+        strategy = PrototypicalStrategy()
+        strategy._detector = None
+        flags, metrics = strategy._detect(
+            ["x"], np.zeros((1, 2)), ["A"], np.array([0.1])
+        )
+        assert flags == set()
+        assert metrics == {}
+
+    def test_detect_returns_scores_and_flags(self):
+        strategy = PrototypicalStrategy()
+        strategy._config = PrototypicalConfig(distance_threshold=0.5)
+
+        class StubDetector:
+            is_trained = True
+
+            def score_batch(self, texts):
+                assert texts == ["a", "b"]
+                return [(False, 0.2, "X"), (True, 0.8, "Y")]
+
+        strategy._detector = StubDetector()
+        flags, metrics = strategy._detect(
+            ["a", "b"],
+            np.zeros((2, 2)),
+            ["X", "Y"],
+            np.array([0.9, 0.1]),
+        )
+
+        assert flags == {1}
+        assert metrics[0]["prototypical_is_novel"] is False
+        assert metrics[1]["prototypical_is_novel"] is True
+        assert metrics[1]["prototypical_nearest_label"] == "Y"
+        assert metrics[1]["prototypical_novelty_score"] == 1.0
+
+    def test_metadata_and_config_schema_contract(self):
+        strategy = PrototypicalStrategy()
+        assert strategy.config_schema is PrototypicalConfig
+        assert strategy.strategy_id == "prototypical"
+        assert strategy.score_keys == ("prototypical_novelty_score",)
+        assert strategy.signal_info.weight_name == "prototypical"

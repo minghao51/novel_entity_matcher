@@ -2,6 +2,8 @@
 
 import pytest
 
+from novelentitymatcher.novelty.config.strategies import SetFitConfig
+from novelentitymatcher.novelty.strategies.setfit import SetFitStrategy
 from novelentitymatcher.novelty.strategies.setfit_impl import SetFitDetector
 
 
@@ -214,3 +216,105 @@ class TestSetFitDetector:
 
             assert detector.is_trained is True
             assert detector.num_epochs == epochs
+
+
+class TestSetFitStrategy:
+    def test_initialize_wires_config_to_detector(self, monkeypatch):
+        captured = {}
+
+        class FakeDetector:
+            def __init__(
+                self,
+                known_entities,
+                model_name,
+                margin,
+                num_epochs,
+                batch_size,
+                learning_rate,
+            ):
+                captured["init"] = {
+                    "known_entities": known_entities,
+                    "model_name": model_name,
+                    "margin": margin,
+                    "num_epochs": num_epochs,
+                    "batch_size": batch_size,
+                    "learning_rate": learning_rate,
+                }
+                self.is_trained = False
+
+            def train(self, show_progress=False):
+                captured["show_progress"] = show_progress
+                self.is_trained = True
+
+        monkeypatch.setattr(
+            "novelentitymatcher.novelty.strategies.setfit.SetFitDetector",
+            FakeDetector,
+        )
+
+        strategy = SetFitStrategy()
+        cfg = SetFitConfig(
+            model_name="mini",
+            margin=0.3,
+            epochs=2,
+            batch_size=8,
+            learning_rate=1e-4,
+        )
+        strategy.initialize([], ["A", "B"], cfg)
+
+        assert captured["init"] == {
+            "known_entities": ["A", "B"],
+            "model_name": "mini",
+            "margin": 0.3,
+            "num_epochs": 2,
+            "batch_size": 8,
+            "learning_rate": 1e-4,
+        }
+        assert captured["show_progress"] is False
+
+    def test_initialize_raises_when_training_fails(self, monkeypatch):
+        class FakeDetector:
+            def __init__(self, **kwargs):
+                self.is_trained = False
+
+            def train(self, show_progress=False):
+                self.is_trained = False
+
+        monkeypatch.setattr(
+            "novelentitymatcher.novelty.strategies.setfit.SetFitDetector",
+            FakeDetector,
+        )
+
+        strategy = SetFitStrategy()
+        with pytest.raises(RuntimeError, match="SetFitDetector training failed"):
+            strategy.initialize([], ["A"], SetFitConfig())
+
+    def test_detect_returns_empty_for_untrained(self):
+        strategy = SetFitStrategy()
+        strategy._detector = None
+        flags, metrics = strategy._detect(["x"], [], ["A"], [])
+        assert flags == set()
+        assert metrics == {}
+
+    def test_detect_returns_expected_schema(self):
+        strategy = SetFitStrategy()
+
+        class StubDetector:
+            is_trained = True
+
+            def score_batch(self, texts):
+                assert texts == ["known", "novel"]
+                return [(False, 0.9), (True, 0.2)]
+
+        strategy._detector = StubDetector()
+        flags, metrics = strategy._detect(["known", "novel"], [], ["A", "B"], [])
+        assert flags == {1}
+        assert metrics[0]["setfit_novelty_score"] == pytest.approx(0.1)
+        assert metrics[1]["setfit_novelty_score"] == pytest.approx(0.8)
+        assert metrics[1]["setfit_is_novel"] is True
+
+    def test_metadata_and_config_schema_contract(self):
+        strategy = SetFitStrategy()
+        assert strategy.config_schema is SetFitConfig
+        assert strategy.strategy_id == "setfit"
+        assert strategy.score_keys == ("setfit_novelty_score",)
+        assert strategy.signal_info.flag_key == "setfit_is_novel"
